@@ -14,7 +14,7 @@ class MapsScreen extends StatefulWidget {
   State<MapsScreen> createState() => _MapsScreenState();
 }
 
-class _MapsScreenState extends State<MapsScreen> {
+class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   late GoogleMapController _mapController;
   late LocationService _locationService;
   late Stream<Position> _positionStream;
@@ -202,6 +202,11 @@ class _MapsScreenState extends State<MapsScreen> {
         }
       });
     }
+  }
+
+  Future<void> _saveCheckpointAchievement(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('achievement_${id}_reached', true);
   }
 
   void _recenterCamera() {
