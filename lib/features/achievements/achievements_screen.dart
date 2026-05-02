@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/location_service.dart';
 
@@ -41,6 +42,12 @@ const List<Map<String, dynamic>> _achievementData = [
     'description': 'Ujdi 40 000 km a dohledej slávu',
     'goal': 40000.0,
   },
+  {
+    'id': 'checkpoint_1',
+    'title': 'První checkpoint',
+    'description': 'Najdi a dosáhni checkpoint na mapě',
+    'type': 'checkpoint',
+  },
 ];
 
 const List<double> _grayscaleMatrix = [
@@ -61,6 +68,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
   late final DistanceManager _distanceManager;
   late final TextEditingController _distanceController;
   bool _debugMode = false;
+  bool _checkpoint1Reached = false;
 
   @override
   void initState() {
@@ -69,6 +77,14 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
     _distanceController = TextEditingController(
       text: _distanceManager.totalDistance.toStringAsFixed(0),
     );
+    _loadCheckpointAchievements();
+  }
+
+  Future<void> _loadCheckpointAchievements() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _checkpoint1Reached = prefs.getBool('achievement_checkpoint_1_reached') ?? false;
+    });
   }
 
   @override
@@ -225,6 +241,86 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                 separatorBuilder: (context, index) => const SizedBox(height: 16),
                 itemBuilder: (context, index) {
                   final item = _achievementData[index];
+                  
+                  // Handle checkpoint achievements
+                  if (item['type'] == 'checkpoint') {
+                    final String id = item['id'] as String;
+                    final bool reached = id == 'checkpoint_1' ? _checkpoint1Reached : false;
+                    final String title = item['title'] as String;
+                    final String description = item['description'] as String;
+                    
+                    return Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: BoxDecoration(
+                                    color: reached ? Colors.lime.shade100 : Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    reached ? Icons.check_circle : Icons.flag,
+                                    size: 48,
+                                    color: reached ? Colors.lime.shade700 : Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.black87,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        description,
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                              color: Colors.black54,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: reached ? Colors.lime.shade100 : Colors.grey.shade200,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          reached ? 'Dosaženo' : 'Nedosaženo',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: reached ? Colors.lime.shade900 : Colors.grey.shade700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  
+                  // Handle distance-based achievements
                   final double goal = item['goal'] as double;
                   final double progress = min(totalDistance / goal, 1.0);
                   final bool reached = totalDistance >= goal;

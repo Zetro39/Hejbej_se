@@ -91,6 +91,9 @@ class _MapsScreenState extends State<MapsScreen> {
         _checkpointReached = true;
       });
 
+      // Save achievement permanently
+      _saveCheckpointAchievement();
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('🎉 Cíl dosažen! Úspěch odemčen!'),
@@ -102,6 +105,11 @@ class _MapsScreenState extends State<MapsScreen> {
       // Here you could also trigger additional achievements or rewards
       // For now, we'll just mark it as reached
     }
+  }
+
+  Future<void> _saveCheckpointAchievement() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('achievement_checkpoint_1_reached', true);
   }
 
   void _updatePolyline() {
