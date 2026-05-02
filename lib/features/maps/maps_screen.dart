@@ -3,6 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
+import 'dart:math';
 
 import '../../services/location_service.dart';
 
@@ -66,6 +67,12 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   // Camera control
   bool _isFollowingUser = true;
   Position? _lastPosition;
+
+  // Trip generation
+  bool _showTripOptions = false;
+  double _selectedDistance = 5.0; // km
+  bool _isGeneratingTrip = false;
+  List<Map<String, dynamic>> _tripPoints = [];
 
   @override
   void initState() {
@@ -227,6 +234,76 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         CameraUpdate.newCameraPosition(cameraPosition),
       );
     }
+  }
+
+  void _generateTripLoop() {
+    if (_lastPosition == null) return;
+
+    setState(() {
+      _isGeneratingTrip = true;
+      _tripPoints.clear();
+    });
+
+    // Remove existing trip polylines and markers
+    _polylines.removeWhere((p) => p.polylineId.value.startsWith('trip_'));
+    _markers.removeWhere((m) => m.markerId.value.startsWith('trip_'));
+
+    // Generate random closed loop around user position
+    final center = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
+    final radiusKm = _selectedDistance / 2; // Convert to radius
+
+    final tripPoints = <LatLng>[];
+    const numPoints = 8; // Points for the loop
+
+    for (int i = 0; i < numPoints; i++) {
+      final angle = (i / numPoints) * 2 * 3.14159;
+      final latOffset = (radiusKm / 111.32) * 0.7 * (0.5 + 0.5 * (i % 2 == 0 ? 1 : -1)); // ~111km per degree latitude
+      final lngOffset = (radiusKm / (111.32 * cos(center.latitude * 3.14159 / 180))) * 0.7 * (0.5 + 0.5 * (i % 3 == 0 ? 1 : -1));
+
+      tripPoints.add(LatLng(
+        center.latitude + latOffset,
+        center.longitude + lngOffset,
+      ));
+    }
+
+    // Close the loop
+    tripPoints.add(tripPoints.first);
+
+    // Add trip polyline
+    final tripPolyline = Polyline(
+      polylineId: const PolylineId('trip_loop'),
+      color: Colors.blue,
+      width: 4,
+      points: tripPoints,
+      geodesic: true,
+    );
+
+    // Generate 3-4 random POI markers along the path
+    final poiNames = ['Zřícenina', 'Vyhlídka', 'Park', 'Jezero'];
+    final tripMarkers = <Marker>[];
+
+    for (int i = 0; i < 4 && i < tripPoints.length - 1; i++) {
+      final pointIndex = (i * tripPoints.length ~/ 4).clamp(0, tripPoints.length - 2);
+      final point = tripPoints[pointIndex];
+
+      tripMarkers.add(Marker(
+        markerId: MarkerId('trip_poi_$i'),
+        position: point,
+        infoWindow: InfoWindow(title: poiNames[i]),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+      ));
+
+      _tripPoints.add({
+        'name': poiNames[i],
+        'position': point,
+      });
+    }
+
+    setState(() {
+      _polylines.add(tripPolyline);
+      _markers.addAll(tripMarkers);
+      _isGeneratingTrip = false;
+    });
   }
 
   void _updateCheckpointMarker(String checkpointId, {required bool reached}) {
@@ -496,60 +573,207 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          // Bottom button
+          // Trip generator button
           Positioned(
             bottom: 100,
             left: 16,
             right: 16,
-            child: SizedBox(
-              width: double.infinity,
+            child: Container(
               height: 56,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Hledání parků v okolí...'),
-                    ),
-                  );
-                },
-                icon: const Icon(
-                  Icons.radar,
-                  size: 28,
-                ),
-                label: const Text(
-                  'SKENOVAT OKOLÍ',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
                   ),
-                ),
-                style: ButtonStyle(
-                  backgroundColor: WidgetStateProperty.all(Colors.lime),
-                  foregroundColor: WidgetStateProperty.all(Colors.black),
-                  elevation: WidgetStateProperty.all(6),
-                  shadowColor: WidgetStateProperty.all(Colors.black26),
-                  shape: WidgetStateProperty.all(
-                    RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Main button
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _showTripOptions = !_showTripOptions;
+                        });
+                      },
+                      icon: const Icon(Icons.explore),
+                      label: const Text(
+                        'Okruh v okolí',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ButtonStyle(
+                        backgroundColor: WidgetStateProperty.all(Colors.lime),
+                        foregroundColor: WidgetStateProperty.all(Colors.black),
+                        elevation: WidgetStateProperty.all(0),
+                        shape: WidgetStateProperty.all(
+                          const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(16),
+                              bottomLeft: Radius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
+                  ),
+                  // Dropdown button
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: const BoxDecoration(
+                      color: Colors.lime,
+                      borderRadius: BorderRadius.only(
+                        topRight: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                      ),
+                    ),
+                    child: PopupMenuButton<String>(
+                      onSelected: (value) {
+                        // Handle dropdown selection
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Vybráno: $value')),
+                        );
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'loop',
+                          child: Text('Okruh v okolí (A → A)'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'destination',
+                          child: Text('Cesta do cíle (A → B)'),
+                        ),
+                      ],
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.black,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Distance slider (when showing trip options)
+          if (_showTripOptions)
+            Positioned(
+              bottom: 170,
+              left: 16,
+              right: 16,
+              child: Card(
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Vyberte délku okruhu: ${_selectedDistance.toStringAsFixed(1)} km',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Slider(
+                        value: _selectedDistance,
+                        min: 2.0,
+                        max: 20.0,
+                        divisions: 18,
+                        label: '${_selectedDistance.toStringAsFixed(1)} km',
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedDistance = value;
+                          });
+                        },
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _showTripOptions = false;
+                              });
+                            },
+                            child: const Text('Zrušit'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _showTripOptions = false;
+                              });
+                              _generateTripLoop();
+                            },
+                            child: const Text('Generovat'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
-          ),
-          // Recenter button
-          Positioned(
-            bottom: 160,
-            right: 16,
-            child: FloatingActionButton(
-              onPressed: _recenterCamera,
-              backgroundColor: Colors.lightBlue,
-              foregroundColor: Colors.white,
-              mini: true,
-              child: const Icon(Icons.my_location),
-              tooltip: 'Vycentrovat na mě',
+          // Trip points card
+          if (_tripPoints.isNotEmpty)
+            Positioned(
+              bottom: 180,
+              left: 16,
+              child: Card(
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Container(
+                  width: 200,
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Body na trase:',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ..._tripPoints.map((point) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.place,
+                              size: 16,
+                              color: Colors.purple,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              point['name'] as String,
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      )),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
           // Celebration overlay
           if (_showCelebration)
             Positioned.fill(
