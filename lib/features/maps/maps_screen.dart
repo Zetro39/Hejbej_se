@@ -492,7 +492,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           ),
           // Bottom button
           Positioned(
-            bottom: 16,
+            bottom: 90,
             left: 16,
             right: 16,
             child: SizedBox(
@@ -520,6 +520,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 style: ButtonStyle(
                   backgroundColor: WidgetStateProperty.all(Colors.lime),
                   foregroundColor: WidgetStateProperty.all(Colors.black),
+                  elevation: WidgetStateProperty.all(6),
+                  shadowColor: WidgetStateProperty.all(Colors.black26),
                   shape: WidgetStateProperty.all(
                     RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
