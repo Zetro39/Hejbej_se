@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 
 import '../../services/location_service.dart';
 
@@ -57,6 +58,11 @@ class _MapsScreenState extends State<MapsScreen> {
   final Set<String> _reachedCheckpoints = {};
   double _todayDistance = 0.0;
 
+  // Animation and celebration
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+  bool _showCelebration = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +71,15 @@ class _MapsScreenState extends State<MapsScreen> {
     _loadSelectedAvatar();
     _loadReachedCheckpoints();
     _setupMap();
+
+    // Initialize animation
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.elasticOut),
+    );
   }
 
   Future<void> _loadReachedCheckpoints() async {
@@ -119,17 +134,17 @@ class _MapsScreenState extends State<MapsScreen> {
     _addAllCheckpointMarkers();
   }
 
-  void _checkCheckpointProximity(Position position) {
+  void _checkCheckpointProximity(Position userPosition) {
     for (final checkpoint in _checkpoints) {
       final id = checkpoint['id'] as String;
       if (_reachedCheckpoints.contains(id)) continue; // Already reached
 
-      final position = checkpoint['position'] as LatLng;
+      final checkpointPosition = checkpoint['position'] as LatLng;
       final distance = Geolocator.distanceBetween(
-        position.latitude,
-        position.longitude,
-        position.latitude,
-        position.longitude,
+        userPosition.latitude,
+        userPosition.longitude,
+        checkpointPosition.latitude,
+        checkpointPosition.longitude,
       );
 
       if (distance < 20.0) { // 20 meters
@@ -143,6 +158,9 @@ class _MapsScreenState extends State<MapsScreen> {
         // Update marker color to green
         _updateCheckpointMarker(id, reached: true);
 
+        // Trigger celebration effects
+        _triggerCheckpointCelebration();
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('🎉 ${checkpoint['title']} dosažen! Úspěch odemčen!'),
@@ -150,13 +168,36 @@ class _MapsScreenState extends State<MapsScreen> {
             backgroundColor: Colors.lime,
           ),
         );
+
+        // Check for level up (all checkpoints reached)
+        _checkLevelUp();
       }
     }
   }
 
-  Future<void> _saveCheckpointAchievement(String checkpointId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('achievement_${checkpointId}_reached', true);
+  void _triggerCheckpointCelebration() {
+    // Haptic feedback
+    HapticFeedback.mediumImpact();
+
+    // Pulse animation for distance card
+    _pulseController.forward(from: 0.0);
+  }
+
+  void _checkLevelUp() {
+    if (_reachedCheckpoints.length == _checkpoints.length && !_showCelebration) {
+      setState(() {
+        _showCelebration = true;
+      });
+
+      // Hide celebration after 5 seconds
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) {
+          setState(() {
+            _showCelebration = false;
+          });
+        }
+      });
+    }
   }
 
   void _updateCheckpointMarker(String checkpointId, {required bool reached}) {
@@ -357,46 +398,49 @@ class _MapsScreenState extends State<MapsScreen> {
           Positioned(
             top: 80,
             right: 16,
-            child: Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 4,
-              color: Colors.white.withOpacity(0.95),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.directions_walk,
-                      color: Colors.lime.shade700,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Dnešní vzdálenost',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
-                            fontWeight: FontWeight.w500,
+            child: ScaleTransition(
+              scale: _pulseAnimation,
+              child: Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 4,
+                color: Colors.white.withOpacity(0.95),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.directions_walk,
+                        color: Colors.lime.shade700,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Dnešní vzdálenost',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                        Text(
-                          '${_todayDistance.toStringAsFixed(0)} m',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.lime.shade900,
-                            fontWeight: FontWeight.bold,
+                          Text(
+                            '${_todayDistance.toStringAsFixed(0)} m',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.lime.shade900,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -440,6 +484,42 @@ class _MapsScreenState extends State<MapsScreen> {
               ),
             ),
           ),
+          // Celebration overlay
+          if (_showCelebration)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.7),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.emoji_events,
+                        size: 100,
+                        color: Colors.yellow.shade600,
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'LEVEL UP!',
+                        style: TextStyle(
+                          fontSize: 48,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Dokončil jsi všechny checkpointy!',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -448,6 +528,7 @@ class _MapsScreenState extends State<MapsScreen> {
   @override
   void dispose() {
     _mapController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 }
