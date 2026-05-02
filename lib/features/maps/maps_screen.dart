@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/location_service.dart';
 
@@ -21,12 +22,39 @@ class _MapsScreenState extends State<MapsScreen> {
   final Set<Marker> _markers = {};
   final List<LatLng> _polylineCoordinates = [];
 
+  String? _selectedAvatar;
+  BitmapDescriptor? _avatarIcon;
+
   @override
   void initState() {
     super.initState();
     _locationService = LocationService();
     _positionStream = _locationService.positionUpdateStream;
+    _loadSelectedAvatar();
     _setupMap();
+  }
+
+  Future<void> _loadSelectedAvatar() async {
+    final prefs = await SharedPreferences.getInstance();
+    final avatar = prefs.getString('selected_avatar');
+    setState(() {
+      _selectedAvatar = avatar;
+    });
+
+    if (avatar != null) {
+      await _createAvatarIcon(avatar);
+    }
+  }
+
+  Future<void> _createAvatarIcon(String avatar) async {
+    final imagePath = 'assets/images/$avatar.png';
+    final bitmapDescriptor = await BitmapDescriptor.fromAssetImage(
+      const ImageConfiguration(size: Size(48, 48)),
+      imagePath,
+    );
+    setState(() {
+      _avatarIcon = bitmapDescriptor;
+    });
   }
 
   Future<void> _setupMap() async {
@@ -47,7 +75,8 @@ class _MapsScreenState extends State<MapsScreen> {
       markerId: markerId,
       position: LatLng(position.latitude, position.longitude),
       infoWindow: const InfoWindow(title: 'Vaše poloha'),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      icon: _avatarIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      anchor: _avatarIcon != null ? const Offset(0.5, 0.5) : const Offset(0.5, 1.0),
     );
 
     setState(() {
