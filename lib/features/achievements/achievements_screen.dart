@@ -2,8 +2,6 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-const double totalDistance = 12345.0; // Change this value to test achievement progress and color states
-
 const List<Map<String, dynamic>> _achievementData = [
   {
     'asset': 'assets/images/Atchivment_1km.png',
@@ -50,8 +48,37 @@ const List<double> _grayscaleMatrix = [
   0, 0, 0, 1, 0,
 ];
 
-class AchievementsScreen extends StatelessWidget {
+class AchievementsScreen extends StatefulWidget {
   const AchievementsScreen({super.key});
+
+  @override
+  State<AchievementsScreen> createState() => _AchievementsScreenState();
+}
+
+class _AchievementsScreenState extends State<AchievementsScreen> {
+  double _totalDistance = 12345.0;
+  late final TextEditingController _distanceController;
+
+  @override
+  void initState() {
+    super.initState();
+    _distanceController = TextEditingController(text: _totalDistance.toStringAsFixed(0));
+  }
+
+  @override
+  void dispose() {
+    _distanceController.dispose();
+    super.dispose();
+  }
+
+  void _updateDistance(String value) {
+    final parsed = double.tryParse(value.replaceAll(',', '.'));
+    if (parsed != null) {
+      setState(() {
+        _totalDistance = parsed.clamp(0, 40000);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,20 +91,9 @@ class AchievementsScreen extends StatelessWidget {
       backgroundColor: Colors.white,
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        child: ListView.separated(
-          itemCount: _achievementData.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 16),
-          itemBuilder: (context, index) {
-            final item = _achievementData[index];
-            final double goal = item['goal'] as double;
-            final double progress = min(totalDistance / goal, 1.0);
-            final bool reached = totalDistance >= goal;
-            final String title = item['title'] as String;
-            final String description = item['description'] as String;
-            final String asset = item['asset'] as String;
-            final int percentage = (progress * 100).round();
-
-            return Card(
+        child: Column(
+          children: [
+            Card(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
@@ -85,69 +101,161 @@ class AchievementsScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Text(
+                      'Testovací vzdálenost',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ColorFiltered(
-                          colorFilter: ColorFilter.matrix(
-                            reached ? List<double>.from(<double>[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]) : _grayscaleMatrix,
-                          ),
-                          child: Image.asset(
-                            asset,
-                            width: 72,
-                            height: 72,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                description,
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: Colors.black54,
-                                    ),
-                              ),
-                              const SizedBox(height: 12),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: LinearProgressIndicator(
-                                  value: progress,
-                                  minHeight: 10,
-                                  backgroundColor: Colors.lightBlue.shade100,
-                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.lime),
-                                ),
-                              ),
-                            ],
+                          child: Slider(
+                            value: _totalDistance.clamp(0, 40000),
+                            min: 0,
+                            max: 40000,
+                            divisions: 40,
+                            label: '${_totalDistance.round()} km',
+                            activeColor: Colors.lime,
+                            inactiveColor: Colors.lightBlue.shade100,
+                            onChanged: (value) {
+                              setState(() {
+                                _totalDistance = value;
+                                _distanceController.text = value.round().toString();
+                              });
+                            },
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Text(
-                          '$percentage%',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          '${_totalDistance.round()} km',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
-                                color: reached ? Colors.lime.shade900 : Colors.black38,
+                                color: Colors.lightBlue.shade900,
                               ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _distanceController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                      decoration: InputDecoration(
+                        labelText: 'Ruční zadání km',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        prefixIcon: const Icon(Icons.directions_walk),
+                      ),
+                      onSubmitted: _updateDistance,
+                      onChanged: (value) {
+                        final parsed = double.tryParse(value.replaceAll(',', '.'));
+                        if (parsed != null) {
+                          setState(() {
+                            _totalDistance = parsed.clamp(0, 40000);
+                          });
+                        }
+                      },
+                    ),
                   ],
                 ),
               ),
-            );
-          },
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.separated(
+                itemCount: _achievementData.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  final item = _achievementData[index];
+                  final double goal = item['goal'] as double;
+                  final double progress = min(_totalDistance / goal, 1.0);
+                  final bool reached = _totalDistance >= goal;
+                  final String title = item['title'] as String;
+                  final String description = item['description'] as String;
+                  final String asset = item['asset'] as String;
+                  final int percentage = (progress * 100).round();
+
+                  return Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ColorFiltered(
+                                colorFilter: ColorFilter.matrix(
+                                  reached
+                                      ? const <double>[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]
+                                      : _grayscaleMatrix,
+                                ),
+                                child: Image.asset(
+                                  asset,
+                                  width: 72,
+                                  height: 72,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black87,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      description,
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                            color: Colors.black54,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: LinearProgressIndicator(
+                                        value: progress,
+                                        minHeight: 10,
+                                        backgroundColor: Colors.lightBlue.shade100,
+                                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.lime),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                '$percentage%',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: reached ? Colors.lime.shade900 : Colors.black38,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
