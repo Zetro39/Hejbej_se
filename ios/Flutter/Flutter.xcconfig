@@ -1,0 +1,9 @@
+// Flutter Configuration
+// Bundle Identifier Configuration
+// Change PRODUCT_BUNDLE_IDENTIFIER to your unique bundle identifier
+// Example: com.yourname.hejbejse
+
+#include "Generated.xcconfig"
+
+// Override with your custom bundle identifier
+PRODUCT_BUNDLE_IDENTIFIER = com.tvojejmeno.hejbejse

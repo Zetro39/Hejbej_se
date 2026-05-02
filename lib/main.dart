@@ -1,64 +1,78 @@
 import 'package:flutter/material.dart';
 
-import 'features/gamification/gamification_screen.dart';
-import 'features/maps/maps_screen.dart';
-import 'features/profile/profile_screen.dart';
-import 'features/shop/shop_screen.dart';
+import 'login_screen.dart';
+import 'main_shell.dart';
 
 void main() {
   runApp(const HejbejSeApp());
 }
 
-/// Kořenová aplikace – později sem přijde téma z [core/theme].
 class HejbejSeApp extends StatelessWidget {
   const HejbejSeApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final lightColorScheme = ColorScheme.fromSeed(
+      seedColor: Colors.lightBlue,
+      brightness: Brightness.light,
+    ).copyWith(
+      secondary: Colors.lime,
+      secondaryContainer: Colors.lime.shade100,
+      surface: Colors.white,
+      surfaceVariant: Colors.lightBlue.shade50,
+    );
+
     return MaterialApp(
       title: 'Hejbej se',
       debugShowCheckedModeBanner: false,
+      themeMode: ThemeMode.light, // Disable dark mode globally
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
+        colorScheme: lightColorScheme,
+        scaffoldBackgroundColor: Colors.white,
+        canvasColor: Colors.white,
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.lightBlue,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: Colors.lightBlue.shade50,
+          indicatorColor: Colors.lime.withOpacity(0.28),
+          height: 70,
+          labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>((states) {
+            return TextStyle(
+              color: states.contains(WidgetState.selected)
+                  ? Colors.lime
+                  : Colors.lightBlue.shade700,
+              fontWeight: FontWeight.w700,
+            );
+          }),
+          iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>((states) {
+            return IconThemeData(
+              color: states.contains(WidgetState.selected)
+                  ? Colors.lime
+                  : Colors.lightBlue.shade700,
+              size: states.contains(WidgetState.selected) ? 32 : 28,
+            );
+          }),
+          indicatorShape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ButtonStyle(
+            backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+              if (states.contains(WidgetState.pressed)) {
+                return Colors.lime.shade700;
+              }
+              return Colors.lime;
+            }),
+            foregroundColor: WidgetStateProperty.all(Colors.black),
+          ),
+        ),
       ),
-      home: const _MainShell(),
-    );
-  }
-}
-
-/// Jednoduchý „karbonát“ se čtyřmi moduly – dokud nepřijde vlastní navigace/router.
-class _MainShell extends StatefulWidget {
-  const _MainShell();
-
-  @override
-  State<_MainShell> createState() => _MainShellState();
-}
-
-class _MainShellState extends State<_MainShell> {
-  int _index = 0;
-
-  static const List<Widget> _screens = [
-    MapsScreen(),
-    GamificationScreen(),
-    ProfileScreen(),
-    ShopScreen(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Mapy'),
-          NavigationDestination(icon: Icon(Icons.emoji_events_outlined), label: 'Hra'),
-          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profil'),
-          NavigationDestination(icon: Icon(Icons.shopping_bag_outlined), label: 'Obchod'),
-        ],
-      ),
+      home: const LoginScreen(),
     );
   }
 }
