@@ -1,26 +1,181 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 
-/// Modul Mapy – Placeholder pro GPS mapu.
-class MapsScreen extends StatelessWidget {
+import '../../services/location_service.dart';
+
+/// Modul Mapy – Live GPS tracking s Google Maps.
+class MapsScreen extends StatefulWidget {
   const MapsScreen({super.key});
+
+  @override
+  State<MapsScreen> createState() => _MapsScreenState();
+}
+
+class _MapsScreenState extends State<MapsScreen> {
+  late GoogleMapController _mapController;
+  late LocationService _locationService;
+  late Stream<Position> _positionStream;
+
+  final Set<Polyline> _polylines = {};
+  final Set<Marker> _markers = {};
+  final List<LatLng> _polylineCoordinates = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _locationService = LocationService();
+    _positionStream = _locationService.positionUpdateStream;
+    _setupMap();
+  }
+
+  Future<void> _setupMap() async {
+    // Get initial position
+    final initialPosition = await _locationService.getCurrentLocation();
+    if (initialPosition != null && mounted) {
+      _polylineCoordinates.add(
+        LatLng(initialPosition.latitude, initialPosition.longitude),
+      );
+      _addMarker(initialPosition);
+      _updatePolyline();
+    }
+  }
+
+  void _addMarker(Position position) {
+    const markerId = MarkerId('user_location');
+    final marker = Marker(
+      markerId: markerId,
+      position: LatLng(position.latitude, position.longitude),
+      infoWindow: const InfoWindow(title: 'Vaše poloha'),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+    );
+
+    setState(() {
+      _markers.removeWhere((m) => m.markerId == markerId);
+      _markers.add(marker);
+    });
+  }
+
+  void _updatePolyline() {
+    if (_polylineCoordinates.length < 2) return;
+
+    const polylineId = PolylineId('user_path');
+    final polyline = Polyline(
+      polylineId: polylineId,
+      color: Colors.blue,
+      width: 5,
+      points: _polylineCoordinates,
+      geodesic: true,
+    );
+
+    setState(() {
+      _polylines.removeWhere((p) => p.polylineId == polylineId);
+      _polylines.add(polyline);
+    });
+  }
+
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+
+    // Listen to position updates
+    _positionStream.listen((position) {
+      if (!mounted) return;
+
+      final newPoint = LatLng(position.latitude, position.longitude);
+
+      // Add to polyline if far enough from last point
+      if (_polylineCoordinates.isEmpty ||
+          _polylineCoordinates.last.latitude != newPoint.latitude ||
+          _polylineCoordinates.last.longitude != newPoint.longitude) {
+        setState(() {
+          _polylineCoordinates.add(newPoint);
+        });
+        _updatePolyline();
+      }
+
+      // Update marker
+      _addMarker(position);
+
+      // Animate camera to follow user
+      _mapController.animateCamera(
+        CameraUpdateWithBounds(
+          bounds: _calculateBounds(),
+          padding: const EdgeInsets.all(100),
+        ),
+      );
+    });
+  }
+
+  CameraUpdate _calculateBounds() {
+    if (_polylineCoordinates.isEmpty) {
+      return CameraUpdate.newLatLng(
+        const LatLng(50.0755, 14.4378), // Prague
+      );
+    }
+
+    double minLat = _polylineCoordinates.first.latitude;
+    double maxLat = _polylineCoordinates.first.latitude;
+    double minLng = _polylineCoordinates.first.longitude;
+    double maxLng = _polylineCoordinates.first.longitude;
+
+    for (final point in _polylineCoordinates) {
+      minLat = minLat > point.latitude ? point.latitude : minLat;
+      maxLat = maxLat < point.latitude ? point.latitude : maxLat;
+      minLng = minLng > point.longitude ? point.longitude : minLng;
+      maxLng = maxLng < point.longitude ? point.longitude : maxLng;
+    }
+
+    return CameraUpdate.newLatLngBounds(
+      LatLngBounds(
+        southwest: LatLng(minLat, minLng),
+        northeast: LatLng(maxLat, maxLng),
+      ),
+      100,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mapy'),
+        title: const Text('Live mapa'),
         backgroundColor: Colors.lightBlue,
         foregroundColor: Colors.white,
       ),
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top overlay with task
-            Container(
+      body: Stack(
+        children: [
+          // Google Map
+          GoogleMap(
+            onMapCreated: _onMapCreated,
+            initialCameraPosition: const CameraPosition(
+              target: LatLng(50.0755, 14.4378), // Prague
+              zoom: 13,
+            ),
+            polylines: _polylines,
+            markers: _markers,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: true,
+            compassEnabled: true,
+            zoomControlsEnabled: true,
+          ),
+          // Top overlay with task
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16.0),
-              color: Colors.lightBlue.shade50,
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.95),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.lightBlue.shade200,
+                    width: 1,
+                  ),
+                ),
+              ),
               child: Row(
                 children: [
                   Icon(
@@ -41,81 +196,55 @@ class MapsScreen extends StatelessWidget {
                 ],
               ),
             ),
-            // Map placeholder
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: Colors.lightBlue.shade100,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.lightBlue.shade200,
-                    width: 2,
-                  ),
-                ),
-                child: const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.map,
-                        size: 80,
-                        color: Colors.lightBlue,
-                      ),
-                      SizedBox(height: 16),
-                      Text(
-                        'GPS Mapa se připravuje',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.lightBlue,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // Bottom scan button
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: double.infinity,
-                height: 64,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Spouštím skenování okolí...'),
-                      ),
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.radar,
-                    size: 32,
-                  ),
-                  label: const Text(
-                    'SKENOVAT OKOLÍ',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+          ),
+          // Bottom button
+          Positioned(
+            bottom: 16,
+            left: 16,
+            right: 16,
+            child: SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Hledání parků v okolí...'),
                     ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.radar,
+                  size: 28,
+                ),
+                label: const Text(
+                  'SKENOVAT OKOLÍ',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
                   ),
-                  style: ButtonStyle(
-                    backgroundColor: WidgetStateProperty.all(Colors.lime),
-                    foregroundColor: WidgetStateProperty.all(Colors.black),
-                    shape: WidgetStateProperty.all(
-                      RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                ),
+                style: ButtonStyle(
+                  backgroundColor: WidgetStateProperty.all(Colors.lime),
+                  foregroundColor: WidgetStateProperty.all(Colors.black),
+                  shape: WidgetStateProperty.all(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
 }
+

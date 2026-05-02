@@ -41,6 +41,14 @@ class DistanceManager {
 }
 
 class LocationService {
+  static final LocationService _instance = LocationService._internal();
+
+  factory LocationService() {
+    return _instance;
+  }
+
+  LocationService._internal();
+
   Position? _lastPosition;
 
   /// Request location permissions and return true if granted
@@ -91,8 +99,22 @@ class LocationService {
     });
   }
 
+  /// Stream of positions for map tracking (polyline and marker)
+  Stream<Position> get positionUpdateStream {
+    return Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.medium,
+        distanceFilter: 10, // Update more frequently for map
+      ),
+    );
+  }
+
+  /// Get last known position
+  Position? get lastPosition => _lastPosition;
+
   /// Reset tracking
   void reset() {
     _lastPosition = null;
   }
 }
+
