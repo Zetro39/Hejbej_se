@@ -1,14 +1,73 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 import 'login_screen.dart';
 import 'main_shell.dart';
+import 'services/location_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await DistanceManager().initialize();
   runApp(const HejbejSeApp());
 }
 
-class HejbejSeApp extends StatelessWidget {
+class HejbejSeApp extends StatefulWidget {
   const HejbejSeApp({super.key});
+
+  @override
+  State<HejbejSeApp> createState() => _HejbejSeAppState();
+}
+
+class _HejbejSeAppState extends State<HejbejSeApp> {
+  final LocationService _locationService = LocationService();
+  late StreamSubscription<double> _locationSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeLocationTracking();
+  }
+
+  Future<void> _initializeLocationTracking() async {
+    // Check if location services are enabled
+    final serviceEnabled = await _locationService.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Povolte služby polohy pro sledování vzdálenosti')),
+        );
+      }
+      return;
+    }
+
+    // Request permission
+    final permissionGranted = await _locationService.requestLocationPermission();
+    if (!permissionGranted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Povolení k poloze je vyžadováno pro sledování')),
+        );
+      }
+      return;
+    }
+
+    // Start tracking
+    _locationSubscription = _locationService.positionStream.listen((distanceKm) async {
+      if (distanceKm > 0) {
+        await DistanceManager().addDistance(distanceKm);
+        // Notify listeners that distance has changed
+        if (mounted) {
+          setState(() {});
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _locationSubscription.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
