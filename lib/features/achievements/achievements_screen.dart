@@ -45,7 +45,31 @@ const List<Map<String, dynamic>> _achievementData = [
   {
     'id': 'checkpoint_1',
     'title': 'První checkpoint',
-    'description': 'Najdi a dosáhni checkpoint na mapě',
+    'description': 'Najdi a dosáhni severovýchodní checkpoint',
+    'type': 'checkpoint',
+  },
+  {
+    'id': 'checkpoint_2',
+    'title': 'Druhý checkpoint',
+    'description': 'Najdi a dosáhni jižovýchodní checkpoint',
+    'type': 'checkpoint',
+  },
+  {
+    'id': 'checkpoint_3',
+    'title': 'Třetí checkpoint',
+    'description': 'Najdi a dosáhni jihozápadní checkpoint',
+    'type': 'checkpoint',
+  },
+  {
+    'id': 'checkpoint_4',
+    'title': 'Čtvrtý checkpoint',
+    'description': 'Najdi a dosáhni severozápadní checkpoint',
+    'type': 'checkpoint',
+  },
+  {
+    'id': 'checkpoint_5',
+    'title': 'Pátý checkpoint',
+    'description': 'Najdi a dosáhni východní checkpoint',
     'type': 'checkpoint',
   },
 ];
@@ -69,6 +93,10 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
   late final TextEditingController _distanceController;
   bool _debugMode = false;
   bool _checkpoint1Reached = false;
+  bool _checkpoint2Reached = false;
+  bool _checkpoint3Reached = false;
+  bool _checkpoint4Reached = false;
+  bool _checkpoint5Reached = false;
 
   @override
   void initState() {
@@ -84,6 +112,10 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _checkpoint1Reached = prefs.getBool('achievement_checkpoint_1_reached') ?? false;
+      _checkpoint2Reached = prefs.getBool('achievement_checkpoint_2_reached') ?? false;
+      _checkpoint3Reached = prefs.getBool('achievement_checkpoint_3_reached') ?? false;
+      _checkpoint4Reached = prefs.getBool('achievement_checkpoint_4_reached') ?? false;
+      _checkpoint5Reached = prefs.getBool('achievement_checkpoint_5_reached') ?? false;
     });
   }
 
@@ -245,7 +277,11 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                   // Handle checkpoint achievements
                   if (item['type'] == 'checkpoint') {
                     final String id = item['id'] as String;
-                    final bool reached = id == 'checkpoint_1' ? _checkpoint1Reached : false;
+                    final bool reached = (id == 'checkpoint_1' ? _checkpoint1Reached :
+                                         id == 'checkpoint_2' ? _checkpoint2Reached :
+                                         id == 'checkpoint_3' ? _checkpoint3Reached :
+                                         id == 'checkpoint_4' ? _checkpoint4Reached :
+                                         id == 'checkpoint_5' ? _checkpoint5Reached : false);
                     final String title = item['title'] as String;
                     final String description = item['description'] as String;
                     

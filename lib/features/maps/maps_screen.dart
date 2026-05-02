@@ -25,9 +25,37 @@ class _MapsScreenState extends State<MapsScreen> {
   String? _selectedAvatar;
   BitmapDescriptor? _avatarIcon;
 
-  // Checkpoint coordinates (approximately 200m NE from Prague center)
-  static const LatLng _checkpointPosition = LatLng(50.0773, 14.4403);
-  bool _checkpointReached = false;
+  // Multiple checkpoint coordinates around Prague
+  static const List<Map<String, dynamic>> _checkpoints = [
+    {
+      'id': 'checkpoint_1',
+      'position': LatLng(50.0773, 14.4403), // NE direction
+      'title': 'Severovýchodní checkpoint',
+    },
+    {
+      'id': 'checkpoint_2', 
+      'position': LatLng(50.0727, 14.4403), // SE direction
+      'title': 'Jižovýchodní checkpoint',
+    },
+    {
+      'id': 'checkpoint_3',
+      'position': LatLng(50.0727, 14.4297), // SW direction  
+      'title': 'Jihozápadní checkpoint',
+    },
+    {
+      'id': 'checkpoint_4',
+      'position': LatLng(50.0773, 14.4297), // NW direction
+      'title': 'Severozápadní checkpoint',
+    },
+    {
+      'id': 'checkpoint_5',
+      'position': LatLng(50.0755, 14.4450), // East direction
+      'title': 'Východní checkpoint',
+    },
+  ];
+
+  final Set<String> _reachedCheckpoints = {};
+  double _todayDistance = 0.0;
 
   @override
   void initState() {
@@ -35,7 +63,22 @@ class _MapsScreenState extends State<MapsScreen> {
     _locationService = LocationService();
     _positionStream = _locationService.positionUpdateStream;
     _loadSelectedAvatar();
+    _loadReachedCheckpoints();
     _setupMap();
+  }
+
+  Future<void> _loadReachedCheckpoints() async {
+    final prefs = await SharedPreferences.getInstance();
+    final reached = <String>{};
+    for (final checkpoint in _checkpoints) {
+      final id = checkpoint['id'] as String;
+      if (prefs.getBool('achievement_${id}_reached') ?? false) {
+        reached.add(id);
+      }
+    }
+    setState(() {
+      _reachedCheckpoints.addAll(reached);
+    });
   }
 
   Future<void> _loadSelectedAvatar() async {
@@ -72,44 +115,104 @@ class _MapsScreenState extends State<MapsScreen> {
       _updatePolyline();
     }
 
-    // Add checkpoint marker
-    _addCheckpointMarker();
+    // Add all checkpoint markers
+    _addAllCheckpointMarkers();
   }
 
   void _checkCheckpointProximity(Position position) {
-    if (_checkpointReached) return;
+    for (final checkpoint in _checkpoints) {
+      final id = checkpoint['id'] as String;
+      if (_reachedCheckpoints.contains(id)) continue; // Already reached
 
-    final distance = Geolocator.distanceBetween(
-      position.latitude,
-      position.longitude,
-      _checkpointPosition.latitude,
-      _checkpointPosition.longitude,
-    );
-
-    if (distance < 20.0) { // 20 meters
-      setState(() {
-        _checkpointReached = true;
-      });
-
-      // Save achievement permanently
-      _saveCheckpointAchievement();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🎉 Cíl dosažen! Úspěch odemčen!'),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.lime,
-        ),
+      final position = checkpoint['position'] as LatLng;
+      final distance = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        position.latitude,
+        position.longitude,
       );
 
-      // Here you could also trigger additional achievements or rewards
-      // For now, we'll just mark it as reached
+      if (distance < 20.0) { // 20 meters
+        setState(() {
+          _reachedCheckpoints.add(id);
+        });
+
+        // Save achievement permanently
+        _saveCheckpointAchievement(id);
+
+        // Update marker color to green
+        _updateCheckpointMarker(id, reached: true);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 ${checkpoint['title']} dosažen! Úspěch odemčen!'),
+            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.lime,
+          ),
+        );
+      }
     }
   }
 
-  Future<void> _saveCheckpointAchievement() async {
+  Future<void> _saveCheckpointAchievement(String checkpointId) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('achievement_checkpoint_1_reached', true);
+    await prefs.setBool('achievement_${checkpointId}_reached', true);
+  }
+
+  void _updateCheckpointMarker(String checkpointId, {required bool reached}) {
+    final markerId = MarkerId(checkpointId);
+    final existingMarker = _markers.firstWhere(
+      (marker) => marker.markerId == markerId,
+      orElse: () => const Marker(markerId: MarkerId('')),
+    );
+
+    if (existingMarker.markerId.value.isNotEmpty) {
+      final updatedMarker = existingMarker.copyWith(
+        iconParam: reached
+          ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
+          : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+      );
+
+      setState(() {
+        _markers.removeWhere((marker) => marker.markerId == markerId);
+        _markers.add(updatedMarker);
+      });
+    }
+  }
+
+  void _addAllCheckpointMarkers() {
+    for (final checkpoint in _checkpoints) {
+      final id = checkpoint['id'] as String;
+      final position = checkpoint['position'] as LatLng;
+      final title = checkpoint['title'] as String;
+      final isReached = _reachedCheckpoints.contains(id);
+
+      final marker = Marker(
+        markerId: MarkerId(id),
+        position: position,
+        infoWindow: InfoWindow(title: title),
+        icon: isReached 
+          ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
+          : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+      );
+
+      setState(() {
+        _markers.add(marker);
+      });
+    }
+  }
+
+  double _calculatePolylineDistance() {
+    double totalDistance = 0.0;
+    for (int i = 1; i < _polylineCoordinates.length; i++) {
+      totalDistance += Geolocator.distanceBetween(
+        _polylineCoordinates[i - 1].latitude,
+        _polylineCoordinates[i - 1].longitude,
+        _polylineCoordinates[i].latitude,
+        _polylineCoordinates[i].longitude,
+      );
+    }
+    return totalDistance;
   }
 
   void _updatePolyline() {
@@ -154,6 +257,11 @@ class _MapsScreenState extends State<MapsScreen> {
 
       // Check checkpoint proximity
       _checkCheckpointProximity(position);
+
+      // Update today's distance
+      setState(() {
+        _todayDistance = _calculatePolylineDistance();
+      });
 
       // Animate camera to follow user
       if (_polylineCoordinates.isNotEmpty) {
@@ -242,6 +350,54 @@ class _MapsScreenState extends State<MapsScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          // Distance tracker overlay
+          Positioned(
+            top: 80,
+            right: 16,
+            child: Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 4,
+              color: Colors.white.withOpacity(0.95),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.directions_walk,
+                      color: Colors.lime.shade700,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Dnešní vzdálenost',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          '${_todayDistance.toStringAsFixed(0)} m',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.lime.shade900,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
