@@ -25,6 +25,10 @@ class _MapsScreenState extends State<MapsScreen> {
   String? _selectedAvatar;
   BitmapDescriptor? _avatarIcon;
 
+  // Checkpoint coordinates (approximately 200m NE from Prague center)
+  static const LatLng _checkpointPosition = LatLng(50.0773, 14.4403);
+  bool _checkpointReached = false;
+
   @override
   void initState() {
     super.initState();
@@ -67,22 +71,37 @@ class _MapsScreenState extends State<MapsScreen> {
       _addMarker(initialPosition);
       _updatePolyline();
     }
+
+    // Add checkpoint marker
+    _addCheckpointMarker();
   }
 
-  void _addMarker(Position position) {
-    const markerId = MarkerId('user_location');
-    final marker = Marker(
-      markerId: markerId,
-      position: LatLng(position.latitude, position.longitude),
-      infoWindow: const InfoWindow(title: 'Vaše poloha'),
-      icon: _avatarIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-      anchor: _avatarIcon != null ? const Offset(0.5, 0.5) : const Offset(0.5, 1.0),
+  void _checkCheckpointProximity(Position position) {
+    if (_checkpointReached) return;
+
+    final distance = Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
+      _checkpointPosition.latitude,
+      _checkpointPosition.longitude,
     );
 
-    setState(() {
-      _markers.removeWhere((m) => m.markerId == markerId);
-      _markers.add(marker);
-    });
+    if (distance < 20.0) { // 20 meters
+      setState(() {
+        _checkpointReached = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🎉 Cíl dosažen! Úspěch odemčen!'),
+          duration: Duration(seconds: 3),
+          backgroundColor: Colors.lime,
+        ),
+      );
+
+      // Here you could also trigger additional achievements or rewards
+      // For now, we'll just mark it as reached
+    }
   }
 
   void _updatePolyline() {
@@ -124,6 +143,9 @@ class _MapsScreenState extends State<MapsScreen> {
 
       // Update marker
       _addMarker(position);
+
+      // Check checkpoint proximity
+      _checkCheckpointProximity(position);
 
       // Animate camera to follow user
       if (_polylineCoordinates.isNotEmpty) {
