@@ -379,35 +379,28 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Live mapa'),
-        backgroundColor: Colors.lightBlue,
-        foregroundColor: Colors.white,
-      ),
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          // Google Map
-          GoogleMap(
-            onMapCreated: _onMapCreated,
-            onCameraMoveStarted: () {
-              // User started moving camera manually, disable auto-follow
-              setState(() {
-                _isFollowingUser = false;
-              });
-            },
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(50.0755, 14.4378), // Prague
-              zoom: 13,
-            ),
-            polylines: _polylines,
-            markers: _markers,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            compassEnabled: true,
-            zoomControlsEnabled: true,
+    return Stack(
+      children: [
+        // Google Map
+        GoogleMap(
+          onMapCreated: _onMapCreated,
+          onCameraMoveStarted: () {
+            // User started moving camera manually, disable auto-follow
+            setState(() {
+              _isFollowingUser = false;
+            });
+          },
+          initialCameraPosition: const CameraPosition(
+            target: LatLng(50.0755, 14.4378), // Prague
+            zoom: 13,
           ),
+          polylines: _polylines,
+          markers: _markers,
+          myLocationEnabled: true,
+          myLocationButtonEnabled: true,
+          compassEnabled: true,
+          zoomControlsEnabled: true,
+        ),
           // Top overlay with task
           Positioned(
             top: 0,
@@ -586,8 +579,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
         ],
-      ),
-    );
+      );
   }
 
   @override
