@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../achievements/achievements_screen.dart';
+
 /// Modul Profil – uživatelské informace.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key, required this.userName});
@@ -13,6 +15,19 @@ class ProfileScreen extends StatelessWidget {
         title: const Text('Profil'),
         backgroundColor: Colors.lightBlue,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.badge),
+            tooltip: 'Úspěchy',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AchievementsScreen(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       backgroundColor: Colors.white,
       body: SingleChildScrollView(

@@ -20,4 +20,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/
+    - assets/images/Atchivment_1km.png
+    - assets/images/Atchivment_10km.png
+    - assets/images/Atchivment_100km.png
+    - assets/images/Atchivment_1000km.png
+    - assets/images/Atchivment_10000km.png
+    - assets/images/Atchivment_40000km.png
