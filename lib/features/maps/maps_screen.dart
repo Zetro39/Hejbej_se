@@ -379,6 +379,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+
     return Stack(
       children: [
         // Google Map
@@ -406,42 +408,46 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             top: 0,
             left: 0,
             right: 0,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.95),
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.lightBlue.shade200,
-                    width: 1,
-                  ),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.task_alt,
-                    color: Colors.lightBlue,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Úkol: Najdi nejbližší park',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.lightBlue.shade900,
-                          ),
+            child: SafeArea(
+              top: true,
+              bottom: false,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.95),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.lightBlue.shade200,
+                      width: 1,
                     ),
                   ),
-                ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.task_alt,
+                      color: Colors.lightBlue,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Úkol: Najdi nejbližší park',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.lightBlue.shade900,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
           // Distance tracker overlay
           Positioned(
-            top: 80,
+            top: MediaQuery.of(context).padding.top + 72,
             right: 16,
             child: ScaleTransition(
               scale: _pulseAnimation,
@@ -492,7 +498,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           ),
           // Bottom button
           Positioned(
-            bottom: 90,
+            bottom: 100,
             left: 16,
             right: 16,
             child: SizedBox(
@@ -533,7 +539,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           ),
           // Recenter button
           Positioned(
-            bottom: 90,
+            bottom: 160,
             right: 16,
             child: FloatingActionButton(
               onPressed: _recenterCamera,
