@@ -110,7 +110,7 @@ class _MapsScreenState extends State<MapsScreen> {
     const polylineId = PolylineId('user_path');
     final polyline = Polyline(
       polylineId: polylineId,
-      color: Colors.blue,
+      color: Colors.lime,
       width: 5,
       points: _polylineCoordinates,
       geodesic: true,
