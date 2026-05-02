@@ -97,41 +97,30 @@ class _MapsScreenState extends State<MapsScreen> {
       _addMarker(position);
 
       // Animate camera to follow user
-      _mapController.animateCamera(
-        CameraUpdate.newLatLngBounds(
-          bounds: _calculateBounds(),
-          padding: const EdgeInsets.all(100),
-        ),
-      );
+      if (_polylineCoordinates.isNotEmpty) {
+        double minLat = _polylineCoordinates.first.latitude;
+        double maxLat = _polylineCoordinates.first.latitude;
+        double minLng = _polylineCoordinates.first.longitude;
+        double maxLng = _polylineCoordinates.first.longitude;
+
+        for (final point in _polylineCoordinates) {
+          minLat = minLat > point.latitude ? point.latitude : minLat;
+          maxLat = maxLat < point.latitude ? point.latitude : maxLat;
+          minLng = minLng > point.longitude ? point.longitude : minLng;
+          maxLng = maxLng < point.longitude ? point.longitude : maxLng;
+        }
+
+        _mapController.animateCamera(
+          CameraUpdate.newLatLngBounds(
+            LatLngBounds(
+              southwest: LatLng(minLat, minLng),
+              northeast: LatLng(maxLat, maxLng),
+            ),
+            50.0,
+          ),
+        );
+      }
     });
-  }
-
-  CameraUpdate _calculateBounds() {
-    if (_polylineCoordinates.isEmpty) {
-      return CameraUpdate.newLatLng(
-        const LatLng(50.0755, 14.4378), // Prague
-      );
-    }
-
-    double minLat = _polylineCoordinates.first.latitude;
-    double maxLat = _polylineCoordinates.first.latitude;
-    double minLng = _polylineCoordinates.first.longitude;
-    double maxLng = _polylineCoordinates.first.longitude;
-
-    for (final point in _polylineCoordinates) {
-      minLat = minLat > point.latitude ? point.latitude : minLat;
-      maxLat = maxLat < point.latitude ? point.latitude : maxLat;
-      minLng = minLng > point.longitude ? point.longitude : minLng;
-      maxLng = maxLng < point.longitude ? point.longitude : maxLng;
-    }
-
-    return CameraUpdate.newLatLngBounds(
-      LatLngBounds(
-        southwest: LatLng(minLat, minLng),
-        northeast: LatLng(maxLat, maxLng),
-      ),
-      100,
-    );
   }
 
   @override
