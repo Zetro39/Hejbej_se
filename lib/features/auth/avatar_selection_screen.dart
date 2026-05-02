@@ -1,0 +1,197 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../maps/maps_screen.dart';
+
+/// Screen for selecting user avatar
+class AvatarSelectionScreen extends StatefulWidget {
+  const AvatarSelectionScreen({super.key});
+
+  @override
+  State<AvatarSelectionScreen> createState() => _AvatarSelectionScreenState();
+}
+
+class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> {
+  String? _selectedAvatar;
+
+  final List<Map<String, dynamic>> _avatars = [
+    {
+      'id': 'boy',
+      'label': 'Chlapec',
+      'icon': Icons.face,
+    },
+    {
+      'id': 'girl',
+      'label': 'Dívka',
+      'icon': Icons.face_3,
+    },
+    {
+      'id': 'man',
+      'label': 'Muž',
+      'icon': Icons.person,
+    },
+    {
+      'id': 'woman',
+      'label': 'Žena',
+      'icon': Icons.person_3,
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSelectedAvatar();
+  }
+
+  Future<void> _loadSelectedAvatar() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _selectedAvatar = prefs.getString('selected_avatar');
+    });
+  }
+
+  Future<void> _saveSelectedAvatar(String avatarId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('selected_avatar', avatarId);
+    setState(() {
+      _selectedAvatar = avatarId;
+    });
+  }
+
+  void _onContinue() {
+    if (_selectedAvatar != null) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const MapsScreen(),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Vyber svého hrdinu'),
+        backgroundColor: Colors.lightBlue,
+        foregroundColor: Colors.white,
+      ),
+      backgroundColor: Colors.white,
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            const Text(
+              'Vyber svého avatar',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.lightBlue,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Tento avatar bude reprezentovat tvůj pokrok v aplikaci',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.black54,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 40),
+            Expanded(
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.0,
+                ),
+                itemCount: _avatars.length,
+                itemBuilder: (context, index) {
+                  final avatar = _avatars[index];
+                  final isSelected = _selectedAvatar == avatar['id'];
+
+                  return GestureDetector(
+                    onTap: () => _saveSelectedAvatar(avatar['id']),
+                    child: Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(
+                          color: isSelected ? Colors.lime : Colors.lightBlue.shade200,
+                          width: isSelected ? 3 : 1,
+                        ),
+                      ),
+                      elevation: isSelected ? 8 : 2,
+                      color: isSelected ? Colors.lightBlue.shade50 : Colors.white,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            avatar['icon'],
+                            size: 64,
+                            color: isSelected ? Colors.lime.shade700 : Colors.lightBlue,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            avatar['label'],
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: isSelected ? Colors.lime.shade900 : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _selectedAvatar != null ? _onContinue : null,
+                style: ButtonStyle(
+                  backgroundColor: WidgetStateProperty.resolveWith<Color>(
+                    (states) {
+                      if (states.contains(WidgetState.disabled)) {
+                        return Colors.grey.shade300;
+                      }
+                      return Colors.lime;
+                    },
+                  ),
+                  foregroundColor: WidgetStateProperty.resolveWith<Color>(
+                    (states) {
+                      if (states.contains(WidgetState.disabled)) {
+                        return Colors.grey.shade500;
+                      }
+                      return Colors.black;
+                    },
+                  ),
+                  shape: WidgetStateProperty.all(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+                child: const Text(
+                  'POKRAČOVAT',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
