@@ -98,7 +98,7 @@ class _MapsScreenState extends State<MapsScreen> {
 
       // Animate camera to follow user
       _mapController.animateCamera(
-        CameraUpdateWithBounds(
+        CameraUpdate.newLatLngBounds(
           bounds: _calculateBounds(),
           padding: const EdgeInsets.all(100),
         ),
