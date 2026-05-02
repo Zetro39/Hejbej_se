@@ -1,18 +1,27 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'login_screen.dart';
 import 'main_shell.dart';
 import 'services/location_service.dart';
+import 'features/auth/avatar_selection_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DistanceManager().initialize();
-  runApp(const HejbejSeApp());
+
+  // Check if avatar is selected
+  final prefs = await SharedPreferences.getInstance();
+  final selectedAvatar = prefs.getString('selected_avatar');
+
+  runApp(HejbejSeApp(hasSelectedAvatar: selectedAvatar != null));
 }
 
 class HejbejSeApp extends StatefulWidget {
-  const HejbejSeApp({super.key});
+  const HejbejSeApp({super.key, required this.hasSelectedAvatar});
+
+  final bool hasSelectedAvatar;
 
   @override
   State<HejbejSeApp> createState() => _HejbejSeAppState();
@@ -131,7 +140,7 @@ class _HejbejSeAppState extends State<HejbejSeApp> {
           ),
         ),
       ),
-      home: const LoginScreen(),
+      home: widget.hasSelectedAvatar ? const LoginScreen() : const AvatarSelectionScreen(),
     );
   }
 }

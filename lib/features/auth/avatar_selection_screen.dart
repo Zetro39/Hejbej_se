@@ -18,22 +18,12 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> {
     {
       'id': 'boy',
       'label': 'Chlapec',
-      'icon': Icons.face,
+      'image': 'assets/images/boy.png',
     },
     {
       'id': 'girl',
       'label': 'Dívka',
-      'icon': Icons.face_3,
-    },
-    {
-      'id': 'man',
-      'label': 'Muž',
-      'icon': Icons.person,
-    },
-    {
-      'id': 'woman',
-      'label': 'Žena',
-      'icon': Icons.person_3,
+      'image': 'assets/images/girl.png',
     },
   ];
 
@@ -101,56 +91,59 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 40),
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 1.0,
-                ),
-                itemCount: _avatars.length,
-                itemBuilder: (context, index) {
-                  final avatar = _avatars[index];
-                  final isSelected = _selectedAvatar == avatar['id'];
-
-                  return GestureDetector(
+            Row(
+              children: _avatars.map((avatar) {
+                final isSelected = _selectedAvatar == avatar['id'];
+                return Expanded(
+                  child: GestureDetector(
                     onTap: () => _saveSelectedAvatar(avatar['id']),
-                    child: Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(
-                          color: isSelected ? Colors.lime : Colors.lightBlue.shade200,
-                          width: isSelected ? 3 : 1,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color: isSelected ? Colors.lime : Colors.lightBlue.shade200,
+                            width: isSelected ? 3 : 1,
+                          ),
+                        ),
+                        elevation: isSelected ? 8 : 2,
+                        color: isSelected ? Colors.lightBlue.shade50 : Colors.white,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            children: [
+                              CircleAvatar(
+                                radius: 60,
+                                backgroundColor: Colors.transparent,
+                                child: ClipOval(
+                                  child: Image.asset(
+                                    avatar['image'],
+                                    width: 120,
+                                    height: 120,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                avatar['label'],
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected ? Colors.lime.shade900 : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      elevation: isSelected ? 8 : 2,
-                      color: isSelected ? Colors.lightBlue.shade50 : Colors.white,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            avatar['icon'],
-                            size: 64,
-                            color: isSelected ? Colors.lime.shade700 : Colors.lightBlue,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            avatar['label'],
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.lime.shade900 : Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              }).toList(),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
               height: 56,
