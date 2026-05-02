@@ -63,6 +63,10 @@ class _MapsScreenState extends State<MapsScreen> {
   late Animation<double> _pulseAnimation;
   bool _showCelebration = false;
 
+  // Camera control
+  bool _isFollowingUser = true;
+  Position? _lastPosition;
+
   @override
   void initState() {
     super.initState();
@@ -200,6 +204,26 @@ class _MapsScreenState extends State<MapsScreen> {
     }
   }
 
+  void _recenterCamera() {
+    if (_lastPosition != null) {
+      setState(() {
+        _isFollowingUser = true;
+      });
+
+      // Immediately snap to user's position with current bearing
+      final cameraPosition = CameraPosition(
+        target: LatLng(_lastPosition!.latitude, _lastPosition!.longitude),
+        zoom: 16.0,
+        bearing: _lastPosition!.heading,
+        tilt: 0.0,
+      );
+
+      _mapController.animateCamera(
+        CameraUpdate.newCameraPosition(cameraPosition),
+      );
+    }
+  }
+
   void _updateCheckpointMarker(String checkpointId, {required bool reached}) {
     final markerId = MarkerId(checkpointId);
     final existingMarker = _markers.firstWhere(
@@ -241,6 +265,23 @@ class _MapsScreenState extends State<MapsScreen> {
         _markers.add(marker);
       });
     }
+  }
+
+  void _addMarker(Position position) {
+    final userMarkerId = const MarkerId('user_location');
+    final userPosition = LatLng(position.latitude, position.longitude);
+
+    final marker = Marker(
+      markerId: userMarkerId,
+      position: userPosition,
+      icon: _avatarIcon ?? BitmapDescriptor.defaultMarker,
+      infoWindow: const InfoWindow(title: 'Vaše poloha'),
+    );
+
+    setState(() {
+      _markers.removeWhere((m) => m.markerId == userMarkerId);
+      _markers.add(marker);
+    });
   }
 
   double _calculatePolylineDistance() {
@@ -302,30 +343,30 @@ class _MapsScreenState extends State<MapsScreen> {
       // Update today's distance
       setState(() {
         _todayDistance = _calculatePolylineDistance();
+        _lastPosition = position;
       });
 
-      // Animate camera to follow user
-      if (_polylineCoordinates.isNotEmpty) {
-        double minLat = _polylineCoordinates.first.latitude;
-        double maxLat = _polylineCoordinates.first.latitude;
-        double minLng = _polylineCoordinates.first.longitude;
-        double maxLng = _polylineCoordinates.first.longitude;
-
-        for (final point in _polylineCoordinates) {
-          minLat = minLat > point.latitude ? point.latitude : minLat;
-          maxLat = maxLat < point.latitude ? point.latitude : maxLat;
-          minLng = minLng > point.longitude ? point.longitude : minLng;
-          maxLng = maxLng < point.longitude ? point.longitude : maxLng;
+      // Smart camera following with bearing and speed-based zoom
+      if (_isFollowingUser) {
+        // Calculate zoom based on speed (zoom in when slow/stationary, zoom out when fast)
+        double baseZoom = 16.0; // Default zoom level
+        if (position.speed > 0) {
+          // Speed is in m/s, adjust zoom inversely with speed
+          // Zoom out when moving fast (up to 2x zoom out), zoom in when slow
+          double speedFactor = position.speed.clamp(0.0, 5.0) / 5.0; // Normalize 0-5 m/s
+          baseZoom = 16.0 - (speedFactor * 2.0); // 16.0 to 14.0 zoom range
         }
 
+        // Create camera position with bearing (heading) for auto-rotation
+        final cameraPosition = CameraPosition(
+          target: LatLng(position.latitude, position.longitude),
+          zoom: baseZoom,
+          bearing: position.heading, // Auto-rotate map to face walking direction
+          tilt: 0.0,
+        );
+
         _mapController.animateCamera(
-          CameraUpdate.newLatLngBounds(
-            LatLngBounds(
-              southwest: LatLng(minLat, minLng),
-              northeast: LatLng(maxLat, maxLng),
-            ),
-            50.0,
-          ),
+          CameraUpdate.newCameraPosition(cameraPosition),
         );
       }
     });
@@ -345,6 +386,12 @@ class _MapsScreenState extends State<MapsScreen> {
           // Google Map
           GoogleMap(
             onMapCreated: _onMapCreated,
+            onCameraMoveStarted: () {
+              // User started moving camera manually, disable auto-follow
+              setState(() {
+                _isFollowingUser = false;
+              });
+            },
             initialCameraPosition: const CameraPosition(
               target: LatLng(50.0755, 14.4378), // Prague
               zoom: 13,
@@ -482,6 +529,19 @@ class _MapsScreenState extends State<MapsScreen> {
                   ),
                 ),
               ),
+            ),
+          ),
+          // Recenter button
+          Positioned(
+            bottom: 90,
+            right: 16,
+            child: FloatingActionButton(
+              onPressed: _recenterCamera,
+              backgroundColor: Colors.lightBlue,
+              foregroundColor: Colors.white,
+              mini: true,
+              child: const Icon(Icons.my_location),
+              tooltip: 'Vycentrovat na mě',
             ),
           ),
           // Celebration overlay
