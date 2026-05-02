@@ -1,38 +1,34 @@
-# iOS build files
-Pods/
-Podfile.lock
-.symlinks/
-Flutter/Generated.xcconfig
-Flutter/Flutter.podspec
-Flutter/Flutter.framework
-Flutter/Flutter.modulemap
-Flutter/flutter_export_environment.sh
-
-# Xcode build files
-*.pbxuser
+**/dgph
 *.mode1v3
 *.mode2v3
-*.perspectivev3
-*.xcworkspace/xcuserdata/
-DerivedData/
-.derived/
-.xcodeproject/
-xcuserdata/
 *.moved-aside
+*.pbxuser
+*.perspectivev3
+**/*sync/
+.sconsign.dblite
+.tags*
+**/.vagrant/
+**/DerivedData/
+Icon?
+**/Pods/
+**/.symlinks/
+profile
+xcuserdata
+**/.generated/
+Flutter/App.framework
+Flutter/Flutter.framework
+Flutter/Flutter.podspec
+Flutter/Generated.xcconfig
+Flutter/ephemeral/
+Flutter/app.flx
+Flutter/app.zip
+Flutter/flutter_assets/
+Flutter/flutter_export_environment.sh
+ServiceDefinitions.json
+Runner/GeneratedPluginRegistrant.*
 
-# Xcode specific files
-*.xcworkspace/
-.xcconfig
-*.xcarchive/
-*.dSYM/
-.DS_Store
-
-# App signing and provisioning
-*.mobileprovision
-*.ipa
-*.app/
-
-# Pod specific
-Runner.app/
-Runner.framework/
-**/Pods/**
+# Exceptions to above rules.
+!default.mode1v3
+!default.mode2v3
+!default.pbxuser
+!default.perspectivev3
