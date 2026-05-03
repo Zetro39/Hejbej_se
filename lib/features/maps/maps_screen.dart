@@ -269,6 +269,11 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     // Close the loop
     tripPoints.add(tripPoints.first);
 
+    // Replace the user's polyline coordinates with the new trip loop so it displays
+    _polylineCoordinates.clear();
+    _polylineCoordinates.addAll(tripPoints);
+    _updatePolyline();
+
     // Add trip polyline
     final tripPolyline = Polyline(
       polylineId: const PolylineId('trip_loop'),
@@ -460,25 +465,33 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
     return Stack(
       children: [
-        // Google Map
-        GoogleMap(
-          onMapCreated: _onMapCreated,
-          onCameraMoveStarted: () {
-            // User started moving camera manually, disable auto-follow
-            setState(() {
-              _isFollowingUser = false;
-            });
-          },
-          initialCameraPosition: const CameraPosition(
-            target: LatLng(50.0755, 14.4378), // Prague
-            zoom: 13,
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 80,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(0),
+            child: GoogleMap(
+              onMapCreated: _onMapCreated,
+              onCameraMoveStarted: () {
+                // User started moving camera manually, disable auto-follow
+                setState(() {
+                  _isFollowingUser = false;
+                });
+              },
+              initialCameraPosition: const CameraPosition(
+                target: LatLng(50.0755, 14.4378), // Prague
+                zoom: 13,
+              ),
+              polylines: _polylines,
+              markers: _markers,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+              compassEnabled: true,
+              zoomControlsEnabled: true,
+            ),
           ),
-          polylines: _polylines,
-          markers: _markers,
-          myLocationEnabled: true,
-          myLocationButtonEnabled: true,
-          compassEnabled: true,
-          zoomControlsEnabled: true,
         ),
           // Top overlay with task
           Positioned(
@@ -610,7 +623,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                         ),
                       ),
                       style: ButtonStyle(
-                        backgroundColor: WidgetStateProperty.all(Colors.lime),
+                        backgroundColor: WidgetStateProperty.all(Colors.limeAccent),
                         foregroundColor: WidgetStateProperty.all(Colors.black),
                         elevation: WidgetStateProperty.all(0),
                         shape: WidgetStateProperty.all(
@@ -629,7 +642,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                     width: 56,
                     height: 56,
                     decoration: const BoxDecoration(
-                      color: Colors.lime,
+                      color: Colors.limeAccent,
                       borderRadius: BorderRadius.only(
                         topRight: Radius.circular(16),
                         bottomRight: Radius.circular(16),
