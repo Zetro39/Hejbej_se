@@ -339,6 +339,27 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _tripPoints.add({'name': 'Cíl cesty', 'position': destination});
   }
 
+  void _updateCheckpointMarker(String checkpointId, {required bool reached}) {
+    final markerId = MarkerId(checkpointId);
+    final existingMarker = _markers.firstWhere(
+      (marker) => marker.markerId == markerId,
+      orElse: () => const Marker(markerId: MarkerId('')),
+    );
+
+    if (existingMarker.markerId.value.isNotEmpty) {
+      final updatedMarker = existingMarker.copyWith(
+        iconParam: reached
+          ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
+          : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+      );
+
+      setState(() {
+        _markers.removeWhere((marker) => marker.markerId == markerId);
+        _markers.add(updatedMarker);
+      });
+    }
+  }
+
   void _addAllCheckpointMarkers() {
     for (final checkpoint in _checkpoints) {
       final id = checkpoint['id'] as String;
@@ -857,7 +878,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
         ],
-      );
+      ),
+    );
   }
 
   @override
