@@ -29,6 +29,7 @@ class _MainShellState extends State<MainShell> {
     return Scaffold(
       body: _screens[_index],
       bottomNavigationBar: NavigationBar(
+        elevation: 8,
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [

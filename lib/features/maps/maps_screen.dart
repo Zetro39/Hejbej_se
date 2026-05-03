@@ -72,6 +72,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   bool _showTripOptions = false;
   double _selectedDistance = 5.0; // km
   bool _isGeneratingTrip = false;
+  bool _isSelectingDestination = false;
+  LatLng? _destinationPoint;
   List<Map<String, dynamic>> _tripPoints = [];
 
   @override
@@ -242,11 +244,13 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     setState(() {
       _isGeneratingTrip = true;
       _tripPoints.clear();
+      _isSelectingDestination = false;
     });
 
     // Remove existing trip polylines and markers
     _polylines.removeWhere((p) => p.polylineId.value.startsWith('trip_'));
     _markers.removeWhere((m) => m.markerId.value.startsWith('trip_'));
+    _markers.removeWhere((m) => m.markerId.value == 'trip_dest');
 
     // Generate random closed loop around user position
     final center = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
@@ -257,7 +261,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
     for (int i = 0; i < numPoints; i++) {
       final angle = (i / numPoints) * 2 * 3.14159;
-      final latOffset = (radiusKm / 111.32) * 0.7 * (0.5 + 0.5 * (i % 2 == 0 ? 1 : -1)); // ~111km per degree latitude
+      final latOffset = (radiusKm / 111.32) * 0.7 * (0.5 + 0.5 * (i % 2 == 0 ? 1 : -1));
       final lngOffset = (radiusKm / (111.32 * cos(center.latitude * 3.14159 / 180))) * 0.7 * (0.5 + 0.5 * (i % 3 == 0 ? 1 : -1));
 
       tripPoints.add(LatLng(
@@ -274,7 +278,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _polylineCoordinates.addAll(tripPoints);
     _updatePolyline();
 
-    // Add trip polyline
     final tripPolyline = Polyline(
       polylineId: const PolylineId('trip_loop'),
       color: Colors.blue,
@@ -283,12 +286,11 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       geodesic: true,
     );
 
-    // Generate 3-4 random POI markers along the path
     final poiNames = ['Zřícenina', 'Vyhlídka', 'Park', 'Jezero'];
     final tripMarkers = <Marker>[];
 
     for (int i = 0; i < 4 && i < tripPoints.length - 1; i++) {
-      final pointIndex = (i * tripPoints.length ~/ 4).clamp(0, tripPoints.length - 2);
+      final pointIndex = ((i + 1) * tripPoints.length ~/ 5).clamp(0, tripPoints.length - 2);
       final point = tripPoints[pointIndex];
 
       tripMarkers.add(Marker(
@@ -311,25 +313,30 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     });
   }
 
-  void _updateCheckpointMarker(String checkpointId, {required bool reached}) {
-    final markerId = MarkerId(checkpointId);
-    final existingMarker = _markers.firstWhere(
-      (marker) => marker.markerId == markerId,
-      orElse: () => const Marker(markerId: MarkerId('')),
+  void _generateDestinationRoute(LatLng destination) {
+    if (_lastPosition == null) return;
+
+    final start = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
+    final midpoint = LatLng(
+      (start.latitude + destination.latitude) / 2,
+      (start.longitude + destination.longitude) / 2 + 0.001,
     );
 
-    if (existingMarker.markerId.value.isNotEmpty) {
-      final updatedMarker = existingMarker.copyWith(
-        iconParam: reached
-          ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
-          : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
-      );
+    final routePoints = [start, midpoint, destination];
+    _polylineCoordinates.clear();
+    _polylineCoordinates.addAll(routePoints);
+    _updatePolyline();
 
-      setState(() {
-        _markers.removeWhere((marker) => marker.markerId == markerId);
-        _markers.add(updatedMarker);
-      });
-    }
+    _markers.removeWhere((m) => m.markerId.value == 'trip_dest');
+    _markers.add(Marker(
+      markerId: const MarkerId('trip_dest'),
+      position: destination,
+      infoWindow: const InfoWindow(title: 'Cíl cesty'),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+    ));
+
+    _tripPoints.clear();
+    _tripPoints.add({'name': 'Cíl cesty', 'position': destination});
   }
 
   void _addAllCheckpointMarkers() {
@@ -463,22 +470,34 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
 
-    return Stack(
-      children: [
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 80,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(0),
-            child: GoogleMap(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kBottomNavigationBarHeight),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            bottom: 100,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(0),
+              child: GoogleMap(
               onMapCreated: _onMapCreated,
               onCameraMoveStarted: () {
                 // User started moving camera manually, disable auto-follow
                 setState(() {
                   _isFollowingUser = false;
                 });
+              },
+              onTap: (latLng) {
+                if (_isSelectingDestination) {
+                  setState(() {
+                    _isSelectingDestination = false;
+                    _destinationPoint = latLng;
+                    _tripPoints.clear();
+                    _generateDestinationRoute(latLng);
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Cíl zvolen. Trasa vytvořena.')),
+                  );
+                }
               },
               initialCameraPosition: const CameraPosition(
                 target: LatLng(50.0755, 14.4378), // Prague
@@ -488,6 +507,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               markers: _markers,
               myLocationEnabled: true,
               myLocationButtonEnabled: true,
+              padding: const EdgeInsets.only(top: 150, right: 16),
               compassEnabled: true,
               zoomControlsEnabled: true,
             ),
@@ -588,9 +608,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           ),
           // Trip generator button
           Positioned(
-            bottom: 100,
-            left: 16,
-            right: 16,
+            bottom: 20,
+            left: 20,
+            right: 20,
             child: Container(
               height: 56,
               decoration: BoxDecoration(
@@ -650,10 +670,23 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                     ),
                     child: PopupMenuButton<String>(
                       onSelected: (value) {
-                        // Handle dropdown selection
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Vybráno: $value')),
-                        );
+                        if (value == 'loop') {
+                          setState(() {
+                            _showTripOptions = true;
+                            _isSelectingDestination = false;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Okruh vybrán. Vyberte délku a generujte.')),
+                          );
+                        } else if (value == 'destination') {
+                          setState(() {
+                            _showTripOptions = false;
+                            _isSelectingDestination = true;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Klikněte do mapy pro cíl')),
+                          );
+                        }
                       },
                       itemBuilder: (context) => [
                         const PopupMenuItem(
