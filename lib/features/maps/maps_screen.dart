@@ -203,7 +203,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   Future<void> _createAvatarIcon(String avatar) async {
     final imagePath = 'assets/images/$avatar.png';
-    final bitmapDescriptor = BitmapDescriptor.asset(imagePath);
+    final bitmapDescriptor = await BitmapDescriptor.asset(createLocalImageConfiguration(context), imagePath);
     if (!mounted) return;
     setState(() {
       _avatarIcon = bitmapDescriptor;
