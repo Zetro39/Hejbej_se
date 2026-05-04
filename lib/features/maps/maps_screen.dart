@@ -65,6 +65,13 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   bool _isFollowingUser = true;
   Position? _lastPosition;
+  Position? _previousPosition;
+
+  double _totalDistance = 0.0;
+  int _limetkyBalance = 0;
+  int _streak = 0;
+  DateTime? _lastActivityDate;
+  bool _isStreakFrozen = false;
 
   final TextEditingController _destinationController = TextEditingController();
   bool _showDestinationSearch = false;
@@ -83,6 +90,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _positionStream = _locationService.positionUpdateStream;
     _loadSelectedAvatar();
     _loadReachedCheckpoints();
+    _loadPersistentData();
     _setupMap();
 
     _pulseController = AnimationController(
@@ -116,6 +124,38 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         _reachedCheckpoints.addAll(reached);
       });
     }
+  }
+
+  Future<void> _loadPersistentData() async {
+    final prefs = await SharedPreferences.getInstance();
+    _totalDistance = prefs.getDouble('totalDistance') ?? 0.0;
+    _limetkyBalance = prefs.getInt('limetkyBalance') ?? 0;
+    _streak = prefs.getInt('streak') ?? 0;
+    _isStreakFrozen = prefs.getBool('isStreakFrozen') ?? false;
+    final lastActivityString = prefs.getString('lastActivityDate');
+    if (lastActivityString != null) {
+      _lastActivityDate = DateTime.tryParse(lastActivityString);
+    }
+  }
+
+  Future<void> _savePersistentData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('totalDistance', _totalDistance);
+    await prefs.setInt('limetkyBalance', _limetkyBalance);
+    await prefs.setInt('streak', _streak);
+    await prefs.setBool('isStreakFrozen', _isStreakFrozen);
+    if (_lastActivityDate != null) {
+      await prefs.setString('lastActivityDate', _lastActivityDate!.toIso8601String());
+    }
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  bool _isConsecutiveDay(DateTime last, DateTime now) {
+    final difference = now.difference(last).inDays;
+    return difference == 1;
   }
 
   Future<void> _loadSelectedAvatar() async {
@@ -418,9 +458,40 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
-    _positionStream.listen((position) {
+    _positionStream.listen((position) async {
       if (!mounted) return;
       final newPoint = LatLng(position.latitude, position.longitude);
+
+      // Update streak
+      final today = DateTime.now();
+      if (_lastActivityDate == null || !_isSameDay(_lastActivityDate!, today)) {
+        if (_lastActivityDate != null && _isConsecutiveDay(_lastActivityDate!, today)) {
+          _streak++;
+        } else if (_lastActivityDate == null) {
+          _streak = 1;
+        } else {
+          if (!_isStreakFrozen) {
+            _streak = 1;
+          }
+        }
+        _lastActivityDate = today;
+        await _savePersistentData();
+      }
+
+      // Update distance
+      if (_previousPosition != null) {
+        final distanceKm = Geolocator.distanceBetween(
+          _previousPosition!.latitude,
+          _previousPosition!.longitude,
+          position.latitude,
+          position.longitude,
+        ) / 1000.0;
+        _totalDistance += distanceKm;
+        _limetkyBalance += distanceKm.toInt();
+        await _savePersistentData();
+      }
+      _previousPosition = position;
+
       if (_breadcrumbsCoordinates.isEmpty ||
           Geolocator.distanceBetween(
             _breadcrumbsCoordinates.last.latitude,
@@ -982,41 +1053,25 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
-          if (_showCelebration)
-            Positioned.fill(
-              child: Container(
+          Positioned(
+            bottom: 20,
+            left: 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
                 color: Colors.black.withOpacity(0.7),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.emoji_events,
-                        size: 100,
-                        color: Colors.yellow.shade600,
-                      ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'LEVEL UP!',
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Dokončil jsi všechny checkpointy!',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'v1.0.8 - May 4th',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
+          ),
         ],
       ),
     );

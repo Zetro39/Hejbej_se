@@ -1,12 +1,111 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../achievements/achievements_screen.dart';
 
 /// Modul Profil – uživatelské informace.
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key, required this.userName});
 
   final String userName;
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  int limetkyBalance = 0;
+  int streak = 0;
+  double totalDistance = 0.0; // in km
+  List<bool> distanceAchievements = List.filled(6, false); // 1,10,100,1000,10000,40000 km
+  List<bool> loyaltyAchievements = List.filled(3, false); // 10,50,250 days
+  bool isStreakFrozen = false;
+
+  final List<double> distanceMilestones = [1, 10, 100, 1000, 10000, 40000];
+  final List<int> loyaltyMilestones = [10, 50, 250];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      limetkyBalance = prefs.getInt('limetkyBalance') ?? 0;
+      streak = prefs.getInt('streak') ?? 0;
+      totalDistance = prefs.getDouble('totalDistance') ?? 0.0;
+      isStreakFrozen = prefs.getBool('isStreakFrozen') ?? false;
+      for (int i = 0; i < distanceAchievements.length; i++) {
+        distanceAchievements[i] = prefs.getBool('distanceAchievement_$i') ?? false;
+      }
+      for (int i = 0; i < loyaltyAchievements.length; i++) {
+        loyaltyAchievements[i] = prefs.getBool('loyaltyAchievement_$i') ?? false;
+      }
+    });
+    _updateAchievements();
+  }
+
+  Future<void> _saveData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('limetkyBalance', limetkyBalance);
+    await prefs.setInt('streak', streak);
+    await prefs.setDouble('totalDistance', totalDistance);
+    await prefs.setBool('isStreakFrozen', isStreakFrozen);
+    for (int i = 0; i < distanceAchievements.length; i++) {
+      await prefs.setBool('distanceAchievement_$i', distanceAchievements[i]);
+    }
+    for (int i = 0; i < loyaltyAchievements.length; i++) {
+      await prefs.setBool('loyaltyAchievement_$i', loyaltyAchievements[i]);
+    }
+  }
+
+  void _updateAchievements() {
+    // Update distance achievements
+    for (int i = 0; i < distanceMilestones.length; i++) {
+      if (totalDistance >= distanceMilestones[i] && !distanceAchievements[i]) {
+        setState(() {
+          distanceAchievements[i] = true;
+        });
+      }
+    }
+    // Update loyalty achievements
+    for (int i = 0; i < loyaltyMilestones.length; i++) {
+      if (streak >= loyaltyMilestones[i] && !loyaltyAchievements[i]) {
+        setState(() {
+          loyaltyAchievements[i] = true;
+        });
+      }
+    }
+    _saveData();
+  }
+
+  void _buyJoker() {
+    if (limetkyBalance >= 100) {
+      setState(() {
+        limetkyBalance -= 100;
+        isStreakFrozen = true;
+      });
+      _saveData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Žolík zakoupen! Streak zmrazen.')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nedostatek Limetků!')),
+      );
+    }
+  }
+
+  // Simulate adding distance for testing
+  void _addDistance(double km) {
+    setState(() {
+      totalDistance += km;
+      limetkyBalance += km.toInt(); // 1 km = 1 Limetka
+    });
+    _updateAchievements();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +169,7 @@ class ProfileScreen extends StatelessWidget {
 
                 // Jméno uživatele
                 Text(
-                  userName,
+                  widget.userName,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
@@ -87,26 +186,126 @@ class ProfileScreen extends StatelessWidget {
                       ),
                 ),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 20),
 
-                // Level indicator
-                _ProgressIndicator(
-                  label: 'Level',
-                  currentValue: 1,
-                  maxValue: 2,
-                  unit: 'Lvl',
-                  color: Colors.lightBlue,
+                // Limetky Balance
+                Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.monetization_on, color: Color(0xFFBFFF00), size: 24),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Limetky: $limetkyBalance',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-                // XP indicator
-                _ProgressIndicator(
-                  label: 'Zkušenosti',
-                  currentValue: 0,
-                  maxValue: 1000,
-                  unit: 'XP',
-                  color: Colors.lime,
+                // Streak
+                Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Streak: $streak dnů',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (isStreakFrozen) const Text('Zmrazeno', style: TextStyle(color: Colors.blue)),
+                        const SizedBox(height: 10),
+                        ElevatedButton(
+                          onPressed: _buyJoker,
+                          style: ButtonStyle(
+                            backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
+                            foregroundColor: MaterialStateProperty.all(Colors.black),
+                          ),
+                          child: const Text('Koupit Žolíka (100 Limetků)'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Total Distance
+                Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'Celková vzdálenost: ${totalDistance.toStringAsFixed(1)} km',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Achievements Grid
+                const Text(
+                  'Úspěchy',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    // Distance Achievements
+                    for (int i = 0; i < distanceMilestones.length; i++)
+                      _AchievementCard(
+                        title: '${distanceMilestones[i]} km',
+                        isUnlocked: distanceAchievements[i],
+                        icon: Icons.directions_walk,
+                      ),
+                    // Loyalty Achievements
+                    for (int i = 0; i < loyaltyMilestones.length; i++)
+                      _AchievementCard(
+                        title: '${loyaltyMilestones[i]} dnů',
+                        isUnlocked: loyaltyAchievements[i],
+                        icon: Icons.calendar_today,
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Test button to add distance
+                ElevatedButton(
+                  onPressed: () => _addDistance(1.0),
+                  child: const Text('Přidat 1 km (test)'),
                 ),
 
                 const SizedBox(height: 40),
@@ -119,73 +318,49 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-/// Widget pro ukazatel pokroku s etiketu
-class _ProgressIndicator extends StatelessWidget {
-  final String label;
-  final int currentValue;
-  final int maxValue;
-  final String unit;
-  final Color color;
+/// Widget pro achievement kartu
+class _AchievementCard extends StatelessWidget {
+  final String title;
+  final bool isUnlocked;
+  final IconData icon;
 
-  const _ProgressIndicator({
-    required this.label,
-    required this.currentValue,
-    required this.maxValue,
-    required this.unit,
-    required this.color,
+  const _AchievementCard({
+    required this.title,
+    required this.isUnlocked,
+    required this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
-    final progress = currentValue / maxValue;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Label a hodnota
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      color: isUnlocked ? Colors.lime.shade100 : Colors.grey.shade200,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
+            Icon(
+              icon,
+              size: 40,
+              color: isUnlocked ? Colors.lime.shade700 : Colors.grey,
             ),
+            const SizedBox(height: 8),
             Text(
-              '$currentValue / $maxValue $unit',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: isUnlocked ? Colors.black : Colors.grey,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
-
-        const SizedBox(height: 8),
-
-        // Progress bar
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 12,
-            backgroundColor: Colors.lightBlue.shade100,
-            valueColor: AlwaysStoppedAnimation<Color>(color),
-          ),
-        ),
-
-        const SizedBox(height: 4),
-
-        // Procenta
-        Text(
-          '${(progress * 100).toStringAsFixed(1)}%',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.lightBlue.shade600,
-              ),
-        ),
-      ],
+      ),
     );
   }
 }
