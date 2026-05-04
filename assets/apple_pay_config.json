@@ -1,0 +1,11 @@
+{
+  "provider": "apple_pay",
+  "data": {
+    "merchantIdentifier": "merchant.com.example",
+    "displayName": "Hejbej se",
+    "merchantCapabilities": ["3DS", "debit", "credit"],
+    "supportedNetworks": ["visa", "masterCard", "amex", "discover"],
+    "countryCode": "CZ",
+    "currencyCode": "CZK"
+  }
+}

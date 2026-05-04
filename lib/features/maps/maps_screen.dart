@@ -1,9 +1,15 @@
-import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/services.dart';
+import 'dart:convert';
 import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_maps_webservice/directions.dart' hide Polyline;
+import 'package:google_maps_webservice/distance.dart' hide Row;
+import 'package:google_maps_webservice/places.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/location_service.dart';
 
@@ -73,6 +79,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   DateTime? _lastActivityDate;
   bool _isStreakFrozen = false;
 
+  static const String _googleApiKey = 'YOUR_API_KEY_HERE';
+
   final TextEditingController _destinationController = TextEditingController();
   bool _showDestinationSearch = false;
 
@@ -82,6 +90,24 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   LatLng? _destinationPoint;
   List<Map<String, dynamic>> _tripPoints = [];
   String _tripMode = 'loop';
+
+  // Places Autocomplete
+  final GoogleMapsPlaces _places = GoogleMapsPlaces(apiKey: _googleApiKey);
+  final GoogleDistanceMatrix _distance = GoogleDistanceMatrix(apiKey: _googleApiKey);
+  final GoogleMapsDirections _directions = GoogleMapsDirections(apiKey: _googleApiKey);
+  List<Prediction> _placePredictions = [];
+  bool _showSuggestions = false;
+
+  // Elevation & Rewards
+  double _totalElevationGain = 0.0;
+
+  // Route Options
+  String _selectedRouteOption = 'fastest'; // 'fastest' or 'eco'
+  int _etaMinutes = 0;
+  double _fastestDistanceKm = 0.0;
+  int _fastestEtaMinutes = 0;
+  double _ecoDistanceKm = 0.0;
+  int _ecoEtaMinutes = 0;
 
   @override
   void initState() {
@@ -107,6 +133,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _mapController.dispose();
     _pulseController.dispose();
     _destinationController.dispose();
+    _places.dispose();
+    _distance.dispose();
+    _directions.dispose();
     super.dispose();
   }
 
@@ -174,10 +203,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   Future<void> _createAvatarIcon(String avatar) async {
     final imagePath = 'assets/images/$avatar.png';
-    final bitmapDescriptor = await BitmapDescriptor.fromAssetImage(
-      const ImageConfiguration(size: Size(48, 48)),
-      imagePath,
-    );
+    final bitmapDescriptor = BitmapDescriptor.asset(imagePath);
     if (!mounted) return;
     setState(() {
       _avatarIcon = bitmapDescriptor;
@@ -291,7 +317,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     const numPoints = 8;
 
     for (int i = 0; i < numPoints; i++) {
-      final angle = (i / numPoints) * 2 * pi;
       final latOffset = (radiusKm / 111.32) * 0.7 * (0.5 + 0.5 * (i % 2 == 0 ? 1 : -1));
       final lngOffset = (radiusKm / (111.32 * cos(center.latitude * pi / 180))) * 0.7 * (0.5 + 0.5 * (i % 3 == 0 ? 1 : -1));
       tripPoints.add(LatLng(center.latitude + latOffset, center.longitude + lngOffset));
@@ -332,7 +357,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     });
   }
 
-  void _generateDestinationRoute(LatLng destination) {
+  Future<void> _generateDestinationRoute(LatLng destination) async {
     if (_lastPosition == null) return;
     final start = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
     final midpoint = LatLng(
@@ -354,6 +379,201 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
     _tripPoints.clear();
     _tripPoints.add({'name': 'Cíl cesty', 'position': destination});
+
+    await _fetchElevationData(routePoints);
+    await _fetchRouteComparison(start, destination);
+  }
+
+  Future<void> _fetchElevationData(List<LatLng> routePoints) async {
+    if (routePoints.isEmpty) return;
+
+    try {
+      final path = routePoints.map((p) => '${p.latitude},${p.longitude}').join('|');
+      final uri = Uri.https('maps.googleapis.com', '/maps/api/elevation/json', {
+        'locations': path,
+        'key': _googleApiKey,
+      });
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        if (body['status'] == 'OK' && body['results'] is List) {
+          final results = body['results'] as List<dynamic>;
+          if (results.isNotEmpty) {
+            double previousElevation = (results.first['elevation'] as num).toDouble();
+            double elevationGain = 0.0;
+            for (final result in results.skip(1)) {
+              final elevation = (result['elevation'] as num).toDouble();
+              if (elevation > previousElevation) {
+                elevationGain += elevation - previousElevation;
+              }
+              previousElevation = elevation;
+            }
+            if (mounted) {
+              setState(() {
+                _totalElevationGain = elevationGain;
+              });
+            }
+            final extraLimetkas = (elevationGain / 10).floor();
+            if (extraLimetkas > 0) {
+              _limetkyBalance += extraLimetkas;
+              await _savePersistentData();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Bonus za převýšení: +$extraLimetkas Limetků!')),
+                );
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Elevation API error: $e');
+    }
+  }
+
+  Future<void> _fetchRouteComparison(LatLng start, LatLng destination) async {
+    try {
+      final distanceResponse = await _distance.distanceWithLocation(
+        [Location(lat: start.latitude, lng: start.longitude)],
+        [Location(lat: destination.latitude, lng: destination.longitude)],
+        travelMode: TravelMode.walking,
+        region: 'cz',
+      );
+      if (distanceResponse.isOkay &&
+          distanceResponse.rows.isNotEmpty &&
+          distanceResponse.rows.first.elements.isNotEmpty) {
+        final element = distanceResponse.rows.first.elements.first;
+        if (mounted) {
+          setState(() {
+            _etaMinutes = (element.duration.value / 60).round();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Distance Matrix API error: $e');
+    }
+
+    try {
+      final directionsResponse = await _directions.directionsWithLocation(
+        Location(lat: start.latitude, lng: start.longitude),
+        Location(lat: destination.latitude, lng: destination.longitude),
+        travelMode: TravelMode.walking,
+        alternatives: true,
+        region: 'cz',
+      );
+
+      if (directionsResponse.isOkay && directionsResponse.routes.isNotEmpty) {
+        final routeSummaries = <Map<String, num>>[];
+        for (final route in directionsResponse.routes) {
+          if (route.legs.isNotEmpty) {
+            final leg = route.legs.first;
+            routeSummaries.add({
+              'distance': leg.distance?.value ?? 0,
+              'duration': leg.duration?.value ?? 0,
+            });
+          }
+        }
+
+        if (routeSummaries.isNotEmpty) {
+          final fastest = routeSummaries.reduce((a, b) => (a['duration'] as num) <= (b['duration'] as num) ? a : b);
+          final eco = routeSummaries.reduce((a, b) => (a['distance'] as num) <= (b['distance'] as num) ? a : b);
+
+          if (mounted) {
+            setState(() {
+              _fastestDistanceKm = (fastest['distance'] as num).toDouble() / 1000.0;
+              _fastestEtaMinutes = ((fastest['duration'] as num).toDouble() / 60).round();
+              _ecoDistanceKm = (eco['distance'] as num).toDouble() / 1000.0;
+              _ecoEtaMinutes = ((eco['duration'] as num).toDouble() / 60).round();
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Directions API error: $e');
+    }
+  }
+
+  Future<void> _fetchPlacePredictions(String input) async {
+    if (input.isEmpty) {
+      setState(() {
+        _placePredictions = [];
+        _showSuggestions = false;
+      });
+      return;
+    }
+
+    final response = await _places.autocomplete(
+      input,
+      components: [Component(Component.country, 'cz')],
+      language: 'cs',
+    );
+
+    if (response.isOkay) {
+      setState(() {
+        _placePredictions = response.predictions;
+        _showSuggestions = true;
+      });
+    } else {
+      setState(() {
+        _placePredictions = [];
+        _showSuggestions = false;
+      });
+    }
+  }
+
+  Future<void> _selectPlace(Prediction prediction) async {
+    final details = await _places.getDetailsByPlaceId(prediction.placeId!);
+    if (details.isOkay) {
+      final place = details.result;
+      final latLng = LatLng(place.geometry!.location.lat, place.geometry!.location.lng);
+      if (!mounted) return;
+      setState(() {
+        _destinationController.text = place.formattedAddress ?? prediction.description!;
+        _showSuggestions = false;
+        _showDestinationSearch = false;
+      });
+      _generateDestinationRoute(latLng);
+      FocusScope.of(context).unfocus();
+    }
+  }
+
+  Future<void> _snapBreadcrumbsToRoads() async {
+    if (_breadcrumbsCoordinates.length < 2) return;
+
+    try {
+      final path = _breadcrumbsCoordinates
+          .map((p) => '${p.latitude},${p.longitude}')
+          .join('|');
+      final uri = Uri.https('roads.googleapis.com', '/v1/snapToRoads', {
+        'path': path,
+        'interpolate': 'true',
+        'key': _googleApiKey,
+      });
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        if (body['snappedPoints'] is List) {
+          final snappedPoints = (body['snappedPoints'] as List<dynamic>)
+              .map((point) {
+                final location = point['location'] as Map<String, dynamic>;
+                return LatLng(
+                  (location['latitude'] as num).toDouble(),
+                  (location['longitude'] as num).toDouble(),
+                );
+              })
+              .toList();
+          if (snappedPoints.isNotEmpty && mounted) {
+            setState(() {
+              _breadcrumbsCoordinates
+                ..clear()
+                ..addAll(snappedPoints);
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Snap to Roads API error: $e');
+    }
   }
 
   void _updateCheckpointMarker(String checkpointId, {required bool reached}) {
@@ -502,6 +722,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         setState(() {
           _breadcrumbsCoordinates.add(newPoint);
         });
+        _snapBreadcrumbsToRoads();
         _updateBreadcrumbsPolyline();
       }
       if (_polylineCoordinates.isEmpty ||
@@ -883,67 +1104,86 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               bottom: bottomOffset + 110,
               left: 16,
               right: 16,
-              child: Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: _destinationController,
-                        decoration: const InputDecoration(
-                          labelText: 'Hledat destinaci',
-                          hintText: 'Zadejte cíl cesty',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                        ),
-                        onSubmitted: (value) {
-                          setState(() {
-                            _showDestinationSearch = false;
-                            _isSelectingDestination = true;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Klikněte do mapy pro cíl')),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Card(
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _showDestinationSearch = false;
-                              });
-                            },
-                            child: const Text('Zrušit'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _showDestinationSearch = false;
-                                _isSelectingDestination = true;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Klikněte do mapy pro cíl')),
-                              );
-                            },
-                            style: ButtonStyle(
-                              backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
-                              foregroundColor: MaterialStateProperty.all(Colors.black),
+                          TextField(
+                            controller: _destinationController,
+                            decoration: const InputDecoration(
+                              labelText: 'Hledat destinaci',
+                              hintText: 'Zadejte cíl cesty',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
                             ),
-                            child: const Text('Hledat'),
+                            onChanged: _fetchPlacePredictions,
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _showDestinationSearch = false;
+                                    _showSuggestions = false;
+                                    _placePredictions = [];
+                                  });
+                                },
+                                child: const Text('Zrušit'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _showDestinationSearch = false;
+                                    _isSelectingDestination = true;
+                                    _showSuggestions = false;
+                                    _placePredictions = [];
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Klikněte do mapy pro cíl')),
+                                  );
+                                },
+                                style: ButtonStyle(
+                                  backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
+                                  foregroundColor: MaterialStateProperty.all(Colors.black),
+                                ),
+                                child: const Text('Hledat'),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                  if (_showSuggestions && _placePredictions.isNotEmpty)
+                    Card(
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _placePredictions.length,
+                        itemBuilder: (context, index) {
+                          final prediction = _placePredictions[index];
+                          return ListTile(
+                            title: Text(prediction.description ?? ''),
+                            onTap: () => _selectPlace(prediction),
+                          );
+                        },
+                      ),
+                    ),
+                ],
               ),
             ),
           if (_showTripOptions)
@@ -1049,6 +1289,86 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                               ],
                             ),
                           )),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Převýšení: ${_totalElevationGain.toStringAsFixed(0)} m',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                      if (_etaMinutes > 0)
+                        Text(
+                          'ETA: ${_etaMinutes} min',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (_tripPoints.isNotEmpty)
+            Positioned(
+              bottom: bottomOffset + 200,
+              right: 16,
+              child: Card(
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Container(
+                  width: 200,
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Možnosti trasy:',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () => setState(() => _selectedRouteOption = 'fastest'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _selectedRouteOption == 'fastest' ? Colors.blue : Colors.grey,
+                              ),
+                              child: const Text('Nejrychlejší'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () => setState(() => _selectedRouteOption = 'eco'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _selectedRouteOption == 'eco' ? Colors.green : Colors.grey,
+                              ),
+                              child: const Text('Nejekologičtější'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Nejrychlejší: ${_fastestDistanceKm.toStringAsFixed(1)} km · ${_fastestEtaMinutes} min',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Nejekologičtější: ${_ecoDistanceKm.toStringAsFixed(1)} km · ${_ecoEtaMinutes} min',
+                        style: const TextStyle(fontSize: 14),
+                      ),
                     ],
                   ),
                 ),
@@ -1064,7 +1384,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
-                'v1.0.9 - Menu Fix',
+                'v1.2.0 - Pro Features & Support',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 12,
