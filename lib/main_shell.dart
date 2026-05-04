@@ -27,9 +27,11 @@ class _MainShellState extends State<MainShell> {
     ];
 
     return Scaffold(
+      extendBody: true,
       body: _screens[_index],
       bottomNavigationBar: NavigationBar(
         elevation: 8,
+        backgroundColor: Colors.lightBlue.shade50.withOpacity(0.8),
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [

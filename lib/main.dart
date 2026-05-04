@@ -84,8 +84,8 @@ class _HejbejSeAppState extends State<HejbejSeApp> {
       seedColor: Colors.lightBlue,
       brightness: Brightness.light,
     ).copyWith(
-      secondary: Colors.lime,
-      secondaryContainer: Colors.lime.shade100,
+      secondary: const Color(0xFFBFFF00), // Lime Accent
+      secondaryContainer: const Color(0xFFBFFF00).withOpacity(0.1),
       surface: Colors.white,
       surfaceVariant: Colors.lightBlue.shade50,
     );

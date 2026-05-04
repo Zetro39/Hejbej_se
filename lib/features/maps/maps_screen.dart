@@ -23,35 +23,35 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   final Set<Polyline> _polylines = {};
   final Set<Marker> _markers = {};
   final List<LatLng> _polylineCoordinates = [];
+  final List<LatLng> _breadcrumbsCoordinates = [];
 
   String? _selectedAvatar;
   BitmapDescriptor? _avatarIcon;
 
-  // Multiple checkpoint coordinates around Prague
   static const List<Map<String, dynamic>> _checkpoints = [
     {
       'id': 'checkpoint_1',
-      'position': LatLng(50.0773, 14.4403), // NE direction
+      'position': LatLng(50.0773, 14.4403),
       'title': 'Severovýchodní checkpoint',
     },
     {
-      'id': 'checkpoint_2', 
-      'position': LatLng(50.0727, 14.4403), // SE direction
+      'id': 'checkpoint_2',
+      'position': LatLng(50.0727, 14.4403),
       'title': 'Jižovýchodní checkpoint',
     },
     {
       'id': 'checkpoint_3',
-      'position': LatLng(50.0727, 14.4297), // SW direction  
+      'position': LatLng(50.0727, 14.4297),
       'title': 'Jihozápadní checkpoint',
     },
     {
       'id': 'checkpoint_4',
-      'position': LatLng(50.0773, 14.4297), // NW direction
+      'position': LatLng(50.0773, 14.4297),
       'title': 'Severozápadní checkpoint',
     },
     {
       'id': 'checkpoint_5',
-      'position': LatLng(50.0755, 14.4450), // East direction
+      'position': LatLng(50.0755, 14.4450),
       'title': 'Východní checkpoint',
     },
   ];
@@ -59,22 +59,22 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   final Set<String> _reachedCheckpoints = {};
   double _todayDistance = 0.0;
 
-  // Animation and celebration
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
   bool _showCelebration = false;
 
-  // Camera control
   bool _isFollowingUser = true;
   Position? _lastPosition;
 
-  // Trip generation
+  final TextEditingController _destinationController = TextEditingController();
+  bool _showDestinationSearch = false;
+
   bool _showTripOptions = false;
-  double _selectedDistance = 5.0; // km
-  bool _isGeneratingTrip = false;
+  double _selectedDistance = 5.0;
   bool _isSelectingDestination = false;
   LatLng? _destinationPoint;
   List<Map<String, dynamic>> _tripPoints = [];
+  String _tripMode = 'loop';
 
   @override
   void initState() {
@@ -85,7 +85,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _loadReachedCheckpoints();
     _setupMap();
 
-    // Initialize animation
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
@@ -93,6 +92,14 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.elasticOut),
     );
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    _pulseController.dispose();
+    _destinationController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadReachedCheckpoints() async {
@@ -104,14 +111,18 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         reached.add(id);
       }
     }
-    setState(() {
-      _reachedCheckpoints.addAll(reached);
-    });
+    if (mounted) {
+      setState(() {
+        _reachedCheckpoints.addAll(reached);
+      });
+    }
   }
 
   Future<void> _loadSelectedAvatar() async {
     final prefs = await SharedPreferences.getInstance();
     final avatar = prefs.getString('selected_avatar');
+    if (!mounted) return;
+
     setState(() {
       _selectedAvatar = avatar;
     });
@@ -127,13 +138,13 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       const ImageConfiguration(size: Size(48, 48)),
       imagePath,
     );
+    if (!mounted) return;
     setState(() {
       _avatarIcon = bitmapDescriptor;
     });
   }
 
   Future<void> _setupMap() async {
-    // Get initial position
     final initialPosition = await _locationService.getCurrentLocation();
     if (initialPosition != null && mounted) {
       _polylineCoordinates.add(
@@ -142,15 +153,13 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _addMarker(initialPosition);
       _updatePolyline();
     }
-
-    // Add all checkpoint markers
     _addAllCheckpointMarkers();
   }
 
   void _checkCheckpointProximity(Position userPosition) {
     for (final checkpoint in _checkpoints) {
       final id = checkpoint['id'] as String;
-      if (_reachedCheckpoints.contains(id)) continue; // Already reached
+      if (_reachedCheckpoints.contains(id)) continue;
 
       final checkpointPosition = checkpoint['position'] as LatLng;
       final distance = Geolocator.distanceBetween(
@@ -160,55 +169,44 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         checkpointPosition.longitude,
       );
 
-      if (distance < 20.0) { // 20 meters
+      if (distance < 20.0) {
         setState(() {
           _reachedCheckpoints.add(id);
         });
-
-        // Save achievement permanently
         _saveCheckpointAchievement(id);
-
-        // Update marker color to green
         _updateCheckpointMarker(id, reached: true);
-
-        // Trigger celebration effects
         _triggerCheckpointCelebration();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('🎉 ${checkpoint['title']} dosažen! Úspěch odemčen!'),
-            duration: const Duration(seconds: 3),
-            backgroundColor: Colors.lime,
-          ),
-        );
-
-        // Check for level up (all checkpoints reached)
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🎉 ${checkpoint['title']} dosažen! Úspěch odemčen!'),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.lime,
+            ),
+          );
+        }
         _checkLevelUp();
       }
     }
   }
 
   void _triggerCheckpointCelebration() {
-    // Haptic feedback
     HapticFeedback.mediumImpact();
-
-    // Pulse animation for distance card
     _pulseController.forward(from: 0.0);
   }
 
   void _checkLevelUp() {
     if (_reachedCheckpoints.length == _checkpoints.length && !_showCelebration) {
+      if (!mounted) return;
       setState(() {
         _showCelebration = true;
       });
-
-      // Hide celebration after 5 seconds
       Future.delayed(const Duration(seconds: 5), () {
-        if (mounted) {
-          setState(() {
-            _showCelebration = false;
-          });
-        }
+        if (!mounted) return;
+        setState(() {
+          _showCelebration = false;
+        });
       });
     }
   }
@@ -219,61 +217,47 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   }
 
   void _recenterCamera() {
-    if (_lastPosition != null) {
-      setState(() {
-        _isFollowingUser = true;
-      });
-
-      // Immediately snap to user's position with current bearing
-      final cameraPosition = CameraPosition(
-        target: LatLng(_lastPosition!.latitude, _lastPosition!.longitude),
-        zoom: 16.0,
-        bearing: _lastPosition!.heading,
-        tilt: 0.0,
-      );
-
-      _mapController.animateCamera(
-        CameraUpdate.newCameraPosition(cameraPosition),
-      );
-    }
+    if (_lastPosition == null) return;
+    setState(() {
+      _isFollowingUser = true;
+    });
+    final cameraPosition = CameraPosition(
+      target: LatLng(_lastPosition!.latitude, _lastPosition!.longitude),
+      zoom: 16.0,
+      bearing: _lastPosition!.heading,
+      tilt: 0.0,
+    );
+    _mapController.animateCamera(
+      CameraUpdate.newCameraPosition(cameraPosition),
+    );
   }
 
   void _generateTripLoop() {
     if (_lastPosition == null) return;
 
     setState(() {
-      _isGeneratingTrip = true;
-      _tripPoints.clear();
+      _showTripOptions = true;
       _isSelectingDestination = false;
+      _tripPoints.clear();
     });
 
-    // Remove existing trip polylines and markers
     _polylines.removeWhere((p) => p.polylineId.value.startsWith('trip_'));
     _markers.removeWhere((m) => m.markerId.value.startsWith('trip_'));
     _markers.removeWhere((m) => m.markerId.value == 'trip_dest');
 
-    // Generate random closed loop around user position
     final center = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
-    final radiusKm = _selectedDistance / 2; // Convert to radius
-
+    final radiusKm = _selectedDistance / 2;
     final tripPoints = <LatLng>[];
-    const numPoints = 8; // Points for the loop
+    const numPoints = 8;
 
     for (int i = 0; i < numPoints; i++) {
-      final angle = (i / numPoints) * 2 * 3.14159;
+      final angle = (i / numPoints) * 2 * pi;
       final latOffset = (radiusKm / 111.32) * 0.7 * (0.5 + 0.5 * (i % 2 == 0 ? 1 : -1));
-      final lngOffset = (radiusKm / (111.32 * cos(center.latitude * 3.14159 / 180))) * 0.7 * (0.5 + 0.5 * (i % 3 == 0 ? 1 : -1));
-
-      tripPoints.add(LatLng(
-        center.latitude + latOffset,
-        center.longitude + lngOffset,
-      ));
+      final lngOffset = (radiusKm / (111.32 * cos(center.latitude * pi / 180))) * 0.7 * (0.5 + 0.5 * (i % 3 == 0 ? 1 : -1));
+      tripPoints.add(LatLng(center.latitude + latOffset, center.longitude + lngOffset));
     }
 
-    // Close the loop
     tripPoints.add(tripPoints.first);
-
-    // Replace the user's polyline coordinates with the new trip loop so it displays
     _polylineCoordinates.clear();
     _polylineCoordinates.addAll(tripPoints);
     _updatePolyline();
@@ -289,39 +273,32 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     final poiNames = ['Zřícenina', 'Vyhlídka', 'Park', 'Jezero'];
     final tripMarkers = <Marker>[];
 
-    for (int i = 0; i < 4 && i < tripPoints.length - 1; i++) {
+    for (int i = 0; i < poiNames.length && i < tripPoints.length - 1; i++) {
       final pointIndex = ((i + 1) * tripPoints.length ~/ 5).clamp(0, tripPoints.length - 2);
       final point = tripPoints[pointIndex];
-
       tripMarkers.add(Marker(
         markerId: MarkerId('trip_poi_$i'),
         position: point,
         infoWindow: InfoWindow(title: poiNames[i]),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
       ));
-
-      _tripPoints.add({
-        'name': poiNames[i],
-        'position': point,
-      });
+      _tripPoints.add({'name': poiNames[i], 'position': point});
     }
 
     setState(() {
       _polylines.add(tripPolyline);
       _markers.addAll(tripMarkers);
-      _isGeneratingTrip = false;
+      _showTripOptions = false;
     });
   }
 
   void _generateDestinationRoute(LatLng destination) {
     if (_lastPosition == null) return;
-
     final start = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
     final midpoint = LatLng(
       (start.latitude + destination.latitude) / 2,
       (start.longitude + destination.longitude) / 2 + 0.001,
     );
-
     final routePoints = [start, midpoint, destination];
     _polylineCoordinates.clear();
     _polylineCoordinates.addAll(routePoints);
@@ -349,10 +326,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     if (existingMarker.markerId.value.isNotEmpty) {
       final updatedMarker = existingMarker.copyWith(
         iconParam: reached
-          ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
-          : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+            ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
+            : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
       );
-
       setState(() {
         _markers.removeWhere((marker) => marker.markerId == markerId);
         _markers.add(updatedMarker);
@@ -366,16 +342,14 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       final position = checkpoint['position'] as LatLng;
       final title = checkpoint['title'] as String;
       final isReached = _reachedCheckpoints.contains(id);
-
       final marker = Marker(
         markerId: MarkerId(id),
         position: position,
         infoWindow: InfoWindow(title: title),
-        icon: isReached 
-          ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
-          : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+        icon: isReached
+            ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
+            : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
       );
-
       setState(() {
         _markers.add(marker);
       });
@@ -385,14 +359,12 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   void _addMarker(Position position) {
     final userMarkerId = const MarkerId('user_location');
     final userPosition = LatLng(position.latitude, position.longitude);
-
     final marker = Marker(
       markerId: userMarkerId,
       position: userPosition,
       icon: _avatarIcon ?? BitmapDescriptor.defaultMarker,
       infoWindow: const InfoWindow(title: 'Vaše poloha'),
     );
-
     setState(() {
       _markers.removeWhere((m) => m.markerId == userMarkerId);
       _markers.add(marker);
@@ -414,7 +386,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   void _updatePolyline() {
     if (_polylineCoordinates.length < 2) return;
-
     const polylineId = PolylineId('user_path');
     final polyline = Polyline(
       polylineId: polylineId,
@@ -423,7 +394,22 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       points: _polylineCoordinates,
       geodesic: true,
     );
+    setState(() {
+      _polylines.removeWhere((p) => p.polylineId == polylineId);
+      _polylines.add(polyline);
+    });
+  }
 
+  void _updateBreadcrumbsPolyline() {
+    if (_breadcrumbsCoordinates.length < 2) return;
+    const polylineId = PolylineId('breadcrumbs');
+    final polyline = Polyline(
+      polylineId: polylineId,
+      color: const Color(0xFFBFFF00),
+      width: 3,
+      points: _breadcrumbsCoordinates,
+      geodesic: true,
+    );
     setState(() {
       _polylines.removeWhere((p) => p.polylineId == polylineId);
       _polylines.add(polyline);
@@ -432,14 +418,21 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
-
-    // Listen to position updates
     _positionStream.listen((position) {
       if (!mounted) return;
-
       final newPoint = LatLng(position.latitude, position.longitude);
-
-      // Add to polyline if far enough from last point
+      if (_breadcrumbsCoordinates.isEmpty ||
+          Geolocator.distanceBetween(
+            _breadcrumbsCoordinates.last.latitude,
+            _breadcrumbsCoordinates.last.longitude,
+            newPoint.latitude,
+            newPoint.longitude,
+          ) > 10.0) {
+        setState(() {
+          _breadcrumbsCoordinates.add(newPoint);
+        });
+        _updateBreadcrumbsPolyline();
+      }
       if (_polylineCoordinates.isEmpty ||
           _polylineCoordinates.last.latitude != newPoint.latitude ||
           _polylineCoordinates.last.longitude != newPoint.longitude) {
@@ -448,38 +441,24 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         });
         _updatePolyline();
       }
-
-      // Update marker
       _addMarker(position);
-
-      // Check checkpoint proximity
       _checkCheckpointProximity(position);
-
-      // Update today's distance
       setState(() {
         _todayDistance = _calculatePolylineDistance();
         _lastPosition = position;
       });
-
-      // Smart camera following with bearing and speed-based zoom
       if (_isFollowingUser) {
-        // Calculate zoom based on speed (zoom in when slow/stationary, zoom out when fast)
-        double baseZoom = 16.0; // Default zoom level
+        double baseZoom = 16.0;
         if (position.speed > 0) {
-          // Speed is in m/s, adjust zoom inversely with speed
-          // Zoom out when moving fast (up to 2x zoom out), zoom in when slow
-          double speedFactor = position.speed.clamp(0.0, 5.0) / 5.0; // Normalize 0-5 m/s
-          baseZoom = 16.0 - (speedFactor * 2.0); // 16.0 to 14.0 zoom range
+          final speedFactor = position.speed.clamp(0.0, 5.0) / 5.0;
+          baseZoom = 16.0 - (speedFactor * 2.0);
         }
-
-        // Create camera position with bearing (heading) for auto-rotation
         final cameraPosition = CameraPosition(
           target: LatLng(position.latitude, position.longitude),
           zoom: baseZoom,
-          bearing: position.heading, // Auto-rotate map to face walking direction
+          bearing: position.heading,
           tilt: 0.0,
         );
-
         _mapController.animateCamera(
           CameraUpdate.newCameraPosition(cameraPosition),
         );
@@ -487,54 +466,128 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     });
   }
 
+  void _showLongPressMenu(BuildContext context, LatLng latLng) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Akce na místě',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.place, color: Color(0xFFBFFF00)),
+              title: const Text('Nahlásit POI'),
+              subtitle: const Text('Označit zajímavé místo'),
+              onTap: () {
+                Navigator.pop(context);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('POI nahlášeno!')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.directions, color: Color(0xFFBFFF00)),
+              title: const Text('Nastavit cíl'),
+              subtitle: const Text('Vytvořit trasu do tohoto místa'),
+              onTap: () {
+                Navigator.pop(context);
+                setState(() {
+                  _destinationPoint = latLng;
+                  _tripPoints.clear();
+                  _generateDestinationRoute(latLng);
+                });
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Cíl nastaven. Trasa vytvořena.')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _simulateGPSMovement() {
+    if (_lastPosition == null) return;
+    final random = Random();
+    for (int i = 0; i < 5; i++) {
+      final latOffset = (random.nextDouble() - 0.5) * 0.001;
+      final lngOffset = (random.nextDouble() - 0.5) * 0.001;
+      final newPoint = LatLng(
+        _lastPosition!.latitude + latOffset,
+        _lastPosition!.longitude + lngOffset,
+      );
+      _breadcrumbsCoordinates.add(newPoint);
+    }
+    _updateBreadcrumbsPolyline();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('GPS simulace spuštěna - přidáno 5 bodů')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kBottomNavigationBarHeight),
-      child: Stack(
+    return Scaffold(
+      extendBody: true,
+      body: Stack(
         children: [
           Positioned.fill(
-            bottom: 100,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(0),
               child: GoogleMap(
-              onMapCreated: _onMapCreated,
-              onCameraMoveStarted: () {
-                // User started moving camera manually, disable auto-follow
-                setState(() {
-                  _isFollowingUser = false;
-                });
-              },
-              onTap: (latLng) {
-                if (_isSelectingDestination) {
+                onMapCreated: _onMapCreated,
+                onCameraMoveStarted: () {
                   setState(() {
-                    _isSelectingDestination = false;
-                    _destinationPoint = latLng;
-                    _tripPoints.clear();
-                    _generateDestinationRoute(latLng);
+                    _isFollowingUser = false;
                   });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Cíl zvolen. Trasa vytvořena.')),
-                  );
-                }
-              },
-              initialCameraPosition: const CameraPosition(
-                target: LatLng(50.0755, 14.4378), // Prague
-                zoom: 13,
+                },
+                onTap: (latLng) {
+                  if (_isSelectingDestination) {
+                    setState(() {
+                      _isSelectingDestination = false;
+                      _destinationPoint = latLng;
+                      _tripPoints.clear();
+                      _generateDestinationRoute(latLng);
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cíl zvolen. Trasa vytvořena.')),
+                    );
+                  }
+                },
+                onLongPress: (latLng) {
+                  _showLongPressMenu(context, latLng);
+                },
+                initialCameraPosition: const CameraPosition(
+                  target: LatLng(50.0755, 14.4378),
+                  zoom: 13,
+                ),
+                polylines: _polylines,
+                markers: _markers,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: true,
+                padding: const EdgeInsets.only(top: 150, right: 16),
+                compassEnabled: true,
+                zoomControlsEnabled: true,
               ),
-              polylines: _polylines,
-              markers: _markers,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: true,
-              padding: const EdgeInsets.only(top: 150, right: 16),
-              compassEnabled: true,
-              zoomControlsEnabled: true,
             ),
           ),
-        ),
-          // Top overlay with task
           Positioned(
             top: 0,
             left: 0,
@@ -576,9 +629,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          // Distance tracker overlay
           Positioned(
-            top: MediaQuery.of(context).padding.top + 72,
+            top: topPadding + 72,
             right: 16,
             child: ScaleTransition(
               scale: _pulseAnimation,
@@ -603,7 +655,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
+                          const Text(
                             'Dnešní vzdálenost',
                             style: TextStyle(
                               fontSize: 12,
@@ -627,9 +679,18 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          // Trip generator button
           Positioned(
-            bottom: 20,
+            bottom: 200,
+            right: 20,
+            child: FloatingActionButton(
+              onPressed: _simulateGPSMovement,
+              backgroundColor: const Color(0xFFBFFF00),
+              child: const Icon(Icons.play_arrow, color: Colors.black),
+              tooltip: 'Simulate GPS Movement',
+            ),
+          ),
+          Positioned(
+            bottom: 140,
             left: 20,
             right: 20,
             child: Container(
@@ -647,7 +708,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
               child: Row(
                 children: [
-                  // Main button
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
@@ -656,18 +716,18 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                         });
                       },
                       icon: const Icon(Icons.explore),
-                      label: const Text(
-                        'Okruh v okolí',
-                        style: TextStyle(
+                      label: Text(
+                        _tripMode == 'loop' ? 'Okruh v okolí' : 'Cesta do cíle',
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       style: ButtonStyle(
-                        backgroundColor: WidgetStateProperty.all(Colors.limeAccent),
-                        foregroundColor: WidgetStateProperty.all(Colors.black),
-                        elevation: WidgetStateProperty.all(0),
-                        shape: WidgetStateProperty.all(
+                        backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
+                        foregroundColor: MaterialStateProperty.all(Colors.black),
+                        elevation: MaterialStateProperty.all(0),
+                        shape: MaterialStateProperty.all(
                           const RoundedRectangleBorder(
                             borderRadius: BorderRadius.only(
                               topLeft: Radius.circular(16),
@@ -678,12 +738,11 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  // Dropdown button
                   Container(
                     width: 56,
                     height: 56,
                     decoration: const BoxDecoration(
-                      color: Colors.limeAccent,
+                      color: Color(0xFFBFFF00),
                       borderRadius: BorderRadius.only(
                         topRight: Radius.circular(16),
                         bottomRight: Radius.circular(16),
@@ -693,20 +752,31 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                       onSelected: (value) {
                         if (value == 'loop') {
                           setState(() {
+                            _tripMode = 'loop';
                             _showTripOptions = true;
                             _isSelectingDestination = false;
+                            _showDestinationSearch = false;
                           });
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Okruh vybrán. Vyberte délku a generujte.')),
                           );
                         } else if (value == 'destination') {
                           setState(() {
+                            _tripMode = 'destination';
                             _showTripOptions = false;
                             _isSelectingDestination = true;
+                            _showDestinationSearch = false;
                           });
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Klikněte do mapy pro cíl')),
                           );
+                        } else if (value == 'search') {
+                          setState(() {
+                            _tripMode = 'destination';
+                            _showTripOptions = false;
+                            _isSelectingDestination = false;
+                            _showDestinationSearch = true;
+                          });
                         }
                       },
                       itemBuilder: (context) => [
@@ -717,6 +787,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                         const PopupMenuItem(
                           value: 'destination',
                           child: Text('Cesta do cíle (A → B)'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'search',
+                          child: Text('Hledat destinaci'),
                         ),
                       ],
                       icon: const Icon(
@@ -732,10 +806,77 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          // Distance slider (when showing trip options)
+          if (_showDestinationSearch)
+            Positioned(
+              bottom: 190,
+              left: 16,
+              right: 16,
+              child: Card(
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: _destinationController,
+                        decoration: const InputDecoration(
+                          labelText: 'Hledat destinaci',
+                          hintText: 'Zadejte cíl cesty',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                        ),
+                        onSubmitted: (value) {
+                          setState(() {
+                            _showDestinationSearch = false;
+                            _isSelectingDestination = true;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Klikněte do mapy pro cíl')),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _showDestinationSearch = false;
+                              });
+                            },
+                            child: const Text('Zrušit'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _showDestinationSearch = false;
+                                _isSelectingDestination = true;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Klikněte do mapy pro cíl')),
+                              );
+                            },
+                            style: ButtonStyle(
+                              backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
+                              foregroundColor: MaterialStateProperty.all(Colors.black),
+                            ),
+                            child: const Text('Hledat'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           if (_showTripOptions)
             Positioned(
-              bottom: 170,
+              bottom: 270,
               left: 16,
               right: 16,
               child: Card(
@@ -780,11 +921,12 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                           ),
                           ElevatedButton(
                             onPressed: () {
-                              setState(() {
-                                _showTripOptions = false;
-                              });
                               _generateTripLoop();
                             },
+                            style: ButtonStyle(
+                              backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
+                              foregroundColor: MaterialStateProperty.all(Colors.black),
+                            ),
                             child: const Text('Generovat'),
                           ),
                         ],
@@ -794,10 +936,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
-          // Trip points card
           if (_tripPoints.isNotEmpty)
             Positioned(
-              bottom: 180,
+              bottom: 280,
               left: 16,
               child: Card(
                 elevation: 6,
@@ -820,28 +961,27 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                       ),
                       const SizedBox(height: 8),
                       ..._tripPoints.map((point) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.place,
-                              size: 16,
-                              color: Colors.purple,
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.place,
+                                  size: 16,
+                                  color: Colors.purple,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  point['name'] as String,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              point['name'] as String,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                          ],
-                        ),
-                      )),
+                          )),
                     ],
                   ),
                 ),
               ),
             ),
-          // Celebration overlay
           if (_showCelebration)
             Positioned.fill(
               child: Container(
@@ -881,12 +1021,4 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       ),
     );
   }
-
-  @override
-  void dispose() {
-    _mapController.dispose();
-    _pulseController.dispose();
-    super.dispose();
-  }
 }
-
