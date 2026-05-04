@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../maps/maps_screen.dart';
+import '../../login_screen.dart';
 
 /// Screen for selecting user avatar
 class AvatarSelectionScreen extends StatefulWidget {
@@ -52,7 +52,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> {
     if (_selectedAvatar != null) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => const MapsScreen(),
+          builder: (context) => const LoginScreen(),
         ),
       );
     }

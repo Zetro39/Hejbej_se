@@ -614,6 +614,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
+    final bottomOffset = MediaQuery.of(context).padding.bottom + 80;
 
     return Scaffold(
       extendBody: true,
@@ -751,7 +752,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             ),
           ),
           Positioned(
-            bottom: 200,
+            bottom: bottomOffset + 100,
             right: 20,
             child: FloatingActionButton(
               onPressed: _simulateGPSMovement,
@@ -761,7 +762,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             ),
           ),
           Positioned(
-            bottom: 140,
+            bottom: bottomOffset,
             left: 20,
             right: 20,
             child: Container(
@@ -879,7 +880,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           ),
           if (_showDestinationSearch)
             Positioned(
-              bottom: 190,
+              bottom: bottomOffset + 110,
               left: 16,
               right: 16,
               child: Card(
@@ -947,7 +948,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             ),
           if (_showTripOptions)
             Positioned(
-              bottom: 270,
+              bottom: bottomOffset + 190,
               left: 16,
               right: 16,
               child: Card(
@@ -1009,7 +1010,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             ),
           if (_tripPoints.isNotEmpty)
             Positioned(
-              bottom: 280,
+              bottom: bottomOffset + 200,
               left: 16,
               child: Card(
                 elevation: 6,
@@ -1054,7 +1055,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
           Positioned(
-            bottom: 20,
+            bottom: MediaQuery.of(context).padding.bottom + 16,
             left: 20,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1063,7 +1064,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
-                'v1.0.8 - May 4th',
+                'v1.0.9 - Menu Fix',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 12,
