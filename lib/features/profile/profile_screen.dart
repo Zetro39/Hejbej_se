@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pay/pay.dart';
 
 import '../achievements/achievements_screen.dart';
 
@@ -22,12 +21,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<bool> loyaltyAchievements = List.filled(3, false); // 10,50,250 days
   bool isStreakFrozen = false;
 
-  late Pay _payClient;
-  PaymentConfiguration? _applePayConfig;
-  PaymentConfiguration? _googlePayConfig;
-  bool _paymentReady = false;
-  bool _applePayAvailable = false;
-
   final List<double> distanceMilestones = [1, 10, 100, 1000, 10000, 40000];
   final List<int> loyaltyMilestones = [10, 50, 250];
 
@@ -35,7 +28,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadData();
-    _initializePayClient();
   }
 
   Future<void> _initializePayClient() async {
@@ -61,8 +53,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _paymentReady = true;
       });
     }
-  }
-
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -351,48 +341,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 10),
-                Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        const Text(
-                          'Pomozte nám vylepšovat aplikaci! Výchozí dar: 50 CZK',
-                          style: TextStyle(fontSize: 16),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        if (!_paymentReady)
-                          const Center(child: CircularProgressIndicator())
-                        else if (_applePayAvailable && _applePayConfig != null)
-                          ApplePayButton(
-                            paymentConfiguration: _applePayConfig!,
-                            paymentItems: _paymentItems,
-                            style: ApplePayButtonStyle.black,
-                            type: ApplePayButtonType.buy,
-                            onPaymentResult: _onPaymentResult,
-                            loadingIndicator: const Center(child: CircularProgressIndicator()),
-                          )
-                        else if (_googlePayConfig != null)
-                          GooglePayButton(
-                            paymentConfiguration: _googlePayConfig!,
-                            paymentItems: _paymentItems,
-                            type: GooglePayButtonType.donate,
-                            onPaymentResult: _onPaymentResult,
-                            loadingIndicator: const Center(child: CircularProgressIndicator()),
-                          )
-                        else
-                          const SizedBox.shrink(),
-                      ],
-                    ),
-                  ),
-                ),
-
                 const SizedBox(height: 40),
               ],
             ),
@@ -402,32 +350,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // Sample assets/apple_pay_config.json structure for TEST environment:
-  // {
-  //   "provider": "apple_pay",
-  //   "data": {
-  //     "merchantIdentifier": "merchant.com.example",
-  //     "displayName": "Hejbej se",
-  //     "merchantCapabilities": ["3DS", "debit", "credit"],
-  //     "supportedNetworks": ["visa", "masterCard", "amex", "discover"],
-  //     "countryCode": "CZ",
-  //     "currencyCode": "CZK"
-  //   }
-  // }
-
-  List<PaymentItem> get _paymentItems => [
-    const PaymentItem(
-      label: 'Dar pro Hejbej se',
-      amount: '50.00',
-      status: PaymentItemStatus.final_price,
-    ),
-  ];
-
-  void _onPaymentResult(Map<String, dynamic> result) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Děkujeme za podporu!')),
-    );
-  }
 }
 
 /// Widget pro achievement kartu
