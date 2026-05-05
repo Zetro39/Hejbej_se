@@ -371,7 +371,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const Center(child: CircularProgressIndicator())
                         else if (_applePayAvailable && _applePayConfig != null)
                           ApplePayButton(
-                            paymentConfiguration: _applePayConfig,
+                            paymentConfiguration: _applePayConfig!,
                             paymentItems: _paymentItems,
                             style: ApplePayButtonStyle.black,
                             type: ApplePayButtonType.buy,
@@ -380,7 +380,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           )
                         else if (_googlePayConfig != null)
                           GooglePayButton(
-                            paymentConfiguration: _googlePayConfig,
+                            paymentConfiguration: _googlePayConfig!,
                             paymentItems: _paymentItems,
                             type: GooglePayButtonType.donate,
                             onPaymentResult: _onPaymentResult,

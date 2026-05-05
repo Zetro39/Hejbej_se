@@ -1384,7 +1384,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
-                'v1.2.0 - Pro Features & Support',
+                'v1.2.1 - Payment Fix',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 12,
