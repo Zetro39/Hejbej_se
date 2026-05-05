@@ -15,7 +15,7 @@ dependencies:
   google_maps_flutter: ^2.5.0
   google_maps_webservice: ^0.0.1-dev.0.1
   http: ^0.13.6
-  pay: ^1.1.0
+  pay: ^3.3.0
 
 dev_dependencies:
   flutter_test:
