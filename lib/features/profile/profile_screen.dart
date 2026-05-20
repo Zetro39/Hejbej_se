@@ -30,29 +30,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadData();
   }
 
-  Future<void> _initializePayClient() async {
-    try {
-      final appleConfig = await PaymentConfiguration.fromAsset('apple_pay_config.json');
-      final googleConfig = await PaymentConfiguration.fromAsset('google_pay_config.json');
-      _payClient = Pay({
-        PayProvider.apple_pay: appleConfig,
-        PayProvider.google_pay: googleConfig,
-      });
-      final appleAvailable = await _payClient.userCanPay(PayProvider.apple_pay);
-      if (!mounted) return;
-      setState(() {
-        _applePayConfig = appleConfig;
-        _googlePayConfig = googleConfig;
-        _applePayAvailable = appleAvailable;
-        _paymentReady = true;
-      });
-    } catch (e) {
-      debugPrint('Payment initialization failed: $e');
-      if (!mounted) return;
-      setState(() {
-        _paymentReady = true;
-      });
-    }
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -332,16 +309,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
 
                 const SizedBox(height: 20),
-
-                // Donations Section
-                const Text(
-                  'Podpořte vývoj Hejbej se',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 40),
               ],
             ),
           ),

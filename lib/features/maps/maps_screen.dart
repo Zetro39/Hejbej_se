@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -79,7 +81,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   DateTime? _lastActivityDate;
   bool _isStreakFrozen = false;
 
-  static const String _googleApiKey = 'YOUR_API_KEY_HERE';
+  static const String _googleApiKey = String.fromEnvironment(
+    'GOOGLE_MAPS_API_KEY',
+    defaultValue: 'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxx',
+  );
 
   final TextEditingController _destinationController = TextEditingController();
   bool _showDestinationSearch = false;
@@ -359,29 +364,47 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   Future<void> _generateDestinationRoute(LatLng destination) async {
     if (_lastPosition == null) return;
-    final start = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
-    final midpoint = LatLng(
-      (start.latitude + destination.latitude) / 2,
-      (start.longitude + destination.longitude) / 2 + 0.001,
-    );
-    final routePoints = [start, midpoint, destination];
-    _polylineCoordinates.clear();
-    _polylineCoordinates.addAll(routePoints);
-    _updatePolyline();
+    
+    try {
+      final start = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
+      final midpoint = LatLng(
+        (start.latitude + destination.latitude) / 2,
+        (start.longitude + destination.longitude) / 2 + 0.001,
+      );
+      final routePoints = [start, midpoint, destination];
+      _polylineCoordinates.clear();
+      _polylineCoordinates.addAll(routePoints);
+      _updatePolyline();
 
-    _markers.removeWhere((m) => m.markerId.value == 'trip_dest');
-    _markers.add(Marker(
-      markerId: const MarkerId('trip_dest'),
-      position: destination,
-      infoWindow: const InfoWindow(title: 'Cíl cesty'),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-    ));
+      _markers.removeWhere((m) => m.markerId.value == 'trip_dest');
+      _markers.add(Marker(
+        markerId: const MarkerId('trip_dest'),
+        position: destination,
+        infoWindow: const InfoWindow(title: 'Cíl cesty'),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+      ));
 
-    _tripPoints.clear();
-    _tripPoints.add({'name': 'Cíl cesty', 'position': destination});
+      _tripPoints.clear();
+      _tripPoints.add({'name': 'Cíl cesty', 'position': destination});
 
-    await _fetchElevationData(routePoints);
-    await _fetchRouteComparison(start, destination);
+      // Fetch elevation data with fallback
+      await _fetchElevationData(routePoints).catchError((e) {
+        debugPrint('Elevation data fetch failed, continuing without elevation: $e');
+        return;
+      });
+      
+      // Fetch route comparison with fallback
+      await _fetchRouteComparison(start, destination).catchError((e) {
+        debugPrint('Route comparison failed, continuing without route options: $e');
+        return;
+      });
+    } catch (e) {
+      debugPrint('Error generating destination route: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Chyba při zpracování trasy: $e')),
+      );
+    }
   }
 
   Future<void> _fetchElevationData(List<LatLng> routePoints) async {
@@ -393,7 +416,12 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         'locations': path,
         'key': _googleApiKey,
       });
-      final response = await http.get(uri);
+      
+      final response = await http.get(uri).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('Elevation API timeout'),
+      );
+      
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         if (body['status'] == 'OK' && body['results'] is List) {
@@ -424,10 +452,18 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               }
             }
           }
+        } else {
+          debugPrint('Elevation API error: ${body['status']}');
         }
+      } else {
+        debugPrint('Elevation API HTTP error: ${response.statusCode}');
       }
+    } on SocketException catch (e) {
+      debugPrint('Network error fetching elevation: $e');
+    } on TimeoutException catch (e) {
+      debugPrint('Timeout fetching elevation: $e');
     } catch (e) {
-      debugPrint('Elevation API error: $e');
+      debugPrint('Unexpected error fetching elevation: $e');
     }
   }
 
@@ -438,7 +474,11 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         [Location(lat: destination.latitude, lng: destination.longitude)],
         travelMode: TravelMode.walking,
         region: 'cz',
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('Distance Matrix API timeout'),
       );
+      
       if (distanceResponse.isOkay &&
           distanceResponse.rows.isNotEmpty &&
           distanceResponse.rows.first.elements.isNotEmpty) {
@@ -448,7 +488,13 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             _etaMinutes = (element.duration.value / 60).round();
           });
         }
+      } else {
+        debugPrint('Distance Matrix: Request not okay');
       }
+    } on SocketException catch (e) {
+      debugPrint('Network error fetching distance: $e');
+    } on TimeoutException catch (e) {
+      debugPrint('Timeout fetching distance: $e');
     } catch (e) {
       debugPrint('Distance Matrix API error: $e');
     }
@@ -460,6 +506,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         travelMode: TravelMode.walking,
         alternatives: true,
         region: 'cz',
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('Directions API timeout'),
       );
 
       if (directionsResponse.isOkay && directionsResponse.routes.isNotEmpty) {
@@ -487,7 +536,13 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             });
           }
         }
+      } else {
+        debugPrint('Directions API: Request not okay');
       }
+    } on SocketException catch (e) {
+      debugPrint('Network error fetching directions: $e');
+    } on TimeoutException catch (e) {
+      debugPrint('Timeout fetching directions: $e');
     } catch (e) {
       debugPrint('Directions API error: $e');
     }
