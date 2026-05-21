@@ -65,11 +65,18 @@ class LocationService {
   /// Get current location
   Future<Position?> getCurrentLocation() async {
     try {
+      // Ensure permissions are granted before trying to get position
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        final requested = await requestLocationPermission();
+        if (!requested) return null;
+      }
+
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
       return position;
-    } on Exception {
+    } catch (e) {
       return null;
     }
   }

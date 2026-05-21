@@ -36,33 +36,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   String? _selectedAvatar;
   BitmapDescriptor? _avatarIcon;
 
-  static const List<Map<String, dynamic>> _checkpoints = [
-    {
-      'id': 'checkpoint_1',
-      'position': LatLng(50.0773, 14.4403),
-      'title': 'Severovýchodní checkpoint',
-    },
-    {
-      'id': 'checkpoint_2',
-      'position': LatLng(50.0727, 14.4403),
-      'title': 'Jižovýchodní checkpoint',
-    },
-    {
-      'id': 'checkpoint_3',
-      'position': LatLng(50.0727, 14.4297),
-      'title': 'Jihozápadní checkpoint',
-    },
-    {
-      'id': 'checkpoint_4',
-      'position': LatLng(50.0773, 14.4297),
-      'title': 'Severozápadní checkpoint',
-    },
-    {
-      'id': 'checkpoint_5',
-      'position': LatLng(50.0755, 14.4450),
-      'title': 'Východní checkpoint',
-    },
-  ];
+  // Removed dummy Prague checkpoints left from testing.
+  static const List<Map<String, dynamic>> _checkpoints = [];
 
   final Set<String> _reachedCheckpoints = {};
   double _todayDistance = 0.0;
@@ -73,6 +48,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   bool _isFollowingUser = true;
   Position? _lastPosition;
+  Position? _initialPosition;
   Position? _previousPosition;
 
   double _totalDistance = 0.0;
@@ -217,13 +193,17 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   Future<void> _setupMap() async {
     final initialPosition = await _locationService.getCurrentLocation();
-    if (initialPosition != null && mounted) {
-      _polylineCoordinates.add(
-        LatLng(initialPosition.latitude, initialPosition.longitude),
-      );
-      _addMarker(initialPosition);
-      _updatePolyline();
+    if (initialPosition != null) {
+      _initialPosition = initialPosition;
+      if (mounted) {
+        _polylineCoordinates.add(
+          LatLng(initialPosition.latitude, initialPosition.longitude),
+        );
+        _addMarker(initialPosition);
+        _updatePolyline();
+      }
     }
+    // Checkpoints list intentionally empty after cleanup
     _addAllCheckpointMarkers();
   }
 
@@ -733,6 +713,17 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
+    // If we already obtained an initial location, center the camera immediately
+    if (_initialPosition != null) {
+      try {
+        final cameraPosition = CameraPosition(
+          target: LatLng(_initialPosition!.latitude, _initialPosition!.longitude),
+          zoom: 16.0,
+        );
+        _mapController.animateCamera(CameraUpdate.newCameraPosition(cameraPosition));
+      } catch (_) {}
+    }
+
     _positionStream.listen((position) async {
       if (!mounted) return;
       final newPoint = LatLng(position.latitude, position.longitude);

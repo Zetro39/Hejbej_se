@@ -6,6 +6,8 @@ import 'login_screen.dart';
 import 'main_shell.dart';
 import 'services/location_service.dart';
 import 'features/auth/avatar_selection_screen.dart';
+import 'services/auth_service.dart';
+import 'package:flutter/foundation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,13 +17,20 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final selectedAvatar = prefs.getString('selected_avatar');
 
-  runApp(HejbejSeApp(hasSelectedAvatar: selectedAvatar != null));
+  // Check secure storage for saved logged-in user
+  final savedUser = await AuthService().getUserName();
+  if (kDebugMode) {
+    debugPrint('Saved user: $savedUser');
+  }
+
+  runApp(HejbejSeApp(hasSelectedAvatar: selectedAvatar != null, initialUserName: savedUser));
 }
 
 class HejbejSeApp extends StatefulWidget {
-  const HejbejSeApp({super.key, required this.hasSelectedAvatar});
+  const HejbejSeApp({super.key, required this.hasSelectedAvatar, this.initialUserName});
 
   final bool hasSelectedAvatar;
+  final String? initialUserName;
 
   @override
   State<HejbejSeApp> createState() => _HejbejSeAppState();
@@ -140,7 +149,9 @@ class _HejbejSeAppState extends State<HejbejSeApp> {
           ),
         ),
       ),
-      home: widget.hasSelectedAvatar ? const LoginScreen() : const AvatarSelectionScreen(),
+      home: widget.initialUserName != null
+          ? MainShell(userName: widget.initialUserName!)
+          : (widget.hasSelectedAvatar ? const LoginScreen() : const AvatarSelectionScreen()),
     );
   }
 }

@@ -56,13 +56,35 @@ class _ShopScreenState extends State<ShopScreen> {
   ];
 
   void _onPaymentResult(Map<String, dynamic> result) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Děkujeme za podporu! Vaší pomocí vylepšujeme aplikaci.'),
-        duration: Duration(seconds: 3),
-        backgroundColor: Colors.green,
-      ),
-    );
+    // Basic validation of the payment result so we can display clearer messages in Sandbox
+    try {
+      if (result.isEmpty) {
+        throw Exception('Prázdná odpověď platební brány');
+      }
+
+      // Check for a token or paymentMethodData - structure differs between providers
+      final hasToken = result.containsKey('token') || (result['paymentMethodData'] != null);
+      if (!hasToken) {
+        throw Exception('Neplatný platební token: $result');
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Děkujeme za podporu! Vaší pomocí vylepšujeme aplikaci.'),
+          duration: Duration(seconds: 3),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Payment result validation failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Platba se nepodařila: $e'),
+          duration: const Duration(seconds: 4),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override

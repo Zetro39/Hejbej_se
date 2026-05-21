@@ -8,4 +8,11 @@
     "countryCode": "CZ",
     "currencyCode": "CZK"
   }
+
+  ,
+  "environment": "TEST",
+  "debug": {
+    "enabled": true,
+    "notes": "Set your real merchantIdentifier (merchant.com.yourdomain) and ensure Apple Pay capability + Merchant ID are configured in Xcode. Use Sandbox tester Apple IDs for TestFlight testing."
+  }
 }
