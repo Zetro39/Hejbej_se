@@ -39,6 +39,15 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+      # Strip unsupported -G flag from C++ flags if present (some builders pass unsupported flags)
+      cpp_flags = config.build_settings['OTHER_CPLUSPLUSFLAGS']
+      if cpp_flags
+        if cpp_flags.respond_to?(:delete)
+          cpp_flags.delete('-G')
+        elsif cpp_flags.is_a?(String)
+          config.build_settings['OTHER_CPLUSPLUSFLAGS'] = cpp_flags.split.reject { |s| s == '-G' }.join(' ')
+        end
+      end
     end
   end
 end
