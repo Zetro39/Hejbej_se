@@ -137,9 +137,9 @@ class AuthService {
     // Merge profile into users collection; initialize default stats if missing
     final docRef = _firestore.collection('users').doc(uid);
     final data = Map<String, dynamic>.from(profile);
-    data['strikes'] = 0;
-    data['limetky'] = 0;
-    data['registration_date'] = FieldValue.serverTimestamp();
+    if (data['strikes'] == null) data['strikes'] = 0;
+    if (data['limetky'] == null) data['limetky'] = 0;
+    if (data['registration_date'] == null) data['registration_date'] = FieldValue.serverTimestamp();
     await docRef.set(data, SetOptions(merge: true));
   }
 }

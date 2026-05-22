@@ -68,9 +68,9 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
 
     try {
       await AuthService().saveProfile(user.uid, profileData);
-      await AuthService().saveUserName(profileData['nickname']);
+      await AuthService().saveUserName(profileData['nickname'] as String);
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: profileData['nickname'])));
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: profileData['nickname'] as String)));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Uložení profilu selhalo: $e')));
