@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "684627309697",
+    "project_id": "hejbej-450a5",
+    "storage_bucket": "hejbej-450a5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:684627309697:android:783789c860a6cc565f8980",
+        "android_client_info": {
+          "package_name": "com.zetro39.hejbejse"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdP-VjtCDjKXuxRGyfZ3Yufk19U_AIC5s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
