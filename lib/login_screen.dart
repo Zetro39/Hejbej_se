@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -6,6 +7,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'main_shell.dart';
 import 'services/auth_service.dart';
+import 'features/profile/profile_creation_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,32 +17,62 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   String? _errorText;
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
   void _onLoginPressed() {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
       setState(() {
-        _errorText = 'Zadejte jméno hrdiny';
+        _errorText = 'Vyplňte e-mail a heslo';
       });
       return;
     }
-    // Persist username securely so login persists across restarts
-    AuthService().saveUserName(name).then((_) {
+
+    AuthService().signInWithEmail(email, password).then((cred) async {
+      final user = cred.user;
+      if (user != null) {
+        await AuthService().saveUserName(user.email ?? '');
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: user.email ?? '')));
+      }
+    }).catchError((e) {
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => MainShell(userName: name),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Přihlášení selhalo: $e')));
     });
+  }
+
+  void _onRegisterPressed() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() {
+        _errorText = 'Vyplňte e-mail a heslo';
+      });
+      return;
+    }
+
+    try {
+      final cred = await AuthService().registerWithEmail(email, password);
+      final user = cred.user;
+      if (user == null) return;
+      await AuthService().saveUserName(user.email ?? '');
+      if (!mounted) return;
+      // Navigate to onboarding/profile creation
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => ProfileCreationScreen()));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Registrace selhala: $e')));
+    }
   }
 
   Future<void> _signInWithGoogle() async {
@@ -117,9 +149,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 60),
               TextField(
-                controller: _nameController,
+                controller: _emailController,
                 decoration: InputDecoration(
-                  labelText: 'Jméno hrdiny',
+                  labelText: 'E-mail',
                   errorText: _errorText,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -127,6 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   filled: true,
                   fillColor: Colors.white,
                 ),
+                keyboardType: TextInputType.emailAddress,
                 onChanged: (value) {
                   if (_errorText != null) {
                     setState(() {
@@ -134,7 +167,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     });
                   }
                 },
-                onSubmitted: (_) => _onLoginPressed(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _passwordController,
+                decoration: InputDecoration(
+                  labelText: 'Heslo',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                obscureText: true,
               ),
               const SizedBox(height: 32),
               // Social login buttons
@@ -142,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _signInWithGoogle,
+                        onPressed: _signInWithGoogle,
                       icon: const Icon(Icons.login, color: Colors.black),
                       label: const Text('Přihlásit se přes Google'),
                       style: ButtonStyle(
@@ -185,6 +230,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: _onRegisterPressed,
+                  child: const Text('Registrovat se'),
                 ),
               ),
             ],

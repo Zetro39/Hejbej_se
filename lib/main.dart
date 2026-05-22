@@ -8,9 +8,13 @@ import 'services/location_service.dart';
 import 'features/auth/avatar_selection_screen.dart';
 import 'services/auth_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   await DistanceManager().initialize();
 
   // Check if avatar is selected
