@@ -37,15 +37,39 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
-    target.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
-      # Strip unsupported -G flag from C++ flags if present (some builders pass unsupported flags)
-      cpp_flags = config.build_settings['OTHER_CPLUSPLUSFLAGS']
-      if cpp_flags
-        if cpp_flags.respond_to?(:delete)
-          cpp_flags.delete('-G')
-        elsif cpp_flags.is_a?(String)
-          config.build_settings['OTHER_CPLUSPLUSFLAGS'] = cpp_flags.split.reject { |s| s == '-G' }.join(' ')
+  end
+
+  projects = [installer.pods_project]
+  begin
+    runner_project_path = File.join(File.dirname(__FILE__), 'Runner.xcodeproj')
+    projects << Xcodeproj::Project.open(runner_project_path) if File.exist?(runner_project_path)
+  rescue => e
+    # ignore
+  end
+
+  projects.compact.each do |proj|
+    proj.targets.each do |target|
+      target.build_configurations.each do |config|
+        # Ensure minimum deployment target
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+
+        # Normalize and remove any -G tokens from OTHER_CPLUSPLUSFLAGS entries
+        config.build_settings.keys.select { |k| k.to_s.start_with?('OTHER_CPLUSPLUSFLAGS') }.each do |k|
+          val = config.build_settings[k]
+          next unless val
+          if val.is_a?(Array)
+            new_val = val.reject { |s| s.to_s =~ /^-G($|\b)/ }
+            config.build_settings[k] = new_val
+          else
+            new_val = val.to_s.split.reject { |s| s.to_s =~ /^-G($|\b)/ }.join(' ')
+            config.build_settings[k] = new_val
+          end
+        end
+
+        # Force a modern C++ standard if an old GNU standard is set
+        cpp_std = config.build_settings['CLANG_CXX_LANGUAGE_STANDARD']
+        if cpp_std && cpp_std.to_s =~ /gnu\+\+(0x|14)/
+          config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++17'
         end
       end
     end
