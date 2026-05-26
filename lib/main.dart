@@ -14,15 +14,44 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  await DistanceManager().initialize();
+  
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('Firebase init error: $e');
+    }
+  }
+
+  try {
+    await DistanceManager().initialize();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('DistanceManager init error: $e');
+    }
+  }
 
   // Check if avatar is selected
-  final prefs = await SharedPreferences.getInstance();
-  final selectedAvatar = prefs.getString('selected_avatar');
+  String? selectedAvatar;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    selectedAvatar = prefs.getString('selected_avatar');
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('SharedPreferences error: $e');
+    }
+  }
 
   // Check secure storage for saved logged-in user
-  final savedUser = await AuthService().getUserName();
+  String? savedUser;
+  try {
+    savedUser = await AuthService().getUserName();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('AuthService error: $e');
+    }
+  }
+
   if (kDebugMode) {
     debugPrint('Saved user: $savedUser');
   }
@@ -47,42 +76,55 @@ class _HejbejSeAppState extends State<HejbejSeApp> {
   @override
   void initState() {
     super.initState();
-    _initializeLocationTracking();
+    // Defer location initialization to next frame to ensure context is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeLocationTracking();
+    });
   }
 
   Future<void> _initializeLocationTracking() async {
-    // Check if location services are enabled
-    final serviceEnabled = await _locationService.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Povolte služby polohy pro sledování vzdálenosti')),
-        );
-      }
-      return;
-    }
-
-    // Request permission
-    final permissionGranted = await _locationService.requestLocationPermission();
-    if (!permissionGranted) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Povolení k poloze je vyžadováno pro sledování')),
-        );
-      }
-      return;
-    }
-
-    // Start tracking
-    _locationSubscription = _locationService.positionStream.listen((distanceKm) async {
-      if (distanceKm > 0) {
-        await DistanceManager().addDistance(distanceKm);
-        // Notify listeners that distance has changed
+    if (!mounted) return;
+    
+    try {
+      // Check if location services are enabled
+      final serviceEnabled = await _locationService.isLocationServiceEnabled();
+      if (!serviceEnabled) {
         if (mounted) {
-          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Povolte služby polohy pro sledování vzdálenosti')),
+          );
         }
+        return;
       }
-    });
+
+      // Request permission
+      final permissionGranted = await _locationService.requestLocationPermission();
+      if (!permissionGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Povolení k poloze je vyžadováno pro sledování')),
+          );
+        }
+        return;
+      }
+
+      if (!mounted) return;
+
+      // Start tracking
+      _locationSubscription = _locationService.positionStream.listen((distanceKm) async {
+        if (distanceKm > 0) {
+          await DistanceManager().addDistance(distanceKm);
+          // Notify listeners that distance has changed
+          if (mounted) {
+            setState(() {});
+          }
+        }
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Location init error: $e');
+      }
+    }
   }
 
   @override
