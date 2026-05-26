@@ -7,13 +7,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:google_maps_webservice/directions.dart' hide Polyline;
-import 'package:google_maps_webservice/distance.dart' hide Row;
-import 'package:google_maps_webservice/places.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/location_service.dart';
+
+class PlacePrediction {
+  final String description;
+  final String placeId;
+
+  PlacePrediction({required this.description, required this.placeId});
+
+  factory PlacePrediction.fromJson(Map<String, dynamic> json) {
+    return PlacePrediction(
+      description: json['description'] as String? ?? '',
+      placeId: json['place_id'] as String? ?? '',
+    );
+  }
+}
 
 /// Modul Mapy – Live GPS tracking s Google Maps.
 class MapsScreen extends StatefulWidget {
@@ -72,11 +83,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   List<Map<String, dynamic>> _tripPoints = [];
   String _tripMode = 'loop';
 
-  // Places Autocomplete
-  final GoogleMapsPlaces _places = GoogleMapsPlaces(apiKey: _googleApiKey);
-  final GoogleDistanceMatrix _distance = GoogleDistanceMatrix(apiKey: _googleApiKey);
-  final GoogleMapsDirections _directions = GoogleMapsDirections(apiKey: _googleApiKey);
-  List<Prediction> _placePredictions = [];
+  List<PlacePrediction> _placePredictions = [];
   bool _showSuggestions = false;
 
   // Elevation & Rewards
@@ -114,9 +121,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _mapController.dispose();
     _pulseController.dispose();
     _destinationController.dispose();
-    _places.dispose();
-    _distance.dispose();
-    _directions.dispose();
     super.dispose();
   }
 
@@ -449,27 +453,38 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   Future<void> _fetchRouteComparison(LatLng start, LatLng destination) async {
     try {
-      final distanceResponse = await _distance.distanceWithLocation(
-        [Location(lat: start.latitude, lng: start.longitude)],
-        [Location(lat: destination.latitude, lng: destination.longitude)],
-        travelMode: TravelMode.walking,
-        region: 'cz',
-      ).timeout(
+      final distanceUri = Uri.https('maps.googleapis.com', '/maps/api/distancematrix/json', {
+        'origins': '${start.latitude},${start.longitude}',
+        'destinations': '${destination.latitude},${destination.longitude}',
+        'mode': 'walking',
+        'region': 'cz',
+        'key': _googleApiKey,
+      });
+      final distanceResponse = await http.get(distanceUri).timeout(
         const Duration(seconds: 10),
         onTimeout: () => throw Exception('Distance Matrix API timeout'),
       );
-      
-      if (distanceResponse.isOkay &&
-          distanceResponse.rows.isNotEmpty &&
-          distanceResponse.rows.first.elements.isNotEmpty) {
-        final element = distanceResponse.rows.first.elements.first;
-        if (mounted) {
-          setState(() {
-            _etaMinutes = (element.duration.value / 60).round();
-          });
+
+      if (distanceResponse.statusCode == 200) {
+        final body = jsonDecode(distanceResponse.body) as Map<String, dynamic>;
+        if (body['status'] == 'OK' && body['rows'] is List && body['rows'].isNotEmpty) {
+          final row = body['rows'][0] as Map<String, dynamic>;
+          if (row['elements'] is List && row['elements'].isNotEmpty) {
+            final element = row['elements'][0] as Map<String, dynamic>;
+            if (element['duration'] is Map<String, dynamic>) {
+              final durationValue = (element['duration']['value'] as num).toInt();
+              if (mounted) {
+                setState(() {
+                  _etaMinutes = (durationValue / 60).round();
+                });
+              }
+            }
+          }
+        } else {
+          debugPrint('Distance Matrix: Request not okay ${body['status']}');
         }
       } else {
-        debugPrint('Distance Matrix: Request not okay');
+        debugPrint('Distance Matrix HTTP error: ${distanceResponse.statusCode}');
       }
     } on SocketException catch (e) {
       debugPrint('Network error fetching distance: $e');
@@ -480,44 +495,52 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     }
 
     try {
-      final directionsResponse = await _directions.directionsWithLocation(
-        Location(lat: start.latitude, lng: start.longitude),
-        Location(lat: destination.latitude, lng: destination.longitude),
-        travelMode: TravelMode.walking,
-        alternatives: true,
-        region: 'cz',
-      ).timeout(
+      final directionsUri = Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
+        'origin': '${start.latitude},${start.longitude}',
+        'destination': '${destination.latitude},${destination.longitude}',
+        'mode': 'walking',
+        'alternatives': 'true',
+        'region': 'cz',
+        'key': _googleApiKey,
+      });
+      final directionsResponse = await http.get(directionsUri).timeout(
         const Duration(seconds: 10),
         onTimeout: () => throw Exception('Directions API timeout'),
       );
 
-      if (directionsResponse.isOkay && directionsResponse.routes.isNotEmpty) {
-        final routeSummaries = <Map<String, num>>[];
-        for (final route in directionsResponse.routes) {
-          if (route.legs.isNotEmpty) {
-            final leg = route.legs.first;
-            routeSummaries.add({
-              'distance': leg.distance?.value ?? 0,
-              'duration': leg.duration?.value ?? 0,
-            });
+      if (directionsResponse.statusCode == 200) {
+        final body = jsonDecode(directionsResponse.body) as Map<String, dynamic>;
+        if (body['status'] == 'OK' && body['routes'] is List && body['routes'].isNotEmpty) {
+          final routeSummaries = <Map<String, num>>[];
+          for (final route in body['routes'] as List<dynamic>) {
+            if (route is Map<String, dynamic> && route['legs'] is List && route['legs'].isNotEmpty) {
+              final leg = route['legs'][0] as Map<String, dynamic>;
+              final distanceValue = (leg['distance']?['value'] as num?)?.toDouble() ?? 0.0;
+              final durationValue = (leg['duration']?['value'] as num?)?.toDouble() ?? 0.0;
+              routeSummaries.add({
+                'distance': distanceValue,
+                'duration': durationValue,
+              });
+            }
           }
-        }
 
-        if (routeSummaries.isNotEmpty) {
-          final fastest = routeSummaries.reduce((a, b) => (a['duration'] as num) <= (b['duration'] as num) ? a : b);
-          final eco = routeSummaries.reduce((a, b) => (a['distance'] as num) <= (b['distance'] as num) ? a : b);
-
-          if (mounted) {
-            setState(() {
-              _fastestDistanceKm = (fastest['distance'] as num).toDouble() / 1000.0;
-              _fastestEtaMinutes = ((fastest['duration'] as num).toDouble() / 60).round();
-              _ecoDistanceKm = (eco['distance'] as num).toDouble() / 1000.0;
-              _ecoEtaMinutes = ((eco['duration'] as num).toDouble() / 60).round();
-            });
+          if (routeSummaries.isNotEmpty) {
+            final fastest = routeSummaries.reduce((a, b) => (a['duration'] as num) <= (b['duration'] as num) ? a : b);
+            final eco = routeSummaries.reduce((a, b) => (a['distance'] as num) <= (b['distance'] as num) ? a : b);
+            if (mounted) {
+              setState(() {
+                _fastestDistanceKm = (fastest['distance'] as num).toDouble() / 1000.0;
+                _fastestEtaMinutes = ((fastest['duration'] as num).toDouble() / 60).round();
+                _ecoDistanceKm = (eco['distance'] as num).toDouble() / 1000.0;
+                _ecoEtaMinutes = ((eco['duration'] as num).toDouble() / 60).round();
+              });
+            }
           }
+        } else {
+          debugPrint('Directions API: Request not okay ${body['status']}');
         }
       } else {
-        debugPrint('Directions API: Request not okay');
+        debugPrint('Directions HTTP error: ${directionsResponse.statusCode}');
       }
     } on SocketException catch (e) {
       debugPrint('Network error fetching directions: $e');
@@ -537,38 +560,86 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       return;
     }
 
-    final response = await _places.autocomplete(
-      input,
-      components: [Component(Component.country, 'cz')],
-      language: 'cs',
-    );
+    try {
+      final uri = Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
+        'input': input,
+        'components': 'country:cz',
+        'language': 'cs',
+        'key': _googleApiKey,
+      });
+      final response = await http.get(uri).timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => throw Exception('Place Autocomplete API timeout'),
+      );
 
-    if (response.isOkay) {
-      setState(() {
-        _placePredictions = response.predictions;
-        _showSuggestions = true;
-      });
-    } else {
-      setState(() {
-        _placePredictions = [];
-        _showSuggestions = false;
-      });
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        if (body['status'] == 'OK' && body['predictions'] is List) {
+          setState(() {
+            _placePredictions = (body['predictions'] as List<dynamic>)
+                .whereType<Map<String, dynamic>>()
+                .map(PlacePrediction.fromJson)
+                .toList();
+            _showSuggestions = true;
+          });
+          return;
+        }
+      }
+    } on SocketException catch (e) {
+      debugPrint('Network error fetching place predictions: $e');
+    } on TimeoutException catch (e) {
+      debugPrint('Timeout fetching place predictions: $e');
+    } catch (e) {
+      debugPrint('Place Autocomplete API error: $e');
     }
+
+    setState(() {
+      _placePredictions = [];
+      _showSuggestions = false;
+    });
   }
 
-  Future<void> _selectPlace(Prediction prediction) async {
-    final details = await _places.getDetailsByPlaceId(prediction.placeId!);
-    if (details.isOkay) {
-      final place = details.result;
-      final latLng = LatLng(place.geometry!.location.lat, place.geometry!.location.lng);
-      if (!mounted) return;
-      setState(() {
-        _destinationController.text = place.formattedAddress ?? prediction.description!;
-        _showSuggestions = false;
-        _showDestinationSearch = false;
+  Future<void> _selectPlace(PlacePrediction prediction) async {
+    try {
+      final uri = Uri.https('maps.googleapis.com', '/maps/api/place/details/json', {
+        'place_id': prediction.placeId,
+        'fields': 'formatted_address,geometry',
+        'language': 'cs',
+        'key': _googleApiKey,
       });
-      _generateDestinationRoute(latLng);
-      FocusScope.of(context).unfocus();
+      final response = await http.get(uri).timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => throw Exception('Place Details API timeout'),
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        if (body['status'] == 'OK' && body['result'] is Map<String, dynamic>) {
+          final place = body['result'] as Map<String, dynamic>;
+          final geometry = place['geometry'] as Map<String, dynamic>?;
+          final location = geometry?['location'] as Map<String, dynamic>?;
+          if (location != null) {
+            final lat = (location['lat'] as num).toDouble();
+            final lng = (location['lng'] as num).toDouble();
+            final latLng = LatLng(lat, lng);
+            if (!mounted) return;
+            setState(() {
+              _destinationController.text = place['formatted_address'] as String? ?? prediction.description;
+              _showSuggestions = false;
+              _showDestinationSearch = false;
+            });
+            _generateDestinationRoute(latLng);
+            FocusScope.of(context).unfocus();
+            return;
+          }
+        }
+      }
+    } on SocketException catch (e) {
+      debugPrint('Network error fetching place details: $e');
+    } on TimeoutException catch (e) {
+      debugPrint('Timeout fetching place details: $e');
+    } catch (e) {
+      debugPrint('Place Details API error: $e');
     }
   }
 
