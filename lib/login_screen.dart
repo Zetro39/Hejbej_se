@@ -7,7 +7,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'main_shell.dart';
 import 'services/auth_service.dart';
-import 'features/profile/profile_creation_screen.dart';
+import 'features/profile/distance_preference_setup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -67,8 +67,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user == null) return;
       await AuthService().saveUserName(user.email ?? '');
       if (!mounted) return;
-      // Navigate to onboarding/profile creation
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => ProfileCreationScreen()));
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const DistancePreferenceSetupScreen()),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Registrace selhala: $e')));

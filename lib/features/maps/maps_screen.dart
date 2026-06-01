@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:pedometer/pedometer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/location_service.dart';
@@ -44,18 +45,27 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   final List<LatLng> _polylineCoordinates = [];
   final List<LatLng> _breadcrumbsCoordinates = [];
 
-  String? _selectedAvatar;
   BitmapDescriptor? _avatarIcon;
+  bool _usingBike = false;
+  double _walkRangeMin = 2.0;
+  double _walkRangeMax = 5.0;
+  double _bikeRangeMin = 10.0;
+  double _bikeRangeMax = 30.0;
+  final double _dailyTargetKm = 1.0;
+  bool _routeActive = false;
+  bool _isLoadingRoutes = false;
+  bool _showRouteSuggestions = false;
+  List<Map<String, dynamic>> _routeSuggestions = [];
+  int _selectedRouteSuggestionIndex = 0;
+  bool _showRouteSearch = false;
+  late final PageController _routePageController;
+  StreamSubscription<StepCount>? _stepCountSubscription;
 
   // Removed dummy Prague checkpoints left from testing.
   static const List<Map<String, dynamic>> _checkpoints = [];
 
   final Set<String> _reachedCheckpoints = {};
   double _todayDistance = 0.0;
-
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-  bool _showCelebration = false;
 
   bool _isFollowingUser = true;
   Position? _lastPosition;
@@ -74,54 +84,27 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   );
 
   final TextEditingController _destinationController = TextEditingController();
-  bool _showDestinationSearch = false;
 
-  bool _showTripOptions = false;
-  double _selectedDistance = 5.0;
   bool _isSelectingDestination = false;
   LatLng? _destinationPoint;
-  List<Map<String, dynamic>> _tripPoints = [];
-  String _tripMode = 'loop';
 
   List<PlacePrediction> _placePredictions = [];
   bool _showSuggestions = false;
 
   // Elevation & Rewards
-  double _totalElevationGain = 0.0;
-
-  // Route Options
-  String _selectedRouteOption = 'fastest'; // 'fastest' or 'eco'
-  int _etaMinutes = 0;
-  double _fastestDistanceKm = 0.0;
-  int _fastestEtaMinutes = 0;
-  double _ecoDistanceKm = 0.0;
-  int _ecoEtaMinutes = 0;
 
   @override
   void initState() {
     super.initState();
+    _routePageController = PageController(viewportFraction: 0.88);
     _locationService = LocationService();
     _positionStream = _locationService.positionUpdateStream;
     _loadSelectedAvatar();
     _loadReachedCheckpoints();
+    _loadRangePreferences();
     _loadPersistentData();
     _setupMap();
-
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.elasticOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _mapController.dispose();
-    _pulseController.dispose();
-    _destinationController.dispose();
-    super.dispose();
+    _initPedometer();
   }
 
   Future<void> _loadReachedCheckpoints() async {
@@ -177,13 +160,41 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     final avatar = prefs.getString('selected_avatar');
     if (!mounted) return;
 
-    setState(() {
-      _selectedAvatar = avatar;
-    });
-
     if (avatar != null) {
       await _createAvatarIcon(avatar);
     }
+  }
+
+  Future<void> _loadRangePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _walkRangeMin = prefs.getDouble('walk_range_min') ?? 2.0;
+      _walkRangeMax = prefs.getDouble('walk_range_max') ?? 5.0;
+      _bikeRangeMin = prefs.getDouble('bike_range_min') ?? 10.0;
+      _bikeRangeMax = prefs.getDouble('bike_range_max') ?? 30.0;
+      _usingBike = prefs.getBool('preferred_bike_mode') ?? false;
+    });
+  }
+
+  void _initPedometer() {
+    try {
+      _stepCountSubscription = Pedometer.stepCountStream.listen((event) {
+        // Step tracking prepared for later use.
+      }, onError: (error) {
+        debugPrint('Pedometer error: $error');
+      });
+    } catch (e) {
+      debugPrint('Pedometer initialization failed: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    _destinationController.dispose();
+    _routePageController.dispose();
+    _stepCountSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _createAvatarIcon(String avatar) async {
@@ -248,22 +259,225 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   void _triggerCheckpointCelebration() {
     HapticFeedback.mediumImpact();
-    _pulseController.forward(from: 0.0);
   }
 
   void _checkLevelUp() {
-    if (_reachedCheckpoints.length == _checkpoints.length && !_showCelebration) {
+    if (_checkpoints.isNotEmpty && _reachedCheckpoints.length == _checkpoints.length) {
       if (!mounted) return;
-      setState(() {
-        _showCelebration = true;
-      });
-      Future.delayed(const Duration(seconds: 5), () {
-        if (!mounted) return;
-        setState(() {
-          _showCelebration = false;
-        });
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Všechny body dokončeny! Skvělá práce.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
+  }
+
+  LatLng _destinationFromDistanceBearing(LatLng start, double distanceKm, double bearingDegrees) {
+    const earthRadiusKm = 6371.0;
+    final bearing = bearingDegrees * pi / 180.0;
+    final lat1 = start.latitude * pi / 180.0;
+    final lon1 = start.longitude * pi / 180.0;
+    final angularDistance = distanceKm / earthRadiusKm;
+
+    final lat2 = asin(sin(lat1) * cos(angularDistance) + cos(lat1) * sin(angularDistance) * cos(bearing));
+    final lon2 = lon1 + atan2(
+      sin(bearing) * sin(angularDistance) * cos(lat1),
+      cos(angularDistance) - sin(lat1) * sin(lat2),
+    );
+
+    return LatLng(lat2 * 180.0 / pi, lon2 * 180.0 / pi);
+  }
+
+  double _calculateRouteLength(List<LatLng> points) {
+    double distance = 0.0;
+    for (int i = 1; i < points.length; i++) {
+      distance += Geolocator.distanceBetween(
+        points[i - 1].latitude,
+        points[i - 1].longitude,
+        points[i].latitude,
+        points[i].longitude,
+      );
+    }
+    return distance / 1000.0;
+  }
+
+  int _calculateRouteEta(double distanceKm) {
+    final speedKmH = _usingBike ? 15.0 : 5.0;
+    return max(1, (distanceKm / speedKmH * 60).round());
+  }
+
+  Future<List<LatLng>> _fetchRouteGeometryFromOSRM(List<LatLng> coordinates, String profile) async {
+    if (coordinates.length < 2) return [];
+    final coordString = coordinates.map((point) => '${point.longitude},${point.latitude}').join(';');
+    final uri = Uri.https('router.project-osrm.org', '/route/v1/$profile/$coordString', {
+      'overview': 'full',
+      'geometries': 'geojson',
+    });
+    try {
+      final response = await http.get(uri).timeout(const Duration(seconds: 12));
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        if (body['code'] == 'Ok' && body['routes'] is List && body['routes'].isNotEmpty) {
+          final route = (body['routes'] as List<dynamic>)[0] as Map<String, dynamic>;
+          final geometry = route['geometry'] as Map<String, dynamic>?;
+          if (geometry != null && geometry['coordinates'] is List) {
+            return (geometry['coordinates'] as List<dynamic>)
+                .whereType<List<dynamic>>()
+                .map((coord) => LatLng(
+                      (coord[1] as num).toDouble(),
+                      (coord[0] as num).toDouble(),
+                    ))
+                .toList();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('OSRM route fetch error: $e');
+    }
+    return [];
+  }
+
+  Future<void> _selectRouteSuggestion(int index) async {
+    if (index < 0 || index >= _routeSuggestions.length) return;
+    final route = _routeSuggestions[index];
+    final points = route['coordinates'] as List<LatLng>?;
+    if (points == null || points.length < 2) return;
+
+    final polyline = Polyline(
+      polylineId: const PolylineId('active_route'),
+      color: _usingBike ? Colors.blue : Colors.green,
+      width: 5,
+      points: points,
+      geodesic: true,
+    );
+
+    setState(() {
+      _routeActive = true;
+      _selectedRouteSuggestionIndex = index;
+      _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+      _polylines.add(polyline);
+      _destinationPoint = points.last;
+      _showRouteSuggestions = true;
+    });
+
+    await _fetchElevationData(points).catchError((_) {});
+  }
+
+  Future<void> _generateNearbyRoutes() async {
+    if (_lastPosition == null) return;
+    final start = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
+    final profile = _usingBike ? 'bike' : 'foot';
+    final minRange = _usingBike ? _bikeRangeMin : _walkRangeMin;
+    final maxRange = _usingBike ? _bikeRangeMax : _walkRangeMax;
+    setState(() {
+      _isLoadingRoutes = true;
+      _showRouteSuggestions = true;
+      _routeSuggestions.clear();
+      _routeActive = false;
+      _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+      _markers.removeWhere((m) => m.markerId.value.startsWith('route_'));
+    });
+
+    final routeNames = ['Lesní okruh', 'Říční cesta', 'Městský okruh', 'Zelená stezka', 'Vyhlídkový okruh'];
+    final random = Random();
+    final suggestions = <Map<String, dynamic>>[];
+
+    for (int i = 0; i < 5; i++) {
+      final distanceKm = minRange + random.nextDouble() * (maxRange - minRange);
+      final bearing = random.nextDouble() * 360;
+      final waypoint = _destinationFromDistanceBearing(start, distanceKm / 2, bearing);
+      final routePoints = await _fetchRouteGeometryFromOSRM([start, waypoint, start], profile);
+      if (routePoints.length < 2) continue;
+      final actualDistance = _calculateRouteLength(routePoints);
+      suggestions.add({
+        'title': '${routeNames[i % routeNames.length]} ${actualDistance.toStringAsFixed(1)} km',
+        'coordinates': routePoints,
+        'distance': actualDistance,
+        'eta': _calculateRouteEta(actualDistance),
+        'poi_count': random.nextInt(3) + 1,
+      });
+      if (suggestions.length >= 4) break;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _routeSuggestions = suggestions;
+      _selectedRouteSuggestionIndex = 0;
+      _isLoadingRoutes = false;
+    });
+
+    if (_routeSuggestions.isNotEmpty) {
+      await _selectRouteSuggestion(0);
+    }
+  }
+
+  Future<void> _generateDestinationRoute(LatLng destination) async {
+    if (_lastPosition == null) return;
+    final start = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
+    final profile = _usingBike ? 'bike' : 'foot';
+    final routePoints = await _fetchRouteGeometryFromOSRM([start, destination], profile);
+    if (routePoints.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nepodařilo se načíst trasu. Zkuste to znovu.')),
+      );
+      return;
+    }
+
+    final polyline = Polyline(
+      polylineId: const PolylineId('active_route'),
+      color: Colors.green,
+      width: 5,
+      points: routePoints,
+      geodesic: true,
+    );
+
+    setState(() {
+      _routeActive = true;
+      _destinationPoint = destination;
+      _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+      _polylines.add(polyline);
+      _showRouteSearch = false;
+      _showRouteSuggestions = false;
+      _routeSuggestions = [
+        {
+          'title': 'Cesta do cíle',
+          'coordinates': routePoints,
+          'distance': _calculateRouteLength(routePoints),
+          'eta': _calculateRouteEta(_calculateRouteLength(routePoints)),
+          'poi_count': 0,
+        }
+      ];
+    });
+
+    await _fetchElevationData(routePoints).catchError((_) {});
+  }
+
+  void _cancelRoute() {
+    setState(() {
+      _routeActive = false;
+      _destinationPoint = null;
+      _showRouteSearch = false;
+      _showRouteSuggestions = false;
+      _routeSuggestions.clear();
+      _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+      _markers.removeWhere((m) => m.markerId.value.startsWith('route_'));
+    });
+  }
+
+  Widget _buildRouteInfoChip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.lightBlue.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 12, color: Colors.black87),
+      ),
+    );
   }
 
   Future<void> _saveCheckpointAchievement(String id) async {
@@ -271,125 +485,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     await prefs.setBool('achievement_${id}_reached', true);
   }
 
-  void _recenterCamera() {
-    if (_lastPosition == null) return;
-    setState(() {
-      _isFollowingUser = true;
-    });
-    final cameraPosition = CameraPosition(
-      target: LatLng(_lastPosition!.latitude, _lastPosition!.longitude),
-      zoom: 16.0,
-      bearing: _lastPosition!.heading,
-      tilt: 0.0,
-    );
-    _mapController.animateCamera(
-      CameraUpdate.newCameraPosition(cameraPosition),
-    );
-  }
-
-  void _generateTripLoop() {
-    if (_lastPosition == null) return;
-
-    setState(() {
-      _showTripOptions = true;
-      _isSelectingDestination = false;
-      _tripPoints.clear();
-    });
-
-    _polylines.removeWhere((p) => p.polylineId.value.startsWith('trip_'));
-    _markers.removeWhere((m) => m.markerId.value.startsWith('trip_'));
-    _markers.removeWhere((m) => m.markerId.value == 'trip_dest');
-
-    final center = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
-    final radiusKm = _selectedDistance / 2;
-    final tripPoints = <LatLng>[];
-    const numPoints = 8;
-
-    for (int i = 0; i < numPoints; i++) {
-      final latOffset = (radiusKm / 111.32) * 0.7 * (0.5 + 0.5 * (i % 2 == 0 ? 1 : -1));
-      final lngOffset = (radiusKm / (111.32 * cos(center.latitude * pi / 180))) * 0.7 * (0.5 + 0.5 * (i % 3 == 0 ? 1 : -1));
-      tripPoints.add(LatLng(center.latitude + latOffset, center.longitude + lngOffset));
-    }
-
-    tripPoints.add(tripPoints.first);
-    _polylineCoordinates.clear();
-    _polylineCoordinates.addAll(tripPoints);
-    _updatePolyline();
-
-    final tripPolyline = Polyline(
-      polylineId: const PolylineId('trip_loop'),
-      color: Colors.blue,
-      width: 4,
-      points: tripPoints,
-      geodesic: true,
-    );
-
-    final poiNames = ['Zřícenina', 'Vyhlídka', 'Park', 'Jezero'];
-    final tripMarkers = <Marker>[];
-
-    for (int i = 0; i < poiNames.length && i < tripPoints.length - 1; i++) {
-      final pointIndex = ((i + 1) * tripPoints.length ~/ 5).clamp(0, tripPoints.length - 2);
-      final point = tripPoints[pointIndex];
-      tripMarkers.add(Marker(
-        markerId: MarkerId('trip_poi_$i'),
-        position: point,
-        infoWindow: InfoWindow(title: poiNames[i]),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
-      ));
-      _tripPoints.add({'name': poiNames[i], 'position': point});
-    }
-
-    setState(() {
-      _polylines.add(tripPolyline);
-      _markers.addAll(tripMarkers);
-      _showTripOptions = false;
-    });
-  }
-
-  Future<void> _generateDestinationRoute(LatLng destination) async {
-    if (_lastPosition == null) return;
-    
-    try {
-      final start = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
-      final midpoint = LatLng(
-        (start.latitude + destination.latitude) / 2,
-        (start.longitude + destination.longitude) / 2 + 0.001,
-      );
-      final routePoints = [start, midpoint, destination];
-      _polylineCoordinates.clear();
-      _polylineCoordinates.addAll(routePoints);
-      _updatePolyline();
-
-      _markers.removeWhere((m) => m.markerId.value == 'trip_dest');
-      _markers.add(Marker(
-        markerId: const MarkerId('trip_dest'),
-        position: destination,
-        infoWindow: const InfoWindow(title: 'Cíl cesty'),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-      ));
-
-      _tripPoints.clear();
-      _tripPoints.add({'name': 'Cíl cesty', 'position': destination});
-
-      // Fetch elevation data with fallback
-      await _fetchElevationData(routePoints).catchError((e) {
-        debugPrint('Elevation data fetch failed, continuing without elevation: $e');
-        return;
-      });
-      
-      // Fetch route comparison with fallback
-      await _fetchRouteComparison(start, destination).catchError((e) {
-        debugPrint('Route comparison failed, continuing without route options: $e');
-        return;
-      });
-    } catch (e) {
-      debugPrint('Error generating destination route: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Chyba při zpracování trasy: $e')),
-      );
-    }
-  }
 
   Future<void> _fetchElevationData(List<LatLng> routePoints) async {
     if (routePoints.isEmpty) return;
@@ -420,11 +515,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               }
               previousElevation = elevation;
             }
-            if (mounted) {
-              setState(() {
-                _totalElevationGain = elevationGain;
-              });
-            }
             final extraLimetkas = (elevationGain / 10).floor();
             if (extraLimetkas > 0) {
               _limetkyBalance += extraLimetkas;
@@ -451,105 +541,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _fetchRouteComparison(LatLng start, LatLng destination) async {
-    try {
-      final distanceUri = Uri.https('maps.googleapis.com', '/maps/api/distancematrix/json', {
-        'origins': '${start.latitude},${start.longitude}',
-        'destinations': '${destination.latitude},${destination.longitude}',
-        'mode': 'walking',
-        'region': 'cz',
-        'key': _googleApiKey,
-      });
-      final distanceResponse = await http.get(distanceUri).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw Exception('Distance Matrix API timeout'),
-      );
-
-      if (distanceResponse.statusCode == 200) {
-        final body = jsonDecode(distanceResponse.body) as Map<String, dynamic>;
-        if (body['status'] == 'OK' && body['rows'] is List && body['rows'].isNotEmpty) {
-          final row = body['rows'][0] as Map<String, dynamic>;
-          if (row['elements'] is List && row['elements'].isNotEmpty) {
-            final element = row['elements'][0] as Map<String, dynamic>;
-            if (element['duration'] is Map<String, dynamic>) {
-              final durationValue = (element['duration']['value'] as num).toInt();
-              if (mounted) {
-                setState(() {
-                  _etaMinutes = (durationValue / 60).round();
-                });
-              }
-            }
-          }
-        } else {
-          debugPrint('Distance Matrix: Request not okay ${body['status']}');
-        }
-      } else {
-        debugPrint('Distance Matrix HTTP error: ${distanceResponse.statusCode}');
-      }
-    } on SocketException catch (e) {
-      debugPrint('Network error fetching distance: $e');
-    } on TimeoutException catch (e) {
-      debugPrint('Timeout fetching distance: $e');
-    } catch (e) {
-      debugPrint('Distance Matrix API error: $e');
-    }
-
-    try {
-      final directionsUri = Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
-        'origin': '${start.latitude},${start.longitude}',
-        'destination': '${destination.latitude},${destination.longitude}',
-        'mode': 'walking',
-        'alternatives': 'true',
-        'region': 'cz',
-        'key': _googleApiKey,
-      });
-      final directionsResponse = await http.get(directionsUri).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw Exception('Directions API timeout'),
-      );
-
-      if (directionsResponse.statusCode == 200) {
-        final body = jsonDecode(directionsResponse.body) as Map<String, dynamic>;
-        if (body['status'] == 'OK' && body['routes'] is List && body['routes'].isNotEmpty) {
-          final routeSummaries = <Map<String, num>>[];
-          for (final route in body['routes'] as List<dynamic>) {
-            if (route is Map<String, dynamic> && route['legs'] is List && route['legs'].isNotEmpty) {
-              final leg = route['legs'][0] as Map<String, dynamic>;
-              final distanceValue = (leg['distance']?['value'] as num?)?.toDouble() ?? 0.0;
-              final durationValue = (leg['duration']?['value'] as num?)?.toDouble() ?? 0.0;
-              routeSummaries.add({
-                'distance': distanceValue,
-                'duration': durationValue,
-              });
-            }
-          }
-
-          if (routeSummaries.isNotEmpty) {
-            final fastest = routeSummaries.reduce((a, b) => (a['duration'] as num) <= (b['duration'] as num) ? a : b);
-            final eco = routeSummaries.reduce((a, b) => (a['distance'] as num) <= (b['distance'] as num) ? a : b);
-            if (mounted) {
-              setState(() {
-                _fastestDistanceKm = (fastest['distance'] as num).toDouble() / 1000.0;
-                _fastestEtaMinutes = ((fastest['duration'] as num).toDouble() / 60).round();
-                _ecoDistanceKm = (eco['distance'] as num).toDouble() / 1000.0;
-                _ecoEtaMinutes = ((eco['duration'] as num).toDouble() / 60).round();
-              });
-            }
-          }
-        } else {
-          debugPrint('Directions API: Request not okay ${body['status']}');
-        }
-      } else {
-        debugPrint('Directions HTTP error: ${directionsResponse.statusCode}');
-      }
-    } on SocketException catch (e) {
-      debugPrint('Network error fetching directions: $e');
-    } on TimeoutException catch (e) {
-      debugPrint('Timeout fetching directions: $e');
-    } catch (e) {
-      debugPrint('Directions API error: $e');
-    }
-  }
 
   Future<void> _fetchPlacePredictions(String input) async {
     if (input.isEmpty) {
@@ -626,7 +617,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             setState(() {
               _destinationController.text = place['formatted_address'] as String? ?? prediction.description;
               _showSuggestions = false;
-              _showDestinationSearch = false;
+              _showRouteSearch = false;
             });
             _generateDestinationRoute(latLng);
             FocusScope.of(context).unfocus();
@@ -728,6 +719,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     final marker = Marker(
       markerId: userMarkerId,
       position: userPosition,
+      rotation: position.heading,
+      anchor: const Offset(0.5, 0.5),
       icon: _avatarIcon ?? BitmapDescriptor.defaultMarker,
       infoWindow: const InfoWindow(title: 'Vaše poloha'),
     );
@@ -914,13 +907,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 Navigator.pop(context);
                 setState(() {
                   _destinationPoint = latLng;
-                  _tripPoints.clear();
+                  _showRouteSearch = false;
                   _generateDestinationRoute(latLng);
                 });
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cíl nastaven. Trasa vytvořena.')),
-                );
               },
             ),
           ],
@@ -929,24 +918,79 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _simulateGPSMovement() {
-    if (_lastPosition == null) return;
-    final random = Random();
-    for (int i = 0; i < 5; i++) {
-      final latOffset = (random.nextDouble() - 0.5) * 0.001;
-      final lngOffset = (random.nextDouble() - 0.5) * 0.001;
-      final newPoint = LatLng(
-        _lastPosition!.latitude + latOffset,
-        _lastPosition!.longitude + lngOffset,
-      );
-      _breadcrumbsCoordinates.add(newPoint);
-    }
-    _updateBreadcrumbsPolyline();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('GPS simulace spuštěna - přidáno 5 bodů')),
-      );
-    }
+  void _showNavigationMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Vyberte režim mapy',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.lightBlue.shade50,
+                  child: const Icon(Icons.loop, color: Colors.lightBlue),
+                ),
+                title: const Text('Okruh v okolí'),
+                subtitle: const Text('Najděte snadné okruhy start-cíl ve vašem dosahu'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _showRouteSearch = false;
+                    _showRouteSuggestions = true;
+                    _isSelectingDestination = false;
+                  });
+                  _generateNearbyRoutes();
+                },
+              ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.lightBlue.shade50,
+                  child: const Icon(Icons.location_pin, color: Colors.lightBlue),
+                ),
+                title: const Text('Cesta do cíle'),
+                subtitle: const Text('Zadejte cíl a nechte trasu vytvořit'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _showRouteSearch = false;
+                    _showRouteSuggestions = false;
+                    _isSelectingDestination = true;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Klikněte na mapu pro výběr cíle.')),
+                  );
+                },
+              ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.lightBlue.shade50,
+                  child: const Icon(Icons.search, color: Colors.lightBlue),
+                ),
+                title: const Text('Hledat destinaci'),
+                subtitle: const Text('Vyhledejte město nebo cíl ve vyhledávání'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _showRouteSearch = true;
+                    _showRouteSuggestions = false;
+                  });
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -973,7 +1017,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                     setState(() {
                       _isSelectingDestination = false;
                       _destinationPoint = latLng;
-                      _tripPoints.clear();
                       _generateDestinationRoute(latLng);
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -999,514 +1042,347 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             ),
           ),
           Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              top: true,
-              bottom: false,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.95),
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Colors.lightBlue.shade200,
-                      width: 1,
-                    ),
-                  ),
-                ),
-                child: Row(
+            top: topPadding + 12,
+            left: 16,
+            right: 16,
+            child: Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.task_alt,
-                      color: Colors.lightBlue,
-                      size: 24,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.directions_walk, color: Colors.lightBlue, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Úkol: Ujdi 1 km dnes',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${min(_todayDistance / 1000.0, _dailyTargetKm).toStringAsFixed(2)} / ${_dailyTargetKm.toStringAsFixed(1)} km',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: _todayDistance >= _dailyTargetKm * 1000 ? Colors.green : Colors.lightBlue.shade50,
+                          child: Icon(
+                            _todayDistance >= _dailyTargetKm * 1000 ? Icons.check : Icons.timer,
+                            color: _todayDistance >= _dailyTargetKm * 1000 ? Colors.white : Colors.lightBlue,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Úkol: Najdi nejbližší park',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.lightBlue.shade900,
-                            ),
+                    const SizedBox(height: 14),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: LinearProgressIndicator(
+                        value: min(_todayDistance / 1000.0 / _dailyTargetKm, 1.0),
+                        minHeight: 10,
+                        backgroundColor: Colors.lightBlue.shade50,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.lightBlue),
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _usingBike = false;
+                              });
+                            },
+                            icon: const Icon(Icons.directions_walk),
+                            label: const Text('Chůze'),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: !_usingBike ? const Color(0x1F03A9F4) : Colors.white,
+                              foregroundColor: !_usingBike ? Colors.lightBlue : Colors.black87,
+                              side: BorderSide(color: !_usingBike ? Colors.lightBlue : Colors.grey.shade300),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _usingBike = true;
+                              });
+                            },
+                            icon: const Icon(Icons.directions_bike),
+                            label: const Text('Kolo'),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: _usingBike ? const Color(0x1F03A9F4) : Colors.white,
+                              foregroundColor: _usingBike ? Colors.lightBlue : Colors.black87,
+                              side: BorderSide(color: _usingBike ? Colors.lightBlue : Colors.grey.shade300),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ),
           ),
-          Positioned(
-            top: topPadding + 72,
-            right: 16,
-            child: ScaleTransition(
-              scale: _pulseAnimation,
+          if (_isSelectingDestination)
+            Positioned(
+              top: topPadding + 210,
+              left: 16,
+              right: 16,
               child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 4,
-                color: Colors.white.withOpacity(0.95),
+                elevation: 6,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.all(14.0),
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.directions_walk,
-                        color: Colors.lime.shade700,
-                        size: 20,
+                      const Icon(Icons.location_on, color: Colors.lightBlue),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Klikněte na mapu pro výběr cíle, nebo zrušte a vyhledejte destinaci.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black87),
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Dnešní vzdálenost',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.black54,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            '${_todayDistance.toStringAsFixed(0)} m',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.lime.shade900,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _isSelectingDestination = false;
+                          });
+                        },
+                        child: const Text('Zrušit'),
                       ),
                     ],
                   ),
                 ),
               ),
             ),
-          ),
-          Positioned(
-            bottom: bottomOffset + 100,
-            right: 20,
-            child: FloatingActionButton(
-              onPressed: _simulateGPSMovement,
-              backgroundColor: const Color(0xFFBFFF00),
-              child: const Icon(Icons.play_arrow, color: Colors.black),
-              tooltip: 'Simulate GPS Movement',
-            ),
-          ),
-          Positioned(
-            bottom: bottomOffset,
-            left: 20,
-            right: 20,
-            child: Container(
-              height: 56,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _showTripOptions = !_showTripOptions;
-                        });
-                      },
-                      icon: const Icon(Icons.explore),
-                      label: Text(
-                        _tripMode == 'loop' ? 'Okruh v okolí' : 'Cesta do cíle',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      style: ButtonStyle(
-                        backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
-                        foregroundColor: MaterialStateProperty.all(Colors.black),
-                        elevation: MaterialStateProperty.all(0),
-                        shape: MaterialStateProperty.all(
-                          const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(16),
-                              bottomLeft: Radius.circular(16),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFBFFF00),
-                      borderRadius: BorderRadius.only(
-                        topRight: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
-                      ),
-                    ),
-                    child: PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'loop') {
-                          setState(() {
-                            _tripMode = 'loop';
-                            _showTripOptions = true;
-                            _isSelectingDestination = false;
-                            _showDestinationSearch = false;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Okruh vybrán. Vyberte délku a generujte.')),
-                          );
-                        } else if (value == 'destination') {
-                          setState(() {
-                            _tripMode = 'destination';
-                            _showTripOptions = false;
-                            _isSelectingDestination = true;
-                            _showDestinationSearch = false;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Klikněte do mapy pro cíl')),
-                          );
-                        } else if (value == 'search') {
-                          setState(() {
-                            _tripMode = 'destination';
-                            _showTripOptions = false;
-                            _isSelectingDestination = false;
-                            _showDestinationSearch = true;
-                          });
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'loop',
-                          child: Text('Okruh v okolí (A → A)'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'destination',
-                          child: Text('Cesta do cíle (A → B)'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'search',
-                          child: Text('Hledat destinaci'),
-                        ),
-                      ],
-                      icon: const Icon(
-                        Icons.arrow_drop_down,
-                        color: Colors.black,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_showDestinationSearch)
+          if (_routeActive)
             Positioned(
-              bottom: bottomOffset + 110,
-              left: 16,
-              right: 16,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Card(
-                    elevation: 8,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextField(
-                            controller: _destinationController,
-                            decoration: const InputDecoration(
-                              labelText: 'Hledat destinaci',
-                              hintText: 'Zadejte cíl cesty',
-                              prefixIcon: Icon(Icons.search),
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: _fetchPlacePredictions,
+              top: topPadding + 154,
+              right: 20,
+              child: CircleAvatar(
+                backgroundColor: const Color.fromRGBO(255, 255, 255, 0.9),
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.black87),
+                  onPressed: _cancelRoute,
+                ),
+              ),
+            ),
+          Positioned(
+            top: topPadding + 140,
+            left: 16,
+            right: 16,
+            child: AnimatedOpacity(
+              opacity: _routeActive || _showRouteSearch ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 250),
+              child: IgnorePointer(
+                ignoring: !(_routeActive || _showRouteSearch),
+                child: Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_destinationPoint != null) ...[
+                          const Text(
+                            'Na trase do cíle',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          const SizedBox(height: 8),
+                          Text(
+                            'Vzdálenost se přičte až po fyzické chůzi',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                        if (_routeActive && _routeSuggestions.isNotEmpty) ...[
+                          Text(
+                            _routeSuggestions[_selectedRouteSuggestionIndex]['title'] as String,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
                             children: [
-                              TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _showDestinationSearch = false;
-                                    _showSuggestions = false;
-                                    _placePredictions = [];
-                                  });
-                                },
-                                child: const Text('Zrušit'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _showDestinationSearch = false;
-                                    _isSelectingDestination = true;
-                                    _showSuggestions = false;
-                                    _placePredictions = [];
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Klikněte do mapy pro cíl')),
-                                  );
-                                },
-                                style: ButtonStyle(
-                                  backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
-                                  foregroundColor: MaterialStateProperty.all(Colors.black),
-                                ),
-                                child: const Text('Hledat'),
-                              ),
+                              _buildRouteInfoChip('${(_routeSuggestions[_selectedRouteSuggestionIndex]['distance'] as double).toStringAsFixed(1)} km'),
+                              _buildRouteInfoChip('${_routeSuggestions[_selectedRouteSuggestionIndex]['eta']} min'),
+                              _buildRouteInfoChip('${_routeSuggestions[_selectedRouteSuggestionIndex]['poi_count']} POI'),
                             ],
                           ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
-                  if (_showSuggestions && _placePredictions.isNotEmpty)
-                    Card(
-                      elevation: 8,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: _placePredictions.length,
-                        itemBuilder: (context, index) {
-                          final prediction = _placePredictions[index];
-                          return ListTile(
-                            title: Text(prediction.description ?? ''),
-                            onTap: () => _selectPlace(prediction),
-                          );
-                        },
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
-          if (_showTripOptions)
+          ),
+          if (_showRouteSearch)
             Positioned(
-              bottom: bottomOffset + 190,
+              bottom: bottomOffset + 220,
               left: 16,
               right: 16,
               child: Card(
                 elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Vyberte délku okruhu: ${_selectedDistance.toStringAsFixed(1)} km',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      TextField(
+                        controller: _destinationController,
+                        decoration: const InputDecoration(
+                          labelText: 'Hledat destinaci',
+                          hintText: 'Například Pardubice',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
                         ),
+                        onChanged: _fetchPlacePredictions,
                       ),
-                      Slider(
-                        value: _selectedDistance,
-                        min: 2.0,
-                        max: 20.0,
-                        divisions: 18,
-                        label: '${_selectedDistance.toStringAsFixed(1)} km',
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedDistance = value;
-                          });
-                        },
-                      ),
+                      const SizedBox(height: 12),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           TextButton(
                             onPressed: () {
                               setState(() {
-                                _showTripOptions = false;
+                                _showRouteSearch = false;
+                                _showRouteSuggestions = false;
+                                _isSelectingDestination = true;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Klikněte na mapu pro výběr cíle.')),
+                              );
+                            },
+                            child: const Text('Vybrat na mapě'),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _showRouteSearch = false;
+                                _showRouteSuggestions = false;
+                                _isSelectingDestination = false;
                               });
                             },
                             child: const Text('Zrušit'),
                           ),
-                          ElevatedButton(
-                            onPressed: () {
-                              _generateTripLoop();
-                            },
-                            style: ButtonStyle(
-                              backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
-                              foregroundColor: MaterialStateProperty.all(Colors.black),
-                            ),
-                            child: const Text('Generovat'),
-                          ),
                         ],
                       ),
+                      if (_showSuggestions && _placePredictions.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _placePredictions.length,
+                          itemBuilder: (context, index) {
+                            final prediction = _placePredictions[index];
+                            return ListTile(
+                              title: Text(prediction.description),
+                              onTap: () => _selectPlace(prediction),
+                            );
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
-          if (_tripPoints.isNotEmpty)
+          if (_showRouteSuggestions)
             Positioned(
-              bottom: bottomOffset + 200,
+              bottom: bottomOffset + 120,
               left: 16,
-              child: Card(
-                elevation: 6,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Container(
-                  width: 200,
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Body na trase:',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ..._tripPoints.map((point) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.place,
-                                  size: 16,
-                                  color: Colors.purple,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  point['name'] as String,
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                              ],
-                            ),
-                          )),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Převýšení: ${_totalElevationGain.toStringAsFixed(0)} m',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      ),
-                      if (_etaMinutes > 0)
-                        Text(
-                          'ETA: ${_etaMinutes} min',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          if (_tripPoints.isNotEmpty)
-            Positioned(
-              bottom: bottomOffset + 200,
               right: 16,
-              child: Card(
-                elevation: 6,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Container(
-                  width: 200,
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Možnosti trasy:',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+              child: SizedBox(
+                height: 180,
+                child: _isLoadingRoutes
+                    ? Card(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        elevation: 8,
+                        child: const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(24.0),
+                            child: CircularProgressIndicator(),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () => setState(() => _selectedRouteOption = 'fastest'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _selectedRouteOption == 'fastest' ? Colors.blue : Colors.grey,
+                      )
+                    : PageView.builder(
+                        controller: _routePageController,
+                        onPageChanged: (index) {
+                          _selectRouteSuggestion(index);
+                        },
+                        itemCount: _routeSuggestions.length,
+                        itemBuilder: (context, index) {
+                          final route = _routeSuggestions[index];
+                          return Card(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            elevation: 8,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    route['title'] as String,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text('Vzdálenost: ${(route['distance'] as double).toStringAsFixed(1)} km'),
+                                  Text('Čas: ${route['eta']} min'),
+                                  Text('POI: ${route['poi_count']}'),
+                                  const Spacer(),
+                                  ElevatedButton(
+                                    onPressed: () => _selectRouteSuggestion(index),
+                                    style: const ButtonStyle(
+                                      backgroundColor: WidgetStatePropertyAll(Colors.lightBlue),
+                                      foregroundColor: WidgetStatePropertyAll(Colors.white),
+                                    ),
+                                    child: const Text('Vybrat trasu'),
+                                  ),
+                                ],
                               ),
-                              child: const Text('Nejrychlejší'),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () => setState(() => _selectedRouteOption = 'eco'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _selectedRouteOption == 'eco' ? Colors.green : Colors.grey,
-                              ),
-                              child: const Text('Nejekologičtější'),
-                            ),
-                          ),
-                        ],
+                          );
+                        },
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Nejrychlejší: ${_fastestDistanceKm.toStringAsFixed(1)} km · ${_fastestEtaMinutes} min',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Nejekologičtější: ${_ecoDistanceKm.toStringAsFixed(1)} km · ${_ecoEtaMinutes} min',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
               ),
             ),
           Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 16,
+            bottom: bottomOffset,
             left: 20,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'v1.2.2 - Shop & Route Fix',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
+            right: 20,
+            child: ElevatedButton.icon(
+              onPressed: _showNavigationMenu,
+              icon: const Icon(Icons.menu),
+              label: const Text('Výběr trasy'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFBFFF00),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
             ),
           ),

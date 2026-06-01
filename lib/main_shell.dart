@@ -75,7 +75,7 @@ class _MainShellState extends State<MainShell> {
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.map), label: 'Mapy'),
-          NavigationDestination(icon: Icon(Icons.emoji_events), label: 'Hra'),
+          NavigationDestination(icon: Icon(Icons.emoji_events), label: 'HRY'),
           NavigationDestination(icon: Icon(Icons.person), label: 'Profil'),
           NavigationDestination(icon: Icon(Icons.shopping_bag), label: 'Obchod'),
         ],

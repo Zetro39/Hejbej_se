@@ -15,6 +15,8 @@ class _ShopScreenState extends State<ShopScreen> {
   PaymentConfiguration? _googlePayConfig;
   bool _paymentReady = false;
   bool _applePayAvailable = false;
+  final TextEditingController _donationController = TextEditingController(text: '50');
+  String _selectedAmount = '50';
 
   @override
   void initState() {
@@ -47,13 +49,38 @@ class _ShopScreenState extends State<ShopScreen> {
     }
   }
 
+  String get _donationAmount {
+    final typed = _donationController.text.replaceAll(',', '.').trim();
+    final parsed = double.tryParse(typed);
+    if (parsed != null && parsed > 0) {
+      return parsed.toStringAsFixed(2);
+    }
+    final selected = double.tryParse(_selectedAmount) ?? 50.0;
+    return selected.toStringAsFixed(2);
+  }
+
   List<PaymentItem> get _paymentItems => [
-    const PaymentItem(
-      label: 'Dar pro Hejbej se',
-      amount: '50.00',
-      status: PaymentItemStatus.final_price,
-    ),
-  ];
+        PaymentItem(
+          label: 'Dar pro Hejbej se',
+          amount: _donationAmount,
+          status: PaymentItemStatus.final_price,
+        ),
+      ];
+
+  Widget _buildAmountChip(BuildContext context, String amount) {
+    final bool selected = _selectedAmount == amount;
+    return ChoiceChip(
+      label: Text('$amount Kč'),
+      selected: selected,
+      selectedColor: Colors.lightBlue.shade100,
+      onSelected: (_) {
+        setState(() {
+          _selectedAmount = amount;
+          _donationController.text = amount;
+        });
+      },
+    );
+  }
 
   void _onPaymentResult(Map<String, dynamic> result) {
     // Basic validation of the payment result so we can display clearer messages in Sandbox
@@ -103,7 +130,7 @@ class _ShopScreenState extends State<ShopScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Podpora vývoje',
+                'Přihlédněte k prémiovému členství a podpoře vývoje',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -120,19 +147,83 @@ class _ShopScreenState extends State<ShopScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'Pomozte nám vylepšovat aplikaci! Výchozí dar: 50 CZK',
-                        style: TextStyle(fontSize: 16),
-                        textAlign: TextAlign.center,
+                        'Členství Premium – 25 Kč (1 €) / měsíčně',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Získejte přístup k bonusovým hrám a dalším výhodám. Prémiové členství bude brzy aktivní.',
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'Vaše příspěvek nám pomůže s vývojem nových funkcí, vylepšením map a přidáním více tras v celé ČR.',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                        textAlign: TextAlign.center,
+                      ElevatedButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Prémiové členství bude brzy aktivní.')),
+                          );
+                        },
+                        style: ButtonStyle(
+                          backgroundColor: WidgetStatePropertyAll(const Color(0xFFBFFF00)),
+                          foregroundColor: WidgetStatePropertyAll(Colors.black),
+                          padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(vertical: 16)),
+                        ),
+                        child: const Text(
+                          'Aktivovat Premium – 25 Kč (1 €) / měsíc',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                       ),
-                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Podpořte vývoj aplikace',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Vyberte částku nebo napište vlastní částku v Kč.',
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildAmountChip(context, '20'),
+                          _buildAmountChip(context, '50'),
+                          _buildAmountChip(context, '100'),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _donationController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Vlastní částka (Kč)',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       if (!_paymentReady)
                         const Center(child: CircularProgressIndicator())
                       else if (_applePayAvailable && _applePayConfig != null)
@@ -166,14 +257,14 @@ class _ShopScreenState extends State<ShopScreen> {
                             );
                           },
                           style: ButtonStyle(
-                            backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
-                            foregroundColor: MaterialStateProperty.all(Colors.black),
-                            padding: MaterialStateProperty.all(
+                            backgroundColor: WidgetStatePropertyAll(const Color(0xFFBFFF00)),
+                            foregroundColor: WidgetStatePropertyAll(Colors.black),
+                            padding: WidgetStatePropertyAll(
                               const EdgeInsets.symmetric(vertical: 16),
                             ),
                           ),
                           child: const Text(
-                            'Poslat dar (Apple Pay / Google Pay)',
+                            'Podpořit vývoj',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -183,74 +274,12 @@ class _ShopScreenState extends State<ShopScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Další možnosti',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.lightBlue,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Icon(Icons.star, color: Colors.amber, size: 32),
-                      SizedBox(height: 12),
-                      Text(
-                        'Spropitné',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Pokud se vám aplikace líbí, můžete nám poslat spropitné prostřednictvím Apple Pay nebo Google Pay.',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Icon(Icons.feedback, color: Colors.blue, size: 32),
-                      SizedBox(height: 12),
-                      Text(
-                        'Feedback',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Máte nápřezad na vylepšení? Pošlijte nám zprávu s vašimi nápady a my se je pokusíme implementovat.',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
+                'Máte nápad na zlepšení nebo potřebujete pomoc? Kontaktujte nás na e-mailu: dlouhy.m7@seznam.cz',
+                style: TextStyle(fontSize: 16, color: Colors.black87),
               ),
               const SizedBox(height: 24),
               Text(
-                'Děkujeme za vaši podporu! ❤️',
+                'Děkujeme za vaši podporu!',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Colors.lightBlue,
                   fontWeight: FontWeight.bold,

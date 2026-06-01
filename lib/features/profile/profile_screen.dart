@@ -1,7 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../achievements/achievements_screen.dart';
+import '../../login_screen.dart';
 
 /// Modul Profil – uživatelské informace.
 class ProfileScreen extends StatefulWidget {
@@ -17,6 +20,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int limetkyBalance = 0;
   int streak = 0;
   double totalDistance = 0.0; // in km
+  String? _selectedAvatar;
   List<bool> distanceAchievements = List.filled(6, false); // 1,10,100,1000,10000,40000 km
   List<bool> loyaltyAchievements = List.filled(3, false); // 10,50,250 days
   bool isStreakFrozen = false;
@@ -28,6 +32,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _loadSelectedAvatar();
   }
 
   Future<void> _loadData() async {
@@ -45,6 +50,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     });
     _updateAchievements();
+  }
+
+  Future<void> _loadSelectedAvatar() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _selectedAvatar = prefs.getString('selected_avatar');
+    });
   }
 
   Future<void> _saveData() async {
@@ -81,34 +93,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _saveData();
   }
 
-  void _buyJoker() {
-    if (limetkyBalance >= 100) {
-      setState(() {
-        limetkyBalance -= 100;
-        isStreakFrozen = true;
-      });
-      _saveData();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Žolík zakoupen! Streak zmrazen.')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nedostatek Limetků!')),
-      );
-    }
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    const storage = FlutterSecureStorage();
+    await storage.deleteAll();
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
-  // Simulate adding distance for testing
-  void _addDistance(double km) {
-    setState(() {
-      totalDistance += km;
-      limetkyBalance += km.toInt(); // 1 km = 1 Limetka
-    });
-    _updateAchievements();
+  String _streakLabel(int days) {
+    return days == 1 ? 'Denní série: 1 den' : 'Denní série: $days dnů';
   }
 
   @override
   Widget build(BuildContext context) {
+    final achievementItems = <Map<String, dynamic>>[];
+    for (int i = 0; i < distanceMilestones.length; i++) {
+      achievementItems.add({
+        'title': '${distanceMilestones[i]} km',
+        'unlocked': distanceAchievements[i],
+        'type': 'distance',
+        'value': distanceMilestones[i],
+        'icon': Icons.directions_walk,
+      });
+    }
+    for (int i = 0; i < loyaltyMilestones.length; i++) {
+      achievementItems.add({
+        'title': '${loyaltyMilestones[i]} dnů',
+        'unlocked': loyaltyAchievements[i],
+        'type': 'loyalty',
+        'value': loyaltyMilestones[i].toDouble(),
+        'icon': Icons.calendar_today,
+      });
+    }
+
+    final visibleAchievements = List<Map<String, dynamic>>.from(achievementItems)
+      ..sort((a, b) {
+        final unlockedA = a['unlocked'] as bool ? 0 : 1;
+        final unlockedB = b['unlocked'] as bool ? 0 : 1;
+        if (unlockedA != unlockedB) return unlockedA - unlockedB;
+        return (b['value'] as double).compareTo(a['value'] as double);
+      });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profil'),
@@ -116,7 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.badge),
+            icon: const Icon(Icons.emoji_events),
             tooltip: 'Úspěchy',
             onPressed: () {
               Navigator.of(context).push(
@@ -136,38 +167,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 20),
-
-                // Kruhový prostor pro fotku
-                Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Colors.lightBlue, Colors.lime],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.lightBlue.withOpacity(0.3),
-                        blurRadius: 20,
-                        spreadRadius: 5,
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.person,
-                      size: 80,
-                      color: Colors.white,
-                    ),
+                CircleAvatar(
+                  radius: 70,
+                  backgroundColor: Colors.lightBlue.shade50,
+                  child: ClipOval(
+                    child: _selectedAvatar != null
+                        ? Image.asset(
+                            'assets/images/${_selectedAvatar!}.png',
+                            fit: BoxFit.cover,
+                            width: 130,
+                            height: 130,
+                          )
+                        : const Icon(
+                            Icons.person,
+                            size: 100,
+                            color: Colors.lightBlue,
+                          ),
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
-                // Jméno uživatele
                 Text(
                   widget.userName,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -175,47 +193,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         color: Colors.black87,
                       ),
                 ),
-
                 const SizedBox(height: 8),
-
-                // Status
                 Text(
-                  'Hrdina',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  _streakLabel(streak),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Colors.lightBlue.shade600,
+                        fontWeight: FontWeight.w600,
                       ),
                 ),
-
                 const SizedBox(height: 20),
-
-                // Limetky Balance
-                Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.monetization_on, color: Color(0xFFBFFF00), size: 24),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Limetky: $limetkyBalance',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Streak
                 Card(
                   elevation: 4,
                   shape: RoundedRectangleBorder(
@@ -225,56 +211,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        Text(
-                          'Streak: $streak dnů',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Limetky',
+                                  style: TextStyle(fontSize: 14, color: Colors.black54),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '$limetkyBalance',
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                const Text(
+                                  'Denní série',
+                                  style: TextStyle(fontSize: 14, color: Colors.black54),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '$streak dnů',
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        if (isStreakFrozen) const Text('Zmrazeno', style: TextStyle(color: Colors.blue)),
-                        const SizedBox(height: 10),
-                        ElevatedButton(
-                          onPressed: _buyJoker,
-                          style: ButtonStyle(
-                            backgroundColor: MaterialStateProperty.all(const Color(0xFFBFFF00)),
-                            foregroundColor: MaterialStateProperty.all(Colors.black),
-                          ),
-                          child: const Text('Koupit Žolíka (100 Limetků)'),
-                        ),
+                        if (isStreakFrozen) ...[
+                          const SizedBox(height: 12),
+                          const Text('Streak je momentálně zmrazený', style: TextStyle(color: Colors.blue)),
+                        ],
                       ],
                     ),
                   ),
                 ),
-
-                const SizedBox(height: 20),
-
-                // Total Distance
-                Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'Celková vzdálenost: ${totalDistance.toStringAsFixed(1)} km',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Achievements Grid
-                const Text(
-                  'Úspěchy',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                const SizedBox(height: 24),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Úspěchy',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -282,32 +271,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisCount: 2,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    // Distance Achievements
-                    for (int i = 0; i < distanceMilestones.length; i++)
-                      _AchievementCard(
-                        title: '${distanceMilestones[i]} km',
-                        isUnlocked: distanceAchievements[i],
-                        icon: Icons.directions_walk,
-                      ),
-                    // Loyalty Achievements
-                    for (int i = 0; i < loyaltyMilestones.length; i++)
-                      _AchievementCard(
-                        title: '${loyaltyMilestones[i]} dnů',
-                        isUnlocked: loyaltyAchievements[i],
-                        icon: Icons.calendar_today,
-                      ),
-                  ],
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.05,
+                  children: visibleAchievements
+                      .take(4)
+                      .map((item) => _AchievementCard(
+                            title: item['title'] as String,
+                            isUnlocked: item['unlocked'] as bool,
+                            icon: item['icon'] as IconData,
+                          ))
+                      .toList(),
                 ),
-
                 const SizedBox(height: 20),
-
-                // Test button to add distance
-                ElevatedButton(
-                  onPressed: () => _addDistance(1.0),
-                  child: const Text('Přidat 1 km (test)'),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const AchievementsScreen(),
+                        ),
+                      );
+                    },
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStatePropertyAll(Colors.lightBlue),
+                      foregroundColor: WidgetStatePropertyAll(Colors.white),
+                      shape: WidgetStatePropertyAll(
+                        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(vertical: 16)),
+                    ),
+                    child: const Text('Zobrazit všechny úspěchy'),
+                  ),
                 ),
-
+                const SizedBox(height: 24),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _logout,
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStatePropertyAll(Colors.red.shade600),
+                      foregroundColor: WidgetStatePropertyAll(Colors.white),
+                      shape: WidgetStatePropertyAll(
+                        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(vertical: 18)),
+                    ),
+                    child: const Text(
+                      'Odhlásit se',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'v1.2.3+25',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                ),
                 const SizedBox(height: 20),
               ],
             ),
