@@ -7,6 +7,7 @@ import 'features/maps/maps_screen.dart';
 import 'features/gamification/gamification_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/shop/shop_screen.dart';
+import 'features/leaderboard/leaderboard_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key, required this.userName});
@@ -45,15 +46,16 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> _screens = [
-      const MapsScreen(),
       const GameScreen(),
       ProfileScreen(userName: widget.userName),
+      const MapsScreen(),
+      const LeaderboardScreen(),
       const ShopScreen(),
     ];
 
     return Scaffold(
       extendBody: true,
-      body: _blocked
+        body: _blocked
           ? _VerificationWall(onSignOut: () async {
               await AuthService().signOut();
               if (!mounted) return;
@@ -68,16 +70,61 @@ class _MainShellState extends State<MainShell> {
               }
             })
           : _screens[_index],
-      bottomNavigationBar: NavigationBar(
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(top: 8.0),
+        child: FloatingActionButton(
+          onPressed: () => setState(() => _index = 2),
+          backgroundColor: Colors.lime,
+          elevation: 6,
+          child: const Icon(Icons.map, size: 32, color: Colors.black),
+        ),
+      ),
+      bottomNavigationBar: BottomAppBar(
         elevation: 8,
-        backgroundColor: Colors.lightBlue.shade50.withOpacity(0.8),
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.map), label: 'Mapy'),
-          NavigationDestination(icon: Icon(Icons.emoji_events), label: 'HRY'),
-          NavigationDestination(icon: Icon(Icons.person), label: 'Profil'),
-          NavigationDestination(icon: Icon(Icons.shopping_bag), label: 'Obchod'),
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8,
+        child: SafeArea(
+          child: SizedBox(
+            height: 72,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _NavButton(icon: Icons.emoji_events, label: 'Hry', index: 0, selected: _index == 0, onTap: () => setState(() => _index = 0)),
+                _NavButton(icon: Icons.person, label: 'Profil', index: 1, selected: _index == 1, onTap: () => setState(() => _index = 1)),
+                const SizedBox(width: 56), // space for FAB
+                _NavButton(icon: Icons.leaderboard, label: 'Leaderboard', index: 3, selected: _index == 3, onTap: () => setState(() => _index = 3)),
+                _NavButton(icon: Icons.shopping_bag, label: 'Obchod', index: 4, selected: _index == 4, onTap: () => setState(() => _index = 4)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int index;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _NavButton({required this.icon, required this.label, required this.index, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: selected ? Colors.lightBlue : Colors.black54),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(color: selected ? Colors.lightBlue : Colors.black54, fontSize: 12)),
         ],
       ),
     );

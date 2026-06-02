@@ -89,6 +89,11 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   bool _isSelectingDestination = false;
   LatLng? _destinationPoint;
 
+  // UI & routing control
+  bool _taskCardExpanded = false;
+  bool _trackingEnabled = false; // accumulate distance only when true
+  bool _routePlotted = false; // route geometry present but not yet started
+
   List<PlacePrediction> _placePredictions = [];
   bool _showSuggestions = false;
 
@@ -355,12 +360,15 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     );
 
     setState(() {
-      _routeActive = true;
+      // plot route but don't start tracking until explicit START
+      _routePlotted = true;
+      _routeActive = false;
       _selectedRouteSuggestionIndex = index;
       _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
       _polylines.add(polyline);
       _destinationPoint = points.last;
       _showRouteSuggestions = true;
+      _taskCardExpanded = false; // collapse top card so map is more visible
     });
 
     await _fetchElevationData(points).catchError((_) {});
@@ -388,8 +396,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     for (int i = 0; i < 5; i++) {
       final distanceKm = minRange + random.nextDouble() * (maxRange - minRange);
       final bearing = random.nextDouble() * 360;
-      final waypoint = _destinationFromDistanceBearing(start, distanceKm / 2, bearing);
-      final routePoints = await _fetchRouteGeometryFromOSRM([start, waypoint, start], profile);
+      // create two waypoints to form a true loop and avoid retracing
+      final wp1 = _destinationFromDistanceBearing(start, distanceKm / 3, bearing - 45);
+      final wp2 = _destinationFromDistanceBearing(start, distanceKm / 3, bearing + 45);
+      final routePoints = await _fetchRouteGeometryFromOSRM([start, wp1, wp2, start], profile);
       if (routePoints.length < 2) continue;
       final actualDistance = _calculateRouteLength(routePoints);
       suggestions.add({
@@ -436,7 +446,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     );
 
     setState(() {
-      _routeActive = true;
+      // plot destination route but wait for explicit START
+      _routePlotted = true;
+      _routeActive = false;
       _destinationPoint = destination;
       _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
       _polylines.add(polyline);
@@ -451,6 +463,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           'poi_count': 0,
         }
       ];
+      _taskCardExpanded = false;
     });
 
     await _fetchElevationData(routePoints).catchError((_) {});
@@ -459,6 +472,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   void _cancelRoute() {
     setState(() {
       _routeActive = false;
+      _routePlotted = false;
+      _trackingEnabled = false;
       _destinationPoint = null;
       _showRouteSearch = false;
       _showRouteSuggestions = false;
@@ -466,6 +481,15 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
       _markers.removeWhere((m) => m.markerId.value.startsWith('route_'));
     });
+  }
+
+  void _startRoute() {
+    setState(() {
+      _trackingEnabled = true;
+      _routeActive = true;
+      _routePlotted = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('START / VYRAZIT — trasa spuštěna')));
   }
 
   Widget _buildRouteInfoChip(String text) {
@@ -545,7 +569,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
 
   Future<void> _fetchPlacePredictions(String input) async {
-    if (input.isEmpty) {
+    if (input.isEmpty || input.trim().length < 2) {
       setState(() {
         _placePredictions = [];
         _showSuggestions = false;
@@ -810,8 +834,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         await _savePersistentData();
       }
 
-      // Update distance
-      if (_previousPosition != null) {
+      // Update distance only when tracking is enabled
+      if (_previousPosition != null && _trackingEnabled) {
         final distanceKm = Geolocator.distanceBetween(
           _previousPosition!.latitude,
           _previousPosition!.longitude,
@@ -1047,100 +1071,67 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             top: topPadding + 12,
             left: 16,
             right: 16,
-            child: Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+            child: GestureDetector(
+              onTap: () => setState(() => _taskCardExpanded = !_taskCardExpanded),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                height: _taskCardExpanded ? 160 : 72,
+                child: Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.directions_walk, color: Colors.lightBlue, size: 28),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
+                        Row(
+                          children: [
+                            const Icon(Icons.directions_walk, color: Colors.lightBlue, size: 26),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
                                 'Úkol: Ujdi 1 km dnes',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                '${min(_todayDistance / 1000.0, _dailyTargetKm).toStringAsFixed(2)} / ${_dailyTargetKm.toStringAsFixed(1)} km',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
-                              ),
-                            ],
-                          ),
+                            ),
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: _todayDistance >= _dailyTargetKm * 1000 ? Colors.green : Colors.lightBlue.shade50,
+                              child: Icon(_todayDistance >= _dailyTargetKm * 1000 ? Icons.check : Icons.timer, color: _todayDistance >= _dailyTargetKm * 1000 ? Colors.white : Colors.lightBlue),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(_taskCardExpanded ? Icons.expand_less : Icons.expand_more),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: _todayDistance >= _dailyTargetKm * 1000 ? Colors.green : Colors.lightBlue.shade50,
-                          child: Icon(
-                            _todayDistance >= _dailyTargetKm * 1000 ? Icons.check : Icons.timer,
-                            color: _todayDistance >= _dailyTargetKm * 1000 ? Colors.white : Colors.lightBlue,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: LinearProgressIndicator(
-                        value: min(_todayDistance / 1000.0 / _dailyTargetKm, 1.0),
-                        minHeight: 10,
-                        backgroundColor: Colors.lightBlue.shade50,
-                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.lightBlue),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _usingBike = false;
-                              });
-                            },
-                            icon: const Icon(Icons.directions_walk),
-                            label: const Text('Chůze'),
-                            style: OutlinedButton.styleFrom(
-                              backgroundColor: !_usingBike ? const Color(0x1F03A9F4) : Colors.white,
-                              foregroundColor: !_usingBike ? Colors.lightBlue : Colors.black87,
-                              side: BorderSide(color: !_usingBike ? Colors.lightBlue : Colors.grey.shade300),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        if (_taskCardExpanded) ...[
+                          const SizedBox(height: 12),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: LinearProgressIndicator(
+                              value: min(_todayDistance / 1000.0 / _dailyTargetKm, 1.0),
+                              minHeight: 10,
+                              backgroundColor: Colors.lightBlue.shade50,
+                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.lightBlue),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _usingBike = true;
-                              });
-                            },
-                            icon: const Icon(Icons.directions_bike),
-                            label: const Text('Kolo'),
-                            style: OutlinedButton.styleFrom(
-                              backgroundColor: _usingBike ? const Color(0x1F03A9F4) : Colors.white,
-                              foregroundColor: _usingBike ? Colors.lightBlue : Colors.black87,
-                              side: BorderSide(color: _usingBike ? Colors.lightBlue : Colors.grey.shade300),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _showNavigationMenu,
+                              icon: const Icon(Icons.menu),
+                              label: const Text('Výběr trasy'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFBFFF00),
+                                foregroundColor: Colors.black,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
                             ),
                           ),
-                        ),
+                        ]
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1195,10 +1186,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             left: 16,
             right: 16,
             child: AnimatedOpacity(
-              opacity: _routeActive || _showRouteSearch ? 1.0 : 0.0,
+              opacity: _routeActive || _showRouteSearch || _routePlotted ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 250),
               child: IgnorePointer(
-                ignoring: !(_routeActive || _showRouteSearch),
+                ignoring: !(_routeActive || _showRouteSearch || _routePlotted),
                 child: Card(
                   elevation: 4,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -1219,7 +1210,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 10),
                         ],
-                        if (_routeActive && _routeSuggestions.isNotEmpty) ...[
+                        if ((_routeActive || _routePlotted) && _routeSuggestions.isNotEmpty) ...[
                           Text(
                             _routeSuggestions[_selectedRouteSuggestionIndex]['title'] as String,
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -1234,6 +1225,18 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                               _buildRouteInfoChip('${_routeSuggestions[_selectedRouteSuggestionIndex]['poi_count']} POI'),
                             ],
                           ),
+                          const SizedBox(height: 12),
+                          if (_routePlotted && !_trackingEnabled)
+                            ElevatedButton(
+                              onPressed: _startRoute,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightBlue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: const Text('START / VYRAZIT', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
                         ],
                       ],
                     ),

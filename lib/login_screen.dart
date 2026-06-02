@@ -3,11 +3,13 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'main_shell.dart';
 import 'services/auth_service.dart';
 import 'features/profile/distance_preference_setup_screen.dart';
+import 'features/auth/registration_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -47,33 +49,37 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }).catchError((e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Přihlášení selhalo: $e')));
+      String message = 'Přihlášení selhalo.';
+      try {
+        if (e is FirebaseAuthException) {
+          switch (e.code) {
+            case 'user-not-found':
+              message = 'Tento e-mail u nás není registrovaný.';
+              break;
+            case 'wrong-password':
+              message = 'Zadané heslo není správné.';
+              break;
+            case 'invalid-email':
+              message = 'Neplatný formát e-mailu.';
+              break;
+            case 'user-disabled':
+              message = 'Účet byl zablokován.';
+              break;
+            default:
+              message = 'Přihlášení selhalo: ${e.message ?? e.code}';
+          }
+        } else {
+          message = e.toString();
+        }
+      } catch (_) {}
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     });
   }
 
   void _onRegisterPressed() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    if (email.isEmpty || password.isEmpty) {
-      setState(() {
-        _errorText = 'Vyplňte e-mail a heslo';
-      });
-      return;
-    }
-
-    try {
-      final cred = await AuthService().registerWithEmail(email, password);
-      final user = cred.user;
-      if (user == null) return;
-      await AuthService().saveUserName(user.email ?? '');
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const DistancePreferenceSetupScreen()),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Registrace selhala: $e')));
-    }
+    // Open comprehensive registration form
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegistrationScreen()));
   }
 
   Future<void> _signInWithGoogle() async {
@@ -183,6 +189,31 @@ class _LoginScreenState extends State<LoginScreen> {
                 obscureText: true,
               ),
               const SizedBox(height: 32),
+              // Email/password sign-in button moved above social
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _onLoginPressed,
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStateProperty.all(Colors.lime),
+                    foregroundColor: WidgetStateProperty.all(Colors.black),
+                    shape: WidgetStateProperty.all(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  child: const Text(
+                    'Přihlásit se',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               // Social login buttons
               Row(
                 children: [

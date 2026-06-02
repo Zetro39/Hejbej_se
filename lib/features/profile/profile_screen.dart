@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +18,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  String _displayName = '';
   int limetkyBalance = 0;
   int streak = 0;
   double totalDistance = 0.0; // in km
@@ -33,6 +35,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _loadData();
     _loadSelectedAvatar();
+    _displayName = widget.userName;
+    _loadProfileFromFirestore();
+  }
+
+  Future<void> _loadProfileFromFirestore() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final data = doc.data() ?? {};
+      setState(() {
+        if (data['first_name'] != null || data['last_name'] != null) {
+          final fn = data['first_name'] as String? ?? '';
+          final ln = data['last_name'] as String? ?? '';
+          _displayName = '$fn $ln'.trim();
+        } else if (data['username'] != null) {
+          _displayName = data['username'] as String;
+        }
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadData() async {
@@ -187,7 +209,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  widget.userName,
+                  _displayName,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
@@ -307,21 +329,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 24),
                 const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _logout,
-                    style: ButtonStyle(
-                      backgroundColor: WidgetStatePropertyAll(Colors.red.shade600),
-                      foregroundColor: WidgetStatePropertyAll(Colors.white),
-                      shape: WidgetStatePropertyAll(
-                        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 85.0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _logout,
+                      style: ButtonStyle(
+                        backgroundColor: WidgetStatePropertyAll(Colors.red.shade600),
+                        foregroundColor: WidgetStatePropertyAll(Colors.white),
+                        shape: WidgetStatePropertyAll(
+                          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(vertical: 18)),
                       ),
-                      padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(vertical: 18)),
-                    ),
-                    child: const Text(
-                      'Odhlásit se',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      child: const Text(
+                        'Odhlásit se',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                 ),
