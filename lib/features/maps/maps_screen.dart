@@ -36,9 +36,10 @@ class MapsScreen extends StatefulWidget {
 }
 
 class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
-  late GoogleMapController _mapController;
+  GoogleMapController? _mapController;
   late LocationService _locationService;
   late Stream<Position> _positionStream;
+  StreamSubscription<Position>? _positionSubscription;
 
   final Set<Polyline> _polylines = {};
   final Set<Marker> _markers = {};
@@ -190,7 +191,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _mapController.dispose();
+    _mapController?.dispose();
+    _positionSubscription?.cancel();
     _destinationController.dispose();
     _routePageController.dispose();
     _stepCountSubscription?.cancel();
@@ -784,11 +786,11 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           target: LatLng(_initialPosition!.latitude, _initialPosition!.longitude),
           zoom: 16.0,
         );
-        _mapController.animateCamera(CameraUpdate.newCameraPosition(cameraPosition));
+        _mapController?.animateCamera(CameraUpdate.newCameraPosition(cameraPosition));
       } catch (_) {}
     }
 
-    _positionStream.listen((position) async {
+    _positionSubscription = _positionStream.listen((position) async {
       if (!mounted) return;
       final newPoint = LatLng(position.latitude, position.longitude);
 
@@ -861,7 +863,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           bearing: position.heading,
           tilt: 0.0,
         );
-        _mapController.animateCamera(
+        _mapController?.animateCamera(
           CameraUpdate.newCameraPosition(cameraPosition),
         );
       }

@@ -70,7 +70,7 @@ class HejbejSeApp extends StatefulWidget {
 
 class _HejbejSeAppState extends State<HejbejSeApp> {
   final LocationService _locationService = LocationService();
-  late StreamSubscription<double> _locationSubscription;
+  StreamSubscription<double>? _locationSubscription;
 
   @override
   void initState() {
@@ -128,7 +128,7 @@ class _HejbejSeAppState extends State<HejbejSeApp> {
 
   @override
   void dispose() {
-    _locationSubscription.cancel();
+    _locationSubscription?.cancel();
     super.dispose();
   }
 
