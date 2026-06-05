@@ -203,8 +203,18 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
     }
 
     try {
-      final docSnap = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final existingData = docSnap.data() ?? {};
+      Map<String, dynamic> existingData = {};
+      try {
+        final docSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get()
+            .timeout(const Duration(seconds: 4));
+        existingData = docSnap.data() ?? {};
+      } catch (e) {
+        debugPrint('Failed to get user doc from Firestore (offline?): $e');
+      }
+
       String finalFriendCode = existingData['friend_code'] as String? ?? '';
       
       if (finalFriendCode.isEmpty || existingData['username'] != enteredUsername) {

@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'services/auth_service.dart';
+
 
 import 'features/maps/maps_screen.dart';
 import 'features/gamification/gamification_screen.dart';
@@ -22,6 +23,7 @@ class _MainShellState extends State<MainShell> {
   int _index = 2;
   bool _blocked = false;
   Timer? _verifyTimer;
+  StreamSubscription? _incomingFriendsSubscription;
 
   @override
   void initState() {
@@ -30,6 +32,7 @@ class _MainShellState extends State<MainShell> {
     _verifyTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
       await _checkBlocked();
     });
+    _listenForIncomingFriends();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -44,7 +47,120 @@ class _MainShellState extends State<MainShell> {
   @override
   void dispose() {
     _verifyTimer?.cancel();
+    _incomingFriendsSubscription?.cancel();
     super.dispose();
+  }
+
+  void _listenForIncomingFriends() {
+    final currentUser = AuthService().currentUser;
+    if (currentUser == null) return;
+
+    bool isFirstSnapshot = true;
+    _incomingFriendsSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('friends')
+        .where('status', isEqualTo: 'incoming')
+        .snapshots()
+        .listen((snapshot) {
+      if (isFirstSnapshot) {
+        isFirstSnapshot = false;
+        return;
+      }
+      for (final change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          final data = change.doc.data();
+          if (data != null) {
+            final username = data['username'] as String? ?? 'Někdo';
+            final code = data['friend_code'] as String? ?? '';
+            final displayName = code.isNotEmpty ? '$username$code' : username;
+            _showFriendRequestNotification(displayName, change.doc.id);
+          }
+        }
+      }
+    });
+  }
+
+  void _showFriendRequestNotification(String displayName, String senderUid) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.person_add, color: Colors.lightBlue, size: 28),
+            SizedBox(width: 12),
+            Text('Žádost o přátelství', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Uživatel $displayName tě chce přidat do přátel.',
+          style: const TextStyle(fontSize: 15, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Zavřít', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _acceptFriendRequest(senderUid);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.lime,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Přijmout', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _acceptFriendRequest(String senderUid) async {
+    final currentUser = AuthService().currentUser;
+    if (currentUser == null) return;
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      final ref1 = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('friends')
+          .doc(senderUid);
+      batch.update(ref1, {
+        'status': 'friends',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      final ref2 = FirebaseFirestore.instance
+          .collection('users')
+          .doc(senderUid)
+          .collection('friends')
+          .doc(currentUser.uid);
+      batch.update(ref2, {
+        'status': 'friends',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Žádost o přátelství byla přijata! 🎉'),
+          backgroundColor: Colors.lime,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nepodařilo se přijmout přátelství: $e')),
+      );
+    }
   }
 
   Future<void> _checkBlocked() async {
