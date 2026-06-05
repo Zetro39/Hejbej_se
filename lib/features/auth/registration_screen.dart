@@ -87,12 +87,20 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         'updated_at': FieldValue.serverTimestamp(),
       };
       
-      // Save profile basics (blocking so we catch database errors) with timeout
-      await AuthService().saveProfile(user.uid, profile)
-          .timeout(const Duration(seconds: 10), onTimeout: () => throw TimeoutException('Uložení základního profilu do databáze vypršelo.'));
+      // Save profile basics (non-blocking timeouts so network delay doesn't halt registration)
+      try {
+        await AuthService().saveProfile(user.uid, profile)
+            .timeout(const Duration(seconds: 4));
+      } catch (e) {
+        debugPrint('Failed to save profile basics to Firestore: $e');
+      }
           
-      await AuthService().saveUserName(username)
-          .timeout(const Duration(seconds: 6), onTimeout: () => throw TimeoutException('Uložení přihlašovacího jména do úložiště vypršelo.'));
+      try {
+        await AuthService().saveUserName(username)
+            .timeout(const Duration(seconds: 4));
+      } catch (e) {
+        debugPrint('Failed to save username to local storage: $e');
+      }
 
       // Go to Profile Complete / Setup Screen
       if (!mounted) return;

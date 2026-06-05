@@ -78,13 +78,17 @@ class AuthService {
     // Create basic user document with registration timestamp and default stats
     final uid = cred.user?.uid;
     if (uid != null) {
-      await _firestore.collection('users').doc(uid).set({
-        'email': email,
-        'emailVerified': cred.user?.emailVerified ?? false,
-        'registration_date': FieldValue.serverTimestamp(),
-        'strikes': 0,
-        'limetky': 0,
-      }, SetOptions(merge: true));
+      try {
+        await _firestore.collection('users').doc(uid).set({
+          'email': email,
+          'emailVerified': cred.user?.emailVerified ?? false,
+          'registration_date': FieldValue.serverTimestamp(),
+          'strikes': 0,
+          'limetky': 0,
+        }, SetOptions(merge: true)).timeout(const Duration(seconds: 4));
+      } catch (e) {
+        if (kDebugMode) debugPrint('Initial Firestore doc write timed out or failed: $e');
+      }
     }
 
     return cred;
@@ -270,6 +274,31 @@ class AuthService {
           final lastUpdateTs = data['lastDistanceUpdate'] as Timestamp;
           await prefs.setString('lastDistanceUpdate', lastUpdateTs.toDate().toIso8601String());
         }
+        if (data['birth_date'] != null) {
+          if (data['birth_date'] is Timestamp) {
+            await prefs.setString('birth_date', (data['birth_date'] as Timestamp).toDate().toIso8601String());
+          } else if (data['birth_date'] is String) {
+            await prefs.setString('birth_date', data['birth_date'] as String);
+          }
+        }
+        if (data['default_activity'] != null) {
+          await prefs.setString('default_activity', data['default_activity'] as String);
+        }
+        if (data['walk_range_min'] != null) {
+          await prefs.setDouble('walk_range_min', (data['walk_range_min'] as num).toDouble());
+        }
+        if (data['walk_range_max'] != null) {
+          await prefs.setDouble('walk_range_max', (data['walk_range_max'] as num).toDouble());
+        }
+        if (data['bike_range_min'] != null) {
+          await prefs.setDouble('bike_range_min', (data['bike_range_min'] as num).toDouble());
+        }
+        if (data['bike_range_max'] != null) {
+          await prefs.setDouble('bike_range_max', (data['bike_range_max'] as num).toDouble());
+        }
+        if (data['selected_avatar'] != null) {
+          await prefs.setString('selected_avatar', data['selected_avatar'] as String);
+        }
       }
     } catch (e) {
       if (kDebugMode) debugPrint('Failed to sync Firestore to local: $e');
@@ -354,5 +383,23 @@ class AuthService {
         'monthlyDistance': data?['monthlyDistance'] ?? 0.0,
       }, SetOptions(merge: true));
     }
+  }
+
+  Future<bool> isProfileCompleted() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    try {
+      final doc = await _firestore.collection('users').doc(user.uid).get().timeout(const Duration(seconds: 4));
+      if (doc.exists) {
+        final data = doc.data() ?? {};
+        return data['birth_date'] != null;
+      }
+    } catch (_) {}
+    // If offline/error, check local prefs fallback
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('birth_date') != null;
+    } catch (_) {}
+    return false;
   }
 }

@@ -259,19 +259,18 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
   }
 
   LatLng _destinationFromDistanceBearing(LatLng start, double distanceKm, double bearingDegrees) {
-    const double earthRadius = 6371.0;
-    final double latRad = start.latitude * pi / 180.0;
-    final double lonRad = start.longitude * pi / 180.0;
     final double bearingRad = bearingDegrees * pi / 180.0;
-    final double distRatio = distanceKm / earthRadius;
-
-    final double destLatRad = asin(sin(latRad) * cos(distRatio) +
-        cos(latRad) * sin(distRatio) * cos(bearingRad));
-    final double destLonRad = lonRad +
-        atan2(sin(bearingRad) * sin(distRatio) * cos(latRad),
-            cos(distRatio) - sin(latRad) * sin(destLatRad));
-
-    return LatLng(destLatRad * 180.0 / pi, destLonRad * 180.0 / pi);
+    
+    // 1 degree of latitude is approximately 111.0 km
+    final double latOffset = (distanceKm * cos(bearingRad)) / 111.0;
+    
+    // 1 degree of longitude is approximately 111.0 * cos(latitude) km
+    final double cosLat = cos(start.latitude * pi / 180.0);
+    // Guard against poles just in case
+    final double divisor = 111.0 * (cosLat == 0 ? 0.0001 : cosLat);
+    final double lonOffset = (distanceKm * sin(bearingRad)) / divisor;
+    
+    return LatLng(start.latitude + latOffset, start.longitude + lonOffset);
   }
 
   double _calculateRouteLength(List<LatLng> points) {

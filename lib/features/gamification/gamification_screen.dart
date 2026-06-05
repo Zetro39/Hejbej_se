@@ -26,14 +26,37 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _loadUserAge() async {
+    // 1. Try loading and calculating from local SharedPreferences for instant offline display
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final birthDateStr = prefs.getString('birth_date');
+      if (birthDateStr != null) {
+        final birthDate = DateTime.tryParse(birthDateStr);
+        if (birthDate != null && mounted) {
+          final today = DateTime.now();
+          int age = today.year - birthDate.year;
+          if (today.month < birthDate.month || (today.month == birthDate.month && today.day < birthDate.day)) {
+            age--;
+          }
+          setState(() {
+            _userAge = age;
+          });
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fetch and synchronize from Firestore
     final user = _auth.currentUser;
     if (user == null) return;
     try {
       final doc = await _firestore.collection('users').doc(user.uid).get();
       if (doc.exists && mounted) {
-        setState(() {
-          _userAge = doc.data()?['age'] as int?;
-        });
+        final dbAge = doc.data()?['age'] as int?;
+        if (dbAge != null) {
+          setState(() {
+            _userAge = dbAge;
+          });
+        }
       }
     } catch (_) {}
   }

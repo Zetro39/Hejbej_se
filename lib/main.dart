@@ -7,9 +7,10 @@ import 'main_shell.dart';
 import 'services/location_service.dart';
 import 'features/auth/avatar_selection_screen.dart';
 import 'services/auth_service.dart';
+import 'features/profile/profile_creation_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,8 +52,12 @@ void main() async {
 
   // Check secure storage for saved logged-in user
   String? savedUser;
+  bool isProfileCompleted = false;
   try {
     savedUser = await AuthService().getUserName();
+    if (savedUser != null && AuthService().currentUser != null) {
+      isProfileCompleted = await AuthService().isProfileCompleted();
+    }
   } catch (e) {
     if (kDebugMode) {
       debugPrint('AuthService error: $e');
@@ -60,17 +65,27 @@ void main() async {
   }
 
   if (kDebugMode) {
-    debugPrint('Saved user: $savedUser');
+    debugPrint('Saved user: $savedUser, profileCompleted: $isProfileCompleted');
   }
 
-  runApp(HejbejSeApp(hasSelectedAvatar: selectedAvatar != null, initialUserName: savedUser));
+  runApp(HejbejSeApp(
+    hasSelectedAvatar: selectedAvatar != null,
+    initialUserName: savedUser,
+    isProfileCompleted: isProfileCompleted,
+  ));
 }
 
 class HejbejSeApp extends StatefulWidget {
-  const HejbejSeApp({super.key, required this.hasSelectedAvatar, this.initialUserName});
+  const HejbejSeApp({
+    super.key,
+    required this.hasSelectedAvatar,
+    this.initialUserName,
+    required this.isProfileCompleted,
+  });
 
   final bool hasSelectedAvatar;
   final String? initialUserName;
+  final bool isProfileCompleted;
 
   @override
   State<HejbejSeApp> createState() => _HejbejSeAppState();
@@ -203,7 +218,7 @@ class _HejbejSeAppState extends State<HejbejSeApp> {
         ),
       ),
       home: widget.initialUserName != null
-          ? MainShell(userName: widget.initialUserName!)
+          ? (widget.isProfileCompleted ? MainShell(userName: widget.initialUserName!) : const ProfileCreationScreen())
           : (widget.hasSelectedAvatar ? const LoginScreen() : const AvatarSelectionScreen()),
     );
   }

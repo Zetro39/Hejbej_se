@@ -1209,7 +1209,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                         }
                       ];
                       _selectedRouteSuggestionIndex = 0;
-                      _showRouteSuggestions = true;
+                      _showRouteSuggestions = false;
                       _showRouteSearch = false;
                       _taskCardExpanded = false;
                     });

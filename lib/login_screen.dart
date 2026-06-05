@@ -11,6 +11,7 @@ import 'main_shell.dart';
 import 'services/auth_service.dart';
 import 'features/profile/distance_preference_setup_screen.dart';
 import 'features/auth/registration_screen.dart';
+import 'features/profile/profile_creation_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -51,6 +52,25 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _handleUserRouting(String name) async {
+    await AuthService().saveUserName(name);
+    await AuthService().syncFirestoreToLocal();
+    if (!mounted) return;
+    
+    final hasProfile = await AuthService().isProfileCompleted();
+    if (!mounted) return;
+    
+    if (hasProfile) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => MainShell(userName: name)),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ProfileCreationScreen()),
+      );
+    }
+  }
+
   void _onLoginPressed() {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -71,10 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
             name = doc.data()?['username'] as String;
           }
         } catch (_) {}
-        await AuthService().saveUserName(name);
-        await AuthService().syncFirestoreToLocal();
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: name)));
+        await _handleUserRouting(name);
       }
     }).catchError((e) {
       if (!mounted) return;
@@ -123,14 +140,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = cred.user;
       final name = user?.displayName ?? user?.email ?? 'Uživatel';
 
-      await AuthService().saveUserName(name);
       await AuthService().saveAuthCredentials('google', {
         'accessToken': auth.accessToken,
         'idToken': auth.idToken,
         'email': account.email,
       });
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: name)));
+      await _handleUserRouting(name);
     } catch (e) {
       debugPrint('Google sign-in failed: $e');
       if (!mounted) return;
@@ -158,15 +173,13 @@ class _LoginScreenState extends State<LoginScreen> {
           ? (user?.email ?? 'Apple User')
           : '${credential.givenName ?? ''} ${credential.familyName ?? ''}'.trim();
 
-      await AuthService().saveUserName(name);
       await AuthService().saveAuthCredentials('apple', {
         'identityToken': credential.identityToken,
         'authorizationCode': credential.authorizationCode,
         'email': credential.email,
       });
 
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: name)));
+      await _handleUserRouting(name);
     } catch (e) {
       debugPrint('Apple sign-in failed: $e');
       if (!mounted) return;
