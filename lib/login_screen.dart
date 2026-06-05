@@ -279,7 +279,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: Colors.redAccent,
                       ),
                     ),
-                    onTap: _showSocialLoginNotice,
+                    onTap: _signInWithGoogle,
                   ),
                   const SizedBox(width: 20),
                   _buildSocialButton(
@@ -288,7 +288,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       size: 28,
                       color: Colors.black,
                     ),
-                    onTap: _showSocialLoginNotice,
+                    onTap: _signInWithApple,
                   ),
                   const SizedBox(width: 20),
                   _buildSocialButton(
