@@ -10,9 +10,13 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:pedometer/pedometer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/location_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_manager.dart';
+import '../profile/notification_inbox_screen.dart';
+import 'qr_scanner_screen.dart';
 import 'package:pay/pay.dart';
 import 'ar_navigation_screen.dart';
 import 'route_selection_screen.dart';
@@ -54,6 +58,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   List<LatLng> _activeRoutePoints = [];
 
   BitmapDescriptor? _avatarIcon;
+  String _currentMapStyle = 'default'; // 'default', 'light', 'dark'
+  BitmapDescriptor? _companionIcon;
+  String? _activeCompanionId;
+  int _unreadNotificationsCount = 0;
   bool _usingBike = false;
   double _walkRangeMin = 2.0;
   double _walkRangeMax = 5.0;
@@ -180,10 +188,115 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   Future<void> _loadSelectedAvatar() async {
     final prefs = await SharedPreferences.getInstance();
     final avatar = prefs.getString('selected_avatar');
+    _currentMapStyle = prefs.getString('map_style') ?? 'default';
+    _activeCompanionId = prefs.getString('selected_companion');
+    
     if (!mounted) return;
 
     if (avatar != null) {
       await _createAvatarIcon(avatar);
+    }
+    
+    if (_activeCompanionId != null) {
+      await _loadCompanionIcon(_activeCompanionId!);
+    }
+    
+    await _loadUnreadNotificationsCount();
+    await _restoreActiveRoute();
+  }
+
+  Future<void> _loadCompanionIcon(String companionId) async {
+    final imagePath = 'assets/images/$companionId.png';
+    try {
+      final bitmapDescriptor = await BitmapDescriptor.asset(
+        createLocalImageConfiguration(context),
+        imagePath,
+      );
+      if (!mounted) return;
+      setState(() {
+        _companionIcon = bitmapDescriptor;
+      });
+    } catch (e) {
+      debugPrint('Failed to load companion icon: $e');
+    }
+  }
+
+  Future<void> _loadUnreadNotificationsCount() async {
+    final count = await NotificationManager.getUnreadCount();
+    if (mounted) {
+      setState(() {
+        _unreadNotificationsCount = count;
+      });
+    }
+  }
+
+  Future<void> _cacheActiveRoute(List<LatLng> points, String title, double distance, int eta) async {
+    final prefs = await SharedPreferences.getInstance();
+    final listJson = points.map((p) => [p.latitude, p.longitude]).toList();
+    await prefs.setString('offline_route_points', jsonEncode(listJson));
+    await prefs.setString('offline_route_title', title);
+    await prefs.setDouble('offline_route_distance', distance);
+    await prefs.setInt('offline_route_eta', eta);
+    await prefs.setBool('offline_route_active', true);
+  }
+
+  Future<void> _clearCachedRoute() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('offline_route_points');
+    await prefs.remove('offline_route_title');
+    await prefs.remove('offline_route_distance');
+    await prefs.remove('offline_route_eta');
+    await prefs.setBool('offline_route_active', false);
+  }
+
+  Future<void> _restoreActiveRoute() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasActive = prefs.getBool('offline_route_active') ?? false;
+    if (hasActive) {
+      final pointsStr = prefs.getString('offline_route_points');
+      if (pointsStr != null) {
+        try {
+          final list = jsonDecode(pointsStr) as List<dynamic>;
+          final points = list.map((coord) => LatLng(coord[0] as double, coord[1] as double)).toList();
+          final title = prefs.getString('offline_route_title') ?? 'Uložená trasa';
+          final distance = prefs.getDouble('offline_route_distance') ?? 0.0;
+          final eta = prefs.getInt('offline_route_eta') ?? 0;
+          
+          final polyline = Polyline(
+            polylineId: const PolylineId('active_route'),
+            color: _usingBike ? Colors.blue : Colors.green,
+            width: 5,
+            points: points,
+            geodesic: true,
+          );
+          
+          setState(() {
+            _activeRoutePoints = points;
+            _routePlotted = true; // plotted but not started
+            _routeActive = false;
+            _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+            _polylines.add(polyline);
+            _destinationPoint = points.last;
+            _routeSuggestions = [
+              {
+                'title': title,
+                'coordinates': points,
+                'distance': distance,
+                'eta': eta,
+                'poi_count': 0,
+              }
+            ];
+            _selectedRouteSuggestionIndex = 0;
+          });
+          
+          // Defer fitting bounds until map controller is ready
+          Future.delayed(const Duration(milliseconds: 600), () {
+            if (mounted && _activeRoutePoints.isNotEmpty) {
+              _fitMapBounds(_activeRoutePoints);
+            }
+          });
+        } catch (_) {}
+      }
     }
   }
 
@@ -544,6 +657,11 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _taskCardExpanded = false; // collapse top card so map is more visible
     });
 
+    final title = route['title'] as String? ?? 'Okruh v okolí';
+    final distance = route['distance'] as double? ?? 0.0;
+    final eta = route['eta'] as int? ?? 0;
+    await _cacheActiveRoute(points, title, distance, eta);
+
     await _fetchElevationData(points).catchError((_) {});
   }
 
@@ -618,9 +736,34 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     final routePoints = await _fetchRouteGeometryFromOSRM([start, destination], profile);
     if (routePoints.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nepodařilo se načíst trasu. Zkuste to znovu.')),
-      );
+      final prefs = await SharedPreferences.getInstance();
+      final hasActive = prefs.getBool('offline_route_active') ?? false;
+      if (hasActive) {
+        final confirmOffline = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Jste offline 📶'),
+            content: const Text('Nepodařilo se připojit k serveru pro vyhledání trasy. Chcete načíst vaši naposledy uloženou trasu offline?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Zrušit'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Načíst offline'),
+              ),
+            ],
+          ),
+        );
+        if (confirmOffline == true) {
+          await _restoreActiveRoute();
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nepodařilo se načíst trasu. Zkontrolujte připojení.')),
+        );
+      }
       return;
     }
 
@@ -631,6 +774,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       points: routePoints,
       geodesic: true,
     );
+
+    final distance = _calculateRouteLength(routePoints);
+    final eta = _calculateRouteEta(distance);
 
     setState(() {
       // plot destination route but wait for explicit START
@@ -646,13 +792,15 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         {
           'title': 'Cesta do cíle',
           'coordinates': routePoints,
-          'distance': _calculateRouteLength(routePoints),
-          'eta': _calculateRouteEta(_calculateRouteLength(routePoints)),
+          'distance': distance,
+          'eta': eta,
           'poi_count': 0,
         }
       ];
       _taskCardExpanded = false;
     });
+
+    await _cacheActiveRoute(routePoints, 'Cesta do cíle', distance, eta);
 
     await _fetchElevationData(routePoints).catchError((_) {});
   }
@@ -669,6 +817,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
       _markers.removeWhere((m) => m.markerId.value.startsWith('route_'));
     });
+    _clearCachedRoute();
   }
 
   void _startRoute() {
@@ -942,6 +1091,34 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _markers.removeWhere((m) => m.markerId == userMarkerId);
       _markers.add(marker);
     });
+
+    // Add companion marker if active
+    if (_activeCompanionId != null && _companionIcon != null) {
+      final companionMarkerId = const MarkerId('companion_location');
+      final compPosition = LatLng(position.latitude + 0.00006, position.longitude + 0.00006);
+      final String compName = _activeCompanionId == 'bear' ? 'Medvěd' :
+                              _activeCompanionId == 'fox' ? 'Liška' :
+                              _activeCompanionId == 'wolf' ? 'Vlk' : 'Jelen';
+      final compMarker = Marker(
+        markerId: companionMarkerId,
+        position: compPosition,
+        rotation: position.heading,
+        anchor: const Offset(0.5, 0.5),
+        icon: _companionIcon!,
+        infoWindow: InfoWindow(
+          title: compName,
+          snippet: 'Tvůj společník',
+        ),
+      );
+      setState(() {
+        _markers.removeWhere((m) => m.markerId == companionMarkerId);
+        _markers.add(compMarker);
+      });
+    } else {
+      setState(() {
+        _markers.removeWhere((m) => m.markerId == const MarkerId('companion_location'));
+      });
+    }
   }
 
   double _calculatePolylineDistance() {
@@ -989,8 +1166,61 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     });
   }
 
+  Future<void> _applyMapStyle(String style) async {
+    if (_mapController == null) return;
+    if (style == 'default') {
+      await _mapController!.setMapStyle(null);
+    } else {
+      try {
+        final file = style == 'light' ? 'assets/map_style_light.json' : 'assets/map_style_dark.json';
+        final styleJson = await rootBundle.loadString(file);
+        await _mapController!.setMapStyle(styleJson);
+      } catch (e) {
+        debugPrint('Error loading map style $style: $e');
+      }
+    }
+  }
+
+  Future<void> _toggleMapStyle() async {
+    if (!_isPremium) {
+      _showPaywall();
+      return;
+    }
+    
+    String nextStyle;
+    if (_currentMapStyle == 'default') {
+      nextStyle = 'light';
+    } else if (_currentMapStyle == 'light') {
+      nextStyle = 'dark';
+    } else {
+      nextStyle = 'default';
+    }
+    
+    setState(() {
+      _currentMapStyle = nextStyle;
+    });
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('map_style', nextStyle);
+    await _applyMapStyle(nextStyle);
+    
+    final label = nextStyle == 'default' ? 'Výchozí' : nextStyle == 'light' ? 'Světlý' : 'Tmavý';
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Styl mapy změněn na: $label'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
+    if (_currentMapStyle != 'default') {
+      _applyMapStyle(_currentMapStyle);
+    }
+    
     // If we already obtained an initial location, center the camera immediately
     if (_initialPosition != null) {
       try {
@@ -1309,6 +1539,18 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                   });
                 },
               ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.lightBlue.shade50,
+                  child: const Icon(Icons.qr_code_scanner, color: Colors.lightBlue),
+                ),
+                title: const Text('Načíst trasu z QR kódu'),
+                subtitle: const Text('Naskenujte trasu od kamaráda offline'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _scanRouteQr();
+                },
+              ),
             ],
           ),
         );
@@ -1367,7 +1609,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           Positioned(
             top: topPadding + 12,
             left: 16,
-            right: 16,
+            right: 80,
             child: GestureDetector(
               onTap: () => setState(() => _taskCardExpanded = !_taskCardExpanded),
               child: AnimatedContainer(
@@ -1524,15 +1766,35 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 12),
                           if (_routePlotted && !_trackingEnabled)
-                            ElevatedButton(
-                              onPressed: _startRoute,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.lightBlue,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              child: const Text('START / VYRAZIT', style: TextStyle(fontWeight: FontWeight.bold)),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: _startRoute,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.lightBlue,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    child: const Text('START / VYRAZIT', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _showQrShareDialog,
+                                    icon: const Icon(Icons.qr_code, size: 20),
+                                    label: const Text('Pozvat (QR)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.lightBlue,
+                                      side: const BorderSide(color: Colors.lightBlue),
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                         ],
                       ],
@@ -1689,6 +1951,24 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             ),
           ),
           Positioned(
+            bottom: bottomOffset + 76 + 76 + 76,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: 'map_style_button',
+              onPressed: _toggleMapStyle,
+              backgroundColor: _currentMapStyle != 'default' ? const Color(0xFFBFFF00) : Colors.white,
+              foregroundColor: Colors.black,
+              child: Icon(
+                _currentMapStyle == 'default'
+                    ? Icons.map
+                    : _currentMapStyle == 'light'
+                        ? Icons.light_mode
+                        : Icons.dark_mode,
+                size: 28,
+              ),
+            ),
+          ),
+          Positioned(
             bottom: bottomOffset + 76 + 76,
             right: 20,
             child: FloatingActionButton(
@@ -1711,6 +1991,64 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               backgroundColor: const Color(0xFFBFFF00),
               foregroundColor: Colors.black,
               child: const Icon(Icons.remove_red_eye, size: 28),
+            ),
+          ),
+          // Top Notification Bell Button
+          Positioned(
+            top: topPadding + 16,
+            right: 16,
+            child: Stack(
+              children: [
+                GestureDetector(
+                  onTap: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const NotificationInboxScreen()),
+                    );
+                    _loadUnreadNotificationsCount();
+                  },
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.notifications_active, color: Colors.lightBlue, size: 26),
+                  ),
+                ),
+                if (_unreadNotificationsCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        '$_unreadNotificationsCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
@@ -1972,6 +2310,154 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       
       if (_activeRoutePoints.isNotEmpty) {
         _openArNavigation();
+      }
+    }
+  }
+
+  void _showQrShareDialog() {
+    if (_activeRoutePoints.isEmpty) return;
+    
+    // Sample points if too many (limit to 30) to fit in QR payload
+    List<LatLng> sampled = [];
+    if (_activeRoutePoints.length <= 30) {
+      sampled = _activeRoutePoints;
+    } else {
+      final step = _activeRoutePoints.length / 30;
+      for (int i = 0; i < 30; i++) {
+        sampled.add(_activeRoutePoints[(i * step).toInt()]);
+      }
+      sampled.add(_activeRoutePoints.last);
+    }
+    
+    final coordinates = sampled.map((p) => [
+      double.parse(p.latitude.toStringAsFixed(5)),
+      double.parse(p.longitude.toStringAsFixed(5))
+    ]).toList();
+    
+    final title = _routeSuggestions.isNotEmpty && _selectedRouteSuggestionIndex < _routeSuggestions.length
+        ? _routeSuggestions[_selectedRouteSuggestionIndex]['title'] as String? ?? 'Cesta do cíle'
+        : 'Cesta do cíle';
+        
+    final payload = jsonEncode({
+      't': title,
+      'p': coordinates,
+    });
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Přizvat kamaráda na cestu 🤝'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Nechte kamaráda naskenovat tento QR kód ve své aplikaci Hejbej Se pro okamžité offline sdílení trasy.',
+              style: TextStyle(fontSize: 13, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: 200,
+              height: 200,
+              child: QrImageView(
+                data: payload,
+                version: QrVersions.auto,
+                size: 200.0,
+                gapless: false,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Zavřít'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _scanRouteQr() async {
+    final scannedData = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (context) => const QrScannerScreen()),
+    );
+    
+    if (scannedData == null || scannedData.isEmpty) return;
+    
+    try {
+      final map = jsonDecode(scannedData) as Map<String, dynamic>;
+      final title = map['t'] as String;
+      final coordsList = map['p'] as List<dynamic>;
+      final points = coordsList.map((c) {
+        final list = c as List<dynamic>;
+        return LatLng((list[0] as num).toDouble(), (list[1] as num).toDouble());
+      }).toList();
+      
+      if (points.length < 2) {
+        throw Exception('Nedostatek bodů trasy');
+      }
+
+      final polyline = Polyline(
+        polylineId: const PolylineId('active_route'),
+        color: _usingBike ? Colors.blue : Colors.green,
+        width: 5,
+        points: points,
+        geodesic: true,
+      );
+      
+      final distance = _calculateRouteLength(points);
+      final eta = _calculateRouteEta(distance);
+
+      setState(() {
+        _activeRoutePoints = points;
+        _routePlotted = true;
+        _routeActive = false;
+        _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+        _polylines.add(polyline);
+        _destinationPoint = points.last;
+        
+        _routeSuggestions = [
+          {
+            'title': title,
+            'coordinates': points,
+            'distance': distance,
+            'eta': eta,
+            'poi_count': 0,
+          }
+        ];
+        _selectedRouteSuggestionIndex = 0;
+        _showRouteSuggestions = false;
+        _showRouteSearch = false;
+        _taskCardExpanded = false;
+      });
+
+      await _cacheActiveRoute(points, title, distance, eta);
+      
+      _fitMapBounds(points);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Trasa "$title" úspěšně naskenována!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Neplatný formát QR trasy: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
     }
   }

@@ -146,48 +146,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showPresetsDialog() {
+    final presets = [
+      {'id': 'boy', 'name': 'Chlapec', 'asset': 'assets/images/boy.png'},
+      {'id': 'girl', 'name': 'Dívka', 'asset': 'assets/images/girl.png'},
+      {'id': 'man', 'name': 'Muž', 'asset': 'assets/images/man.png'},
+      {'id': 'chlap', 'name': 'Chlap', 'asset': 'assets/images/chlap.png'},
+      {'id': 'woman', 'name': 'Žena', 'asset': 'assets/images/woman.png'},
+    ];
+
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('Přednastavení avataři'),
-          content: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Expanded(
-                child: GestureDetector(
+          content: SizedBox(
+            width: double.maxFinite,
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: presets.length,
+              itemBuilder: (context, index) {
+                final preset = presets[index];
+                return GestureDetector(
                   onTap: () {
                     Navigator.pop(context);
-                    _updateAvatarStateAndDatabase('boy');
+                    _updateAvatarStateAndDatabase(preset['id']!);
                   },
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Image.asset('assets/images/boy.png', height: 80, width: 80, fit: BoxFit.cover),
-                      const SizedBox(height: 8),
-                      const Text('Chlapec'),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.asset(
+                            preset['asset']!,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        preset['name']!,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                    _updateAvatarStateAndDatabase('girl');
-                  },
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset('assets/images/girl.png', height: 80, width: 80, fit: BoxFit.cover),
-                      const SizedBox(height: 8),
-                      const Text('Dívka'),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+                );
+              },
+            ),
           ),
         );
       },

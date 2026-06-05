@@ -8,11 +8,20 @@ import 'services/location_service.dart';
 import 'features/auth/avatar_selection_screen.dart';
 import 'services/auth_service.dart';
 import 'features/profile/profile_creation_screen.dart';
+import 'services/notification_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  final title = message.notification?.title ?? message.data['title'] ?? 'Nové oznámení';
+  final body = message.notification?.body ?? message.data['body'] ?? '';
+  await NotificationManager.saveNotification(title, body);
+}
 
 Future<void> _initializeFirebaseMessaging() async {
   try {
@@ -37,9 +46,12 @@ Future<void> _initializeFirebaseMessaging() async {
     }
 
     // Listen to foreground messages
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+      final title = message.notification?.title ?? message.data['title'] ?? 'Nové oznámení';
+      final body = message.notification?.body ?? message.data['body'] ?? '';
+      await NotificationManager.saveNotification(title, body);
       if (kDebugMode) {
-        debugPrint('FCM Message received in foreground: ${message.notification?.title}');
+        debugPrint('FCM Message received in foreground: $title');
       }
     });
   } catch (e) {
@@ -54,6 +66,7 @@ void main() async {
   
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     await _initializeFirebaseMessaging();
   } catch (e) {
     if (kDebugMode) {

@@ -302,6 +302,18 @@ class AuthService {
         if (data['selected_avatar'] != null) {
           await prefs.setString('selected_avatar', data['selected_avatar'] as String);
         }
+        if (data['gender'] != null) {
+          await prefs.setString('gender', data['gender'] as String);
+        }
+        if (data['selected_companion'] != null) {
+          await prefs.setString('selected_companion', data['selected_companion'] as String);
+        } else {
+          await prefs.remove('selected_companion');
+        }
+        if (data['unlocked_companions'] != null) {
+          final list = (data['unlocked_companions'] as List).map((e) => e.toString()).toList();
+          await prefs.setStringList('unlocked_companions', list);
+        }
       }
     } catch (e) {
       if (kDebugMode) debugPrint('Failed to sync Firestore to local: $e');
@@ -406,5 +418,90 @@ class AuthService {
       return prefs.getString('birth_date') != null;
     } catch (_) {}
     return false;
+  }
+
+  Future<List<String>> getUnlockedCompanions() async {
+    final user = currentUser;
+    if (user == null) return [];
+    try {
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        final data = doc.data() ?? {};
+        final list = data['unlocked_companions'] as List?;
+        if (list != null) {
+          return list.map((e) => e.toString()).toList();
+        }
+      }
+    } catch (_) {}
+    // Fallback locally
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList('unlocked_companions') ?? [];
+    } catch (_) {}
+    return [];
+  }
+
+  Future<bool> unlockCompanion(String companionId, int cost) async {
+    final user = currentUser;
+    if (user == null) return false;
+    try {
+      final docRef = _firestore.collection('users').doc(user.uid);
+      final success = await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        final data = snapshot.data() ?? {};
+        final currentLimetky = (data['limetky'] as num?)?.toInt() ?? 0;
+        if (currentLimetky < cost) {
+          return false;
+        }
+        final unlocked = List<String>.from(data['unlocked_companions'] ?? []);
+        if (unlocked.contains(companionId)) {
+          return true; // Already unlocked
+        }
+        unlocked.add(companionId);
+        transaction.update(docRef, {
+          'limetky': currentLimetky - cost,
+          'unlocked_companions': unlocked,
+        });
+        return true;
+      });
+
+      if (success) {
+        final prefs = await SharedPreferences.getInstance();
+        final unlockedLocal = prefs.getStringList('unlocked_companions') ?? [];
+        if (!unlockedLocal.contains(companionId)) {
+          unlockedLocal.add(companionId);
+          await prefs.setStringList('unlocked_companions', unlockedLocal);
+        }
+        await syncFirestoreToLocal();
+      }
+      return success;
+    } catch (e) {
+      if (kDebugMode) debugPrint('unlockCompanion error: $e');
+      return false;
+    }
+  }
+
+  Future<void> selectCompanion(String? companionId) async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (companionId == null) {
+        await prefs.remove('selected_companion');
+      } else {
+        await prefs.setString('selected_companion', companionId);
+      }
+      await _firestore.collection('users').doc(user.uid).update({
+        'selected_companion': companionId,
+      });
+    } catch (_) {}
+  }
+
+  Future<String?> getSelectedCompanion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('selected_companion');
+    } catch (_) {}
+    return null;
   }
 }

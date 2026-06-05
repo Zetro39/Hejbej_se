@@ -23,7 +23,7 @@ dependencies:
   firebase_core: ^4.10.0
   firebase_auth: ^6.5.2
   cloud_firestore: ^6.5.0
-  firebase_messaging: ^15.1.0
+  firebase_messaging: any
   camera: ^0.10.5
   qr_flutter: ^4.1.0
   image_picker: ^1.1.2
@@ -43,3 +43,5 @@ flutter:
     - assets/images/
     - assets/google_pay_config.json
     - assets/apple_pay_config.json
+    - assets/map_style_light.json
+    - assets/map_style_dark.json

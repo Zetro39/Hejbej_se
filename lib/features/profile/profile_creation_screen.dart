@@ -30,6 +30,8 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   String? _presetAvatarId = 'boy'; // Default preset
   File? _customImageFile;
   
+  String _gender = 'male'; // 'male' or 'female'
+  String _adultMaleOption = 'man'; // 'man' or 'chlap'
   bool _isSaving = false;
 
   int _calculateAge(DateTime birthDate) {
@@ -39,6 +41,28 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
       age--;
     }
     return age;
+  }
+
+  void _updateAssignedAvatar() {
+    if (_birthDate == null) {
+      setState(() {
+        _presetAvatarId = _gender == 'male' ? 'boy' : 'girl';
+      });
+      return;
+    }
+
+    final age = _calculateAge(_birthDate!);
+    setState(() {
+      if (age < 18) {
+        _presetAvatarId = _gender == 'male' ? 'boy' : 'girl';
+      } else {
+        if (_gender == 'female') {
+          _presetAvatarId = 'woman';
+        } else {
+          _presetAvatarId = _adultMaleOption; // 'man' or 'chlap'
+        }
+      }
+    });
   }
 
   Future<void> _pickImage() async {
@@ -96,6 +120,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
       setState(() {
         _birthDate = picked;
       });
+      _updateAssignedAvatar();
     }
   }
 
@@ -123,6 +148,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
     final data = {
       'birth_date': Timestamp.fromDate(_birthDate!),
       'age': age,
+      'gender': _gender,
       'walk_range_min': _walkMin,
       'walk_range_max': _walkMax,
       'bike_range_min': _bikeMin,
@@ -136,6 +162,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
       // 1. Save locally in SharedPreferences first for instant responsiveness
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('selected_avatar', avatarToSave);
+      await prefs.setString('gender', _gender);
       await prefs.setDouble('walk_range_min', _walkMin);
       await prefs.setDouble('walk_range_max', _walkMax);
       await prefs.setDouble('bike_range_min', _bikeMin);
@@ -213,34 +240,64 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
 
               // SECTION 1: Avatar selection
               const Text(
-                'Vyber nebo nahraj svůj profilový obrázek',
+                'Tvůj hrdina na mapě',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  // Boy Preset
+                  // Auto-assigned Hero Preview
                   Expanded(
+                    flex: 2,
                     child: _buildAvatarOption(
-                      id: 'boy',
-                      isSelected: _presetAvatarId == 'boy',
-                      onTap: () => _selectPresetAvatar('boy'),
-                      child: Image.asset('assets/images/boy.png', fit: BoxFit.cover),
+                      id: _presetAvatarId ?? 'boy',
+                      isSelected: _presetAvatarId != null,
+                      onTap: () {
+                        setState(() {
+                          _selectedAvatarBase64 = null;
+                          _customImageFile = null;
+                        });
+                        _updateAssignedAvatar();
+                      },
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Image.asset(
+                            'assets/images/${_presetAvatarId ?? (_gender == 'male' ? 'boy' : 'girl')}.png',
+                            fit: BoxFit.cover,
+                          ),
+                          Positioned(
+                            bottom: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                _presetAvatarId == 'boy'
+                                    ? 'Chlapec'
+                                    : _presetAvatarId == 'girl'
+                                        ? 'Dívka'
+                                        : _presetAvatarId == 'man'
+                                            ? 'Muž'
+                                            : _presetAvatarId == 'chlap'
+                                                ? 'Chlap'
+                                                : _presetAvatarId == 'woman'
+                                                    ? 'Žena'
+                                                    : 'Hrdina',
+                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  // Girl Preset
+                  const SizedBox(width: 12),
+                  // Custom photo option
                   Expanded(
-                    child: _buildAvatarOption(
-                      id: 'girl',
-                      isSelected: _presetAvatarId == 'girl',
-                      onTap: () => _selectPresetAvatar('girl'),
-                      child: Image.asset('assets/images/girl.png', fit: BoxFit.cover),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Custom Upload option
-                  Expanded(
+                    flex: 1,
                     child: _buildAvatarOption(
                       id: 'custom',
                       isSelected: _selectedAvatarBase64 != null,
@@ -315,6 +372,79 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                   ),
                 ),
               ),
+
+              const SizedBox(height: 24),
+
+              // SECTION 2.5: Gender selection
+              const Text(
+                'Pohlaví',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildGenderButton(
+                      type: 'male',
+                      label: _birthDate != null && _calculateAge(_birthDate!) < 18 ? 'Chlapec' : 'Muž',
+                      icon: Icons.male,
+                      isSelected: _gender == 'male',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildGenderButton(
+                      type: 'female',
+                      label: _birthDate != null && _calculateAge(_birthDate!) < 18 ? 'Dívka' : 'Žena',
+                      icon: Icons.female,
+                      isSelected: _gender == 'female',
+                    ),
+                  ),
+                ],
+              ),
+
+              // Adult Male Style choice (if age >= 18 and gender == 'male')
+              if (_birthDate != null && _calculateAge(_birthDate!) >= 18 && _gender == 'male') ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Styl postavy',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Center(child: Text('Mladší muž')),
+                        selected: _adultMaleOption == 'man',
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() {
+                              _adultMaleOption = 'man';
+                            });
+                            _updateAssignedAvatar();
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Center(child: Text('Starší chlap')),
+                        selected: _adultMaleOption == 'chlap',
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() {
+                              _adultMaleOption = 'chlap';
+                            });
+                            _updateAssignedAvatar();
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
 
               const SizedBox(height: 24),
 
@@ -522,6 +652,48 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
               divisions: (rangeMax - minVal).round(),
               label: '${maxVal.toStringAsFixed(0)} km',
               onChanged: onMaxChanged,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGenderButton({
+    required String type,
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _gender = type;
+        });
+        _updateAssignedAvatar();
+      },
+      child: Container(
+        height: 54,
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.lightBlue.shade50 : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? Colors.lightBlue : Colors.grey.shade200,
+            width: 2,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: isSelected ? Colors.lightBlue : Colors.black54),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.lightBlue : Colors.black54,
+              ),
             ),
           ],
         ),
