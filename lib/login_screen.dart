@@ -1,11 +1,13 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:crypto/crypto.dart';
 
 import 'main_shell.dart';
 import 'services/auth_service.dart';
@@ -153,6 +155,18 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  String _generateNonce([int length = 32]) {
+    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+  }
+
+  String _sha256ofString(String input) {
+    final bytes = utf8.encode(input);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
   Future<void> _signInWithApple() async {
     try {
       // Only available on iOS/macOS; guard for other platforms
@@ -161,12 +175,22 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      final rawNonce = _generateNonce();
+      final shaNonce = _sha256ofString(rawNonce);
+
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
+        nonce: shaNonce,
       );
 
-      // Sign in to Firebase Auth!
-      final cred = await AuthService().signInWithApple(credential.identityToken ?? '', null);
+      // Sign in to Firebase Auth with the generated rawNonce, auth code, and name fields!
+      final cred = await AuthService().signInWithApple(
+        idToken: credential.identityToken ?? '',
+        rawNonce: rawNonce,
+        accessToken: credential.authorizationCode,
+        firstName: credential.givenName,
+        lastName: credential.familyName,
+      );
       final user = cred.user;
 
       final name = ([credential.givenName, credential.familyName].where((s) => s != null).join(' ').trim()).isEmpty

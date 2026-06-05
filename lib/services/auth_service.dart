@@ -117,6 +117,14 @@ class AuthService {
     if (data['strikes'] == null) data['strikes'] = 0;
     if (data['limetky'] == null) data['limetky'] = 0;
     if (data['registration_date'] == null) data['registration_date'] = FieldValue.serverTimestamp();
+    
+    if (data['username'] != null) {
+      data['username_clean'] = _cleanStringForSearch(data['username'] as String);
+    }
+    if (data['friend_code'] != null) {
+      data['friend_code_clean'] = _cleanStringForSearch(data['friend_code'] as String);
+    }
+
     await docRef.set(data, SetOptions(merge: true));
   }
 
@@ -350,13 +358,20 @@ class AuthService {
   }
 
   // Sign in with Apple credentials in Firebase Auth and ensure user document
-  Future<UserCredential> signInWithApple(String idToken, String? rawNonce) async {
+  Future<UserCredential> signInWithApple({
+    required String idToken,
+    required String rawNonce,
+    String? accessToken,
+    String? firstName,
+    String? lastName,
+  }) async {
     final credential = OAuthProvider('apple.com').credential(
       idToken: idToken,
       rawNonce: rawNonce,
+      accessToken: accessToken,
     );
     final userCred = await _auth.signInWithCredential(credential);
-    await _ensureUserDocument(userCred.user);
+    await _ensureUserDocument(userCred.user, firstName: firstName, lastName: lastName);
     return userCred;
   }
 
@@ -371,35 +386,56 @@ class AuthService {
         monday1.day == monday2.day;
   }
 
+  String _cleanStringForSearch(String input) {
+    var str = input.toLowerCase().trim();
+    const diacritics = {
+      'á': 'a', 'č': 'c', 'ď': 'd', 'é': 'e', 'ě': 'e', 'í': 'i', 'ň': 'n', 
+      'ó': 'o', 'ř': 'r', 'š': 's', 'ť': 't', 'ú': 'u', 'ů': 'u', 'ý': 'y', 'ž': 'z'
+    };
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      final char = str[i];
+      buffer.write(diacritics[char] ?? char);
+    }
+    return buffer.toString().replaceAll('#', '');
+  }
+
   // Ensures user document exists in Firestore with a valid friend_code and username
-  Future<void> _ensureUserDocument(User? user) async {
+  Future<void> _ensureUserDocument(User? user, {String? firstName, String? lastName}) async {
     if (user == null) return;
     final docRef = _firestore.collection('users').doc(user.uid);
     final doc = await docRef.get();
     final data = doc.data();
-    if (!doc.exists || data == null || data['username'] == null || data['friend_code'] == null) {
-      final emailName = user.email != null ? user.email!.split('@')[0] : 'user';
-      final cleanedName = emailName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-      final username = cleanedName.isNotEmpty ? cleanedName : 'user';
-      
-      final friendCode = '#${username.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}';
-      
-      await docRef.set({
-        'email': user.email,
-        'username': data?['username'] ?? username,
-        'friend_code': data?['friend_code'] ?? friendCode,
-        'first_name': data?['first_name'] ?? (user.displayName != null ? user.displayName!.split(' ').first : ''),
-        'last_name': data?['last_name'] ?? (user.displayName != null && user.displayName!.split(' ').length > 1 
-            ? user.displayName!.split(' ').sublist(1).join(' ') 
-            : ''),
-        'registration_date': data?['registration_date'] ?? FieldValue.serverTimestamp(),
-        'strikes': data?['strikes'] ?? 0,
-        'limetky': data?['limetky'] ?? 0,
-        'totalDistance': data?['totalDistance'] ?? 0.0,
-        'weeklyDistance': data?['weeklyDistance'] ?? 0.0,
-        'monthlyDistance': data?['monthlyDistance'] ?? 0.0,
-      }, SetOptions(merge: true));
-    }
+    
+    final emailName = user.email != null ? user.email!.split('@')[0] : 'user';
+    final cleanedName = emailName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    final username = cleanedName.isNotEmpty ? cleanedName : 'user';
+    
+    final friendCode = '#${username.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}';
+    
+    final finalUsername = data?['username'] ?? username;
+    final finalFriendCode = data?['friend_code'] ?? friendCode;
+    
+    final finalFirstName = data?['first_name'] ?? firstName ?? (user.displayName != null ? user.displayName!.split(' ').first : '');
+    final finalLastName = data?['last_name'] ?? lastName ?? (user.displayName != null && user.displayName!.split(' ').length > 1 
+        ? user.displayName!.split(' ').sublist(1).join(' ') 
+        : '');
+
+    await docRef.set({
+      'email': user.email,
+      'username': finalUsername,
+      'username_clean': _cleanStringForSearch(finalUsername),
+      'friend_code': finalFriendCode,
+      'friend_code_clean': _cleanStringForSearch(finalFriendCode),
+      'first_name': finalFirstName,
+      'last_name': finalLastName,
+      'registration_date': data?['registration_date'] ?? FieldValue.serverTimestamp(),
+      'strikes': data?['strikes'] ?? 0,
+      'limetky': data?['limetky'] ?? 0,
+      'totalDistance': data?['totalDistance'] ?? 0.0,
+      'weeklyDistance': data?['weeklyDistance'] ?? 0.0,
+      'monthlyDistance': data?['monthlyDistance'] ?? 0.0,
+    }, SetOptions(merge: true));
   }
 
   Future<bool> isProfileCompleted() async {

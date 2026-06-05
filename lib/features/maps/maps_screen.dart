@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -206,15 +207,13 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadCompanionIcon(String companionId) async {
-    final imagePath = 'assets/images/$companionId.png';
     try {
-      final bitmapDescriptor = await BitmapDescriptor.asset(
-        createLocalImageConfiguration(context),
-        imagePath,
-      );
+      final ByteData data = await rootBundle.load('assets/images/$companionId.png');
+      final bytes = data.buffer.asUint8List();
+      final circularIcon = await _getCircularMarker(bytes, 100, const Color(0xFFBFFF00));
       if (!mounted) return;
       setState(() {
-        _companionIcon = bitmapDescriptor;
+        _companionIcon = circularIcon;
       });
     } catch (e) {
       debugPrint('Failed to load companion icon: $e');
@@ -490,12 +489,102 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _createAvatarIcon(String avatar) async {
-    final imagePath = 'assets/images/$avatar.png';
-    final bitmapDescriptor = await BitmapDescriptor.asset(createLocalImageConfiguration(context), imagePath);
-    if (!mounted) return;
-    setState(() {
-      _avatarIcon = bitmapDescriptor;
-    });
+    try {
+      Uint8List bytes;
+      if (avatar.startsWith('base64:')) {
+        bytes = base64Decode(avatar.substring(7));
+      } else {
+        final ByteData data = await rootBundle.load('assets/images/$avatar.png');
+        bytes = data.buffer.asUint8List();
+      }
+      final circularIcon = await _getCircularMarker(bytes, 120, Colors.lightBlue);
+      if (!mounted) return;
+      setState(() {
+        _avatarIcon = circularIcon;
+      });
+    } catch (e) {
+      debugPrint('Failed to create circular avatar icon: $e');
+    }
+  }
+
+  Future<ui.Image> _loadUiImage(String assetPath) async {
+    final ByteData data = await rootBundle.load(assetPath);
+    final ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+    final ui.FrameInfo fi = await codec.getNextFrame();
+    return fi.image;
+  }
+
+  Future<BitmapDescriptor> _getCircularMarker(Uint8List bytes, int size, Color borderColor) async {
+    try {
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        bytes,
+        targetWidth: size,
+        targetHeight: size,
+      );
+      final ui.FrameInfo fi = await codec.getNextFrame();
+      final ui.Image image = fi.image;
+
+      final ui.PictureRecorder recorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(recorder, Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()));
+      final Paint paint = Paint()..isAntiAlias = true;
+
+      final double radius = size / 2.0;
+
+      // 1. Draw soft shadow
+      canvas.drawCircle(
+        Offset(radius, radius),
+        radius - 2,
+        Paint()
+          ..color = Colors.black26
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      );
+
+      // 2. Draw solid border background
+      canvas.drawCircle(
+        Offset(radius, radius),
+        radius - 2,
+        Paint()
+          ..color = borderColor
+          ..style = PaintingStyle.fill,
+      );
+
+      // 3. Clip path to make the image circular inside the border
+      final Path clipPath = Path()..addOval(Rect.fromCircle(center: Offset(radius, radius), radius: radius - 6));
+      canvas.save();
+      canvas.clipPath(clipPath);
+
+      // 4. Draw image inside clipped area
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        Rect.fromLTWH(6, 6, size.toDouble() - 12, size.toDouble() - 12),
+        paint,
+      );
+      
+      canvas.restore();
+
+      final ui.Picture picture = recorder.endRecording();
+      final ui.Image markerImage = await picture.toImage(size, size);
+      final ByteData? byteData = await markerImage.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) throw Exception('Failed to serialize image');
+      
+      // Determine device pixel ratio for correct scaling on high-res displays
+      double pixelRatio = 1.0;
+      if (mounted) {
+        pixelRatio = MediaQuery.of(context).devicePixelRatio;
+      } else {
+        pixelRatio = ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
+      }
+
+      return BitmapDescriptor.bytes(
+        byteData.buffer.asUint8List(),
+        imagePixelRatio: pixelRatio,
+      );
+    } catch (e) {
+      debugPrint('Error creating circular marker: $e');
+      // Fallback
+      return BitmapDescriptor.defaultMarker;
+    }
   }
 
   Future<void> _setupMap() async {

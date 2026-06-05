@@ -156,6 +156,20 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
     }
   }
 
+  String _cleanStringForSearch(String input) {
+    var str = input.toLowerCase().trim();
+    const diacritics = {
+      'á': 'a', 'č': 'c', 'ď': 'd', 'é': 'e', 'ě': 'e', 'í': 'i', 'ň': 'n', 
+      'ó': 'o', 'ř': 'r', 'š': 's', 'ť': 't', 'ú': 'u', 'ů': 'u', 'ý': 'y', 'ž': 'z'
+    };
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      final char = str[i];
+      buffer.write(diacritics[char] ?? char);
+    }
+    return buffer.toString().replaceAll('#', '');
+  }
+
   Future<void> _connectFriend(String code) async {
     String searchCode = code.trim();
     if (searchCode.isEmpty) return;
@@ -183,15 +197,30 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
         throw Exception('Nemůžeš přidat sám sebe.');
       }
 
-      // 2. Query target user document by friend_code or username (with multiple casing fallbacks)
-      QuerySnapshot query;
-      
-      // Try querying by friend_code (with # prepended)
-      query = await _firestore
+      // 2. Query target user document by clean fields
+      final cleanInput = _cleanStringForSearch(searchCode);
+      QuerySnapshot query = await _firestore
           .collection('users')
-          .where('friend_code', isEqualTo: targetCode)
+          .where('friend_code_clean', isEqualTo: cleanInput)
           .limit(1)
           .get();
+
+      if (query.docs.isEmpty) {
+        query = await _firestore
+            .collection('users')
+            .where('username_clean', isEqualTo: cleanInput)
+            .limit(1)
+            .get();
+      }
+
+      // Backward compatibility fallbacks if clean fields are not populated
+      if (query.docs.isEmpty) {
+        query = await _firestore
+            .collection('users')
+            .where('friend_code', isEqualTo: targetCode)
+            .limit(1)
+            .get();
+      }
 
       // If not found, try querying by exact username
       if (query.docs.isEmpty) {

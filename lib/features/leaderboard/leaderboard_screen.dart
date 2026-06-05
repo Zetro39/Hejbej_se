@@ -27,6 +27,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     super.dispose();
   }
 
+  String _cleanStringForSearch(String input) {
+    var str = input.toLowerCase().trim();
+    const diacritics = {
+      'á': 'a', 'č': 'c', 'ď': 'd', 'é': 'e', 'ě': 'e', 'í': 'i', 'ň': 'n', 
+      'ó': 'o', 'ř': 'r', 'š': 's', 'ť': 't', 'ú': 'u', 'ů': 'u', 'ý': 'y', 'ž': 'z'
+    };
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      final char = str[i];
+      buffer.write(diacritics[char] ?? char);
+    }
+    return buffer.toString().replaceAll('#', '');
+  }
+
   // Task 1: Search users in Firestore by username or friend_code
   Future<void> _searchUser() async {
     final queryText = _searchController.text.trim();
@@ -43,26 +57,46 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
       if (currentUser == null) throw Exception('Uživatel není přihlášen');
 
       QuerySnapshot query;
-      if (queryText.startsWith('#')) {
-        query = await _firestore
-            .collection('users')
-            .where('friend_code', isEqualTo: queryText.toUpperCase())
-            .limit(1)
-            .get();
-      } else {
-        query = await _firestore
-            .collection('users')
-            .where('username', isEqualTo: queryText.toLowerCase())
-            .limit(1)
-            .get();
+      final cleanInput = _cleanStringForSearch(queryText);
 
-        if (query.docs.isEmpty) {
-          // Try searching friend code with added hashtag
+      // Try querying by clean fields first
+      query = await _firestore
+          .collection('users')
+          .where('friend_code_clean', isEqualTo: cleanInput)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) {
+        query = await _firestore
+            .collection('users')
+            .where('username_clean', isEqualTo: cleanInput)
+            .limit(1)
+            .get();
+      }
+
+      // Backward compatibility fallbacks
+      if (query.docs.isEmpty) {
+        if (queryText.startsWith('#')) {
           query = await _firestore
               .collection('users')
-              .where('friend_code', isEqualTo: '#${queryText.toUpperCase()}')
+              .where('friend_code', isEqualTo: queryText.toUpperCase())
               .limit(1)
               .get();
+        } else {
+          query = await _firestore
+              .collection('users')
+              .where('username', isEqualTo: queryText.toLowerCase())
+              .limit(1)
+              .get();
+
+          if (query.docs.isEmpty) {
+            // Try searching friend code with added hashtag
+            query = await _firestore
+                .collection('users')
+                .where('friend_code', isEqualTo: '#${queryText.toUpperCase()}')
+                .limit(1)
+                .get();
+          }
         }
       }
 
