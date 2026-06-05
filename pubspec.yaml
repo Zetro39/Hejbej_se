@@ -1,13 +1,15 @@
 name: hejbej_se
 description: Hejbej se – trasy v ČR s gamifikací.
 publish_to: "none"
-version: 1.2.3+51
+version: 1.2.3+52
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
   geolocator: ^13.0.0
   pedometer: ^4.0.0
