@@ -422,7 +422,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _getFriendsListStream(),
                 builder: (context, friendsSnapshot) {
-                  if (friendsSnapshot.connectionState == ConnectionState.waiting) {
+                  if (!friendsSnapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
@@ -435,7 +435,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                   return StreamBuilder<List<DocumentSnapshot>>(
                     stream: _getLeaderboardUsersStream(friendUids),
                     builder: (context, usersSnapshot) {
-                      if (usersSnapshot.connectionState == ConnectionState.waiting) {
+                      if (!usersSnapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
 

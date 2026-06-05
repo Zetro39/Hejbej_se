@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'main_shell.dart';
@@ -63,9 +64,17 @@ class _LoginScreenState extends State<LoginScreen> {
     AuthService().signInWithEmail(email, password).then((cred) async {
       final user = cred.user;
       if (user != null) {
-        await AuthService().saveUserName(user.email ?? '');
+        String name = user.email ?? '';
+        try {
+          final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+          if (doc.exists && doc.data()?['username'] != null) {
+            name = doc.data()?['username'] as String;
+          }
+        } catch (_) {}
+        await AuthService().saveUserName(name);
+        await AuthService().syncFirestoreToLocal();
         if (!mounted) return;
-        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: user.email ?? '')));
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: name)));
       }
     }).catchError((e) {
       if (!mounted) return;

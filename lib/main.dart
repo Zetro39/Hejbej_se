@@ -30,6 +30,14 @@ void main() async {
     }
   }
 
+  try {
+    await AuthService().syncFirestoreToLocal();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('AuthService sync error: $e');
+    }
+  }
+
   // Check if avatar is selected
   String? selectedAvatar;
   try {

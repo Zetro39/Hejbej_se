@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -67,11 +68,11 @@ class AuthService {
   // Authentication methods using Firebase
   Future<UserCredential> registerWithEmail(String email, String password) async {
     final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-    try {
-      await cred.user?.sendEmailVerification();
-    } catch (e) {
+    
+    // Do not await email verification to prevent registration from hanging on slow SMTP networks
+    cred.user?.sendEmailVerification().catchError((e) {
       if (kDebugMode) debugPrint('Failed to send email verification: $e');
-    }
+    });
 
     // Create basic user document with registration timestamp and default stats
     final uid = cred.user?.uid;
@@ -90,6 +91,7 @@ class AuthService {
 
   Future<UserCredential> signInWithEmail(String email, String password) async {
     final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
+    await _ensureUserDocument(cred.user);
     return cred;
   }
 
@@ -161,6 +163,61 @@ class AuthService {
     }
   }
 
+  Future<void> updateDistanceLocal(double totalDistance, double weeklyDistance, double monthlyDistance, int limetky) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final docRef = _firestore.collection('users').doc(user.uid);
+    try {
+      await docRef.set({
+        'totalDistance': totalDistance,
+        'weeklyDistance': weeklyDistance,
+        'monthlyDistance': monthlyDistance,
+        'limetky': limetky,
+        'lastDistanceUpdate': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Failed to sync distance to Firestore: $e');
+    }
+  }
+
+  Future<void> syncFirestoreToLocal() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        final data = doc.data() ?? {};
+        final prefs = await SharedPreferences.getInstance();
+        
+        if (data['totalDistance'] != null) {
+          await prefs.setDouble('totalDistance', (data['totalDistance'] as num).toDouble());
+        }
+        if (data['weeklyDistance'] != null) {
+          await prefs.setDouble('weeklyDistance', (data['weeklyDistance'] as num).toDouble());
+        }
+        if (data['monthlyDistance'] != null) {
+          await prefs.setDouble('monthlyDistance', (data['monthlyDistance'] as num).toDouble());
+        }
+        if (data['limetky'] != null) {
+          await prefs.setInt('limetkyBalance', (data['limetky'] as num).toInt());
+        }
+        if (data['streak'] != null) {
+          await prefs.setInt('streak', (data['streak'] as num).toInt());
+        }
+        if (data['username'] != null) {
+          await saveUserName(data['username'] as String);
+        }
+        if (data['lastDistanceUpdate'] != null) {
+          final lastUpdateTs = data['lastDistanceUpdate'] as Timestamp;
+          await prefs.setString('lastDistanceUpdate', lastUpdateTs.toDate().toIso8601String());
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Failed to sync Firestore to local: $e');
+    }
+  }
+
   // Sync streak to Firestore
   Future<void> updateStreak(int streak) async {
     final user = _auth.currentUser;
@@ -210,7 +267,8 @@ class AuthService {
     if (user == null) return;
     final docRef = _firestore.collection('users').doc(user.uid);
     final doc = await docRef.get();
-    if (!doc.exists) {
+    final data = doc.data();
+    if (!doc.exists || data == null || data['username'] == null || data['friend_code'] == null) {
       final emailName = user.email != null ? user.email!.split('@')[0] : 'user';
       final cleanedName = emailName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
       final username = cleanedName.isNotEmpty ? cleanedName : 'user';
@@ -219,18 +277,18 @@ class AuthService {
       
       await docRef.set({
         'email': user.email,
-        'username': username,
-        'friend_code': friendCode,
-        'first_name': user.displayName != null ? user.displayName!.split(' ').first : '',
-        'last_name': user.displayName != null && user.displayName!.split(' ').length > 1 
+        'username': data?['username'] ?? username,
+        'friend_code': data?['friend_code'] ?? friendCode,
+        'first_name': data?['first_name'] ?? (user.displayName != null ? user.displayName!.split(' ').first : ''),
+        'last_name': data?['last_name'] ?? (user.displayName != null && user.displayName!.split(' ').length > 1 
             ? user.displayName!.split(' ').sublist(1).join(' ') 
-            : '',
-        'registration_date': FieldValue.serverTimestamp(),
-        'strikes': 0,
-        'limetky': 0,
-        'totalDistance': 0.0,
-        'weeklyDistance': 0.0,
-        'monthlyDistance': 0.0,
+            : ''),
+        'registration_date': data?['registration_date'] ?? FieldValue.serverTimestamp(),
+        'strikes': data?['strikes'] ?? 0,
+        'limetky': data?['limetky'] ?? 0,
+        'totalDistance': data?['totalDistance'] ?? 0.0,
+        'weeklyDistance': data?['weeklyDistance'] ?? 0.0,
+        'monthlyDistance': data?['monthlyDistance'] ?? 0.0,
       }, SetOptions(merge: true));
     }
   }

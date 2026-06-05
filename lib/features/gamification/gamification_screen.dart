@@ -71,7 +71,7 @@ class _GameScreenState extends State<GameScreen> {
                           .where('participants', arrayContains: currentUser.uid)
                           .snapshots(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
+                        if (!snapshot.hasData) {
                           return const Center(child: Padding(
                             padding: EdgeInsets.all(24.0),
                             child: CircularProgressIndicator(),
