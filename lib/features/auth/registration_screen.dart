@@ -79,10 +79,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         'updated_at': FieldValue.serverTimestamp(),
       };
       await AuthService().saveProfile(user.uid, profile);
+      await AuthService().saveUserName(username);
 
-      // Go to email verification waiting screen
+      // Go directly to MainShell
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => EmailVerificationWaiting(user: user)));
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: username)));
     } on FirebaseAuthException catch (e) {
       setState(() {
         _error = e.code == 'weak-password'

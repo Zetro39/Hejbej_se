@@ -100,37 +100,7 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
 
   Future<bool> isBlockedDueToUnverified() async {
-    final user = _auth.currentUser;
-    if (user == null) return false;
-    await user.reload();
-    final verified = user.emailVerified;
-
-    if (verified) {
-      // Ensure Firestore reflects verification
-      await _firestore.collection('users').doc(user.uid).set({'emailVerified': true}, SetOptions(merge: true));
-      return false;
-    }
-
-    // Fetch registration date from Firestore
-    final doc = await _firestore.collection('users').doc(user.uid).get();
-    if (!doc.exists) return false;
-    final ts = doc.data()?['registration_date'];
-    if (ts == null) return false;
-
-    DateTime regDate;
-    if (ts is Timestamp) {
-      regDate = ts.toDate();
-    } else if (ts is DateTime) {
-      regDate = ts;
-    } else {
-      return false;
-    }
-
-    final diff = DateTime.now().difference(regDate);
-    if (diff.inHours >= 1 && !verified) {
-      return true; // blocked
-    }
-    return false;
+    return false; // Email verification bypass for smoother testing & onboarding
   }
 
   Future<void> saveProfile(String uid, Map<String, dynamic> profile) async {
