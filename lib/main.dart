@@ -10,7 +10,7 @@ import 'services/auth_service.dart';
 import 'features/profile/profile_creation_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_options.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
