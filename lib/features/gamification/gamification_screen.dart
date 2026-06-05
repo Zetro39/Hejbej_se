@@ -14,13 +14,28 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  int? _userAge;
 
   @override
   void initState() {
     super.initState();
+    _loadUserAge();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showWidgetPromoIfNeeded();
     });
+  }
+
+  Future<void> _loadUserAge() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _userAge = doc.data()?['age'] as int?;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _showWidgetPromoIfNeeded() async {
@@ -357,6 +372,9 @@ class _GameScreenState extends State<GameScreen> {
                     // Steps Card (from template)
                     _buildStepsCard(),
                     const SizedBox(height: 24),
+
+                    // Special Games (e.g. Tour de Bear 18+)
+                    _buildSpecialGamesSection(),
 
                     // Friend Activity Feed
                     _buildFriendActivityFeed(currentUser.uid),
@@ -1060,6 +1078,123 @@ class _GameScreenState extends State<GameScreen> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildSpecialGamesSection() {
+    final show18Plus = _userAge != null && _userAge! >= 18;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Speciální výpravy & hry',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 145,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              _buildSpecialGameCard(
+                title: 'Zámecká stezka',
+                description: 'Objev historické zámky a parky ve svém okolí.',
+                icon: Icons.fort,
+                color: Colors.amber.shade50,
+                iconColor: Colors.amber.shade700,
+                is18Plus: false,
+              ),
+              const SizedBox(width: 12),
+              _buildSpecialGameCard(
+                title: 'Krakonošův okruh',
+                description: 'Náročný výšlap horskou přírodou za bájným pánem hor.',
+                icon: Icons.landscape,
+                color: Colors.green.shade50,
+                iconColor: Colors.green.shade700,
+                is18Plus: false,
+              ),
+              if (show18Plus) ...[
+                const SizedBox(width: 12),
+                _buildSpecialGameCard(
+                  title: 'Tour de Bear (18+)',
+                  description: 'Chmelový okruh po lokálních hospůdkách a pivovarech.',
+                  icon: Icons.sports_bar,
+                  color: Colors.red.shade50,
+                  iconColor: Colors.red.shade700,
+                  is18Plus: true,
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildSpecialGameCard({
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color color,
+    required Color iconColor,
+    required bool is18Plus,
+  }) {
+    return Container(
+      width: 210,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: iconColor.withOpacity(0.2), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: iconColor, size: 28),
+              if (is18Plus)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade700,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    '18+',
+                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+            ],
+          ),
+          const Spacer(),
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            description,
+            style: const TextStyle(fontSize: 10, color: Colors.black54),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 }

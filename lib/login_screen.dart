@@ -227,7 +227,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 obscureText: true,
               ),
               const SizedBox(height: 32),
-              // Email/password sign-in button moved above social
+              // Email/password sign-in button
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -251,69 +251,104 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              // Social login buttons
+              const SizedBox(height: 24),
+              // Social login buttons next to each other as rounded squares
               Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                        onPressed: _signInWithGoogle,
-                      icon: const Icon(Icons.login, color: Colors.black),
-                      label: const Text('Přihlásit se přes Google'),
-                      style: ButtonStyle(
-                        backgroundColor: WidgetStateProperty.all(Colors.white),
-                        foregroundColor: WidgetStateProperty.all(Colors.black),
+                  _buildSocialButton(
+                    child: const Text(
+                      'G',
+                      style: TextStyle(
+                        fontFamily: 'Roboto',
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.redAccent,
                       ),
                     ),
+                    onTap: _showSocialLoginNotice,
+                  ),
+                  const SizedBox(width: 20),
+                  _buildSocialButton(
+                    child: const Icon(
+                      Icons.apple,
+                      size: 28,
+                      color: Colors.black,
+                    ),
+                    onTap: _showSocialLoginNotice,
+                  ),
+                  const SizedBox(width: 20),
+                  _buildSocialButton(
+                    child: Icon(
+                      Icons.facebook,
+                      size: 28,
+                      color: Colors.blue.shade800,
+                    ),
+                    onTap: _showSocialLoginNotice,
                   ),
                 ],
               ),
+              const Spacer(),
+              // Flat borderless register button at the bottom
+              TextButton(
+                onPressed: _onRegisterPressed,
+                child: const Text(
+                  'Registrovat se',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.lightBlue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
-              if (Platform.isIOS)
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: SignInWithAppleButton(
-                    onPressed: _signInWithApple,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              if (Platform.isIOS) const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _onLoginPressed,
-                  style: ButtonStyle(
-                    backgroundColor: WidgetStateProperty.all(Colors.lime),
-                    foregroundColor: WidgetStateProperty.all(Colors.black),
-                    shape: WidgetStateProperty.all(
-                      RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                  child: const Text(
-                    'VSTOUPIT DO HRY',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton(
-                  onPressed: _onRegisterPressed,
-                  child: const Text('Registrovat se'),
-                ),
-              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showSocialLoginNotice() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Přihlášení'),
+        content: const Text(
+          'Tato možnost přihlášení bude brzy dostupná. Nyní prosím použijte přihlášení přes E-mail a Heslo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Rozumím'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSocialButton({required Widget child, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.grey.shade300,
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Center(child: child),
       ),
     );
   }

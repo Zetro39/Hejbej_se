@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../achievements/achievements_screen.dart';
 import '../../login_screen.dart';
@@ -79,6 +81,141 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _selectedAvatar = prefs.getString('selected_avatar');
     });
+  }
+
+  Future<void> _changeAvatar() async {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Změnit profilový obrázek',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.photo_library, color: Colors.lightBlue),
+                  title: const Text('Vybrat z galerie'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickCustomAvatar();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.face, color: Colors.lightBlue),
+                  title: const Text('Vybrat přednastaveného avatara'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showPresetsDialog();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickCustomAvatar() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 150,
+        maxHeight: 150,
+        imageQuality: 80,
+      );
+      if (image == null) return;
+      final bytes = await image.readAsBytes();
+      final base64String = base64Encode(bytes);
+      final avatarId = 'base64:$base64String';
+      
+      await _updateAvatarStateAndDatabase(avatarId);
+    } catch (e) {
+      debugPrint('Failed to pick image: $e');
+    }
+  }
+
+  void _showPresetsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Přednastavení avataři'),
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context);
+                    _updateAvatarStateAndDatabase('boy');
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset('assets/images/boy.png', height: 80, width: 80, fit: BoxFit.cover),
+                      const SizedBox(height: 8),
+                      const Text('Chlapec'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context);
+                    _updateAvatarStateAndDatabase('girl');
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset('assets/images/girl.png', height: 80, width: 80, fit: BoxFit.cover),
+                      const SizedBox(height: 8),
+                      const Text('Dívka'),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _updateAvatarStateAndDatabase(String avatarId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('selected_avatar', avatarId);
+    
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'selected_avatar': avatarId,
+        });
+      } catch (_) {}
+    }
+    
+    setState(() {
+      _selectedAvatar = avatarId;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profilový obrázek byl změněn.')),
+      );
+    }
   }
 
   Future<void> _saveData() async {
@@ -189,22 +326,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 20),
-                CircleAvatar(
-                  radius: 70,
-                  backgroundColor: Colors.lightBlue.shade50,
-                  child: ClipOval(
-                    child: _selectedAvatar != null
-                        ? Image.asset(
-                            'assets/images/${_selectedAvatar!}.png',
-                            fit: BoxFit.cover,
-                            width: 130,
-                            height: 130,
-                          )
-                        : const Icon(
-                            Icons.person,
-                            size: 100,
-                            color: Colors.lightBlue,
-                          ),
+                 GestureDetector(
+                  onTap: _changeAvatar,
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 70,
+                        backgroundColor: Colors.lightBlue.shade50,
+                        child: ClipOval(
+                          child: _selectedAvatar != null
+                              ? (_selectedAvatar!.startsWith('base64:')
+                                  ? Image.memory(
+                                      base64Decode(_selectedAvatar!.substring(7)),
+                                      fit: BoxFit.cover,
+                                      width: 130,
+                                      height: 130,
+                                    )
+                                  : Image.asset(
+                                      'assets/images/$_selectedAvatar.png',
+                                      fit: BoxFit.cover,
+                                      width: 130,
+                                      height: 130,
+                                    ))
+                              : const Icon(
+                                  Icons.person,
+                                  size: 100,
+                                  color: Colors.lightBlue,
+                                ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 4,
+                        child: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: Colors.lime,
+                          foregroundColor: Colors.black,
+                          child: const Icon(Icons.edit, size: 18),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -352,7 +513,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'v1.2.3+41',
+                  'v1.2.3+45',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                 ),
                 const SizedBox(height: 20),

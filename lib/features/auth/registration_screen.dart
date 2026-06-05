@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +22,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _confirm = TextEditingController();
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
-  final _age = TextEditingController();
   final _username = TextEditingController();
   bool _isSubmitting = false;
   String? _error;
@@ -33,7 +33,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _confirm.dispose();
     _firstName.dispose();
     _lastName.dispose();
-    _age.dispose();
     _username.dispose();
     super.dispose();
   }
@@ -72,7 +71,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
       final email = _email.text.trim();
       final password = _password.text;
-      final cred = await AuthService().registerWithEmail(email, password);
+      
+      final cred = await AuthService().registerWithEmail(email, password)
+          .timeout(const Duration(seconds: 12), onTimeout: () => throw TimeoutException('Registrace účtu vypršela. Zkontrolujte připojení k internetu.'));
+      
       final user = cred.user;
       if (user == null) throw Exception('Registrace selhala');
 
@@ -81,17 +83,25 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         'first_name': _firstName.text.trim(),
         'last_name': _lastName.text.trim(),
         'username': username,
-        'age': int.tryParse(_age.text) ?? null,
         'friend_code': '#${username.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}',
         'updated_at': FieldValue.serverTimestamp(),
       };
-      // Save profile basics (blocking so we catch database errors)
-      await AuthService().saveProfile(user.uid, profile);
-      await AuthService().saveUserName(username);
+      
+      // Save profile basics (blocking so we catch database errors) with timeout
+      await AuthService().saveProfile(user.uid, profile)
+          .timeout(const Duration(seconds: 10), onTimeout: () => throw TimeoutException('Uložení základního profilu do databáze vypršelo.'));
+          
+      await AuthService().saveUserName(username)
+          .timeout(const Duration(seconds: 6), onTimeout: () => throw TimeoutException('Uložení přihlašovacího jména do úložiště vypršelo.'));
 
-      // Go directly to MainShell
+      // Go to Profile Complete / Setup Screen
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: username)));
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const ProfileCreationScreen()));
+    } on TimeoutException catch (e) {
+      setState(() {
+        _error = e.message;
+        _isSubmitting = false;
+      });
     } on FirebaseAuthException catch (e) {
       setState(() {
         _error = e.code == 'weak-password'
@@ -152,13 +162,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   decoration: const InputDecoration(labelText: 'Příjmení'),
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Vyplňte příjmení' : null,
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _age,
-                  decoration: const InputDecoration(labelText: 'Věk'),
-                  keyboardType: TextInputType.number,
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Vyplňte věk' : null,
-                ),
+
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _username,

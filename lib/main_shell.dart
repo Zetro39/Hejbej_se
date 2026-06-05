@@ -19,7 +19,7 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  int _index = 0;
+  int _index = 2;
   bool _blocked = false;
   Timer? _verifyTimer;
 
@@ -100,10 +100,10 @@ class _MainShellState extends State<MainShell> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _NavButton(icon: Icons.emoji_events, label: 'Hry', index: 0, selected: _index == 0, onTap: () => setState(() => _index = 0)),
-                _NavButton(icon: Icons.person, label: 'Profil', index: 1, selected: _index == 1, onTap: () => setState(() => _index = 1)),
+                _NavButton(icon: Icons.leaderboard, label: 'Žebříček', index: 3, selected: _index == 3, onTap: () => setState(() => _index = 3)),
                 const SizedBox(width: 56), // space for FAB
-                _NavButton(icon: Icons.leaderboard, label: 'Leaderboard', index: 3, selected: _index == 3, onTap: () => setState(() => _index = 3)),
                 _NavButton(icon: Icons.shopping_bag, label: 'Obchod', index: 4, selected: _index == 4, onTap: () => setState(() => _index = 4)),
+                _NavButton(icon: Icons.person, label: 'Profil', index: 1, selected: _index == 1, onTap: () => setState(() => _index = 1)),
               ],
             ),
           ),

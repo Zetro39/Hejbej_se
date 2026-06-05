@@ -15,6 +15,7 @@ import '../../services/location_service.dart';
 import '../../services/auth_service.dart';
 import 'package:pay/pay.dart';
 import 'ar_navigation_screen.dart';
+import 'route_selection_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -50,6 +51,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   final Set<Marker> _markers = {};
   final List<LatLng> _polylineCoordinates = [];
   final List<LatLng> _breadcrumbsCoordinates = [];
+  List<LatLng> _activeRoutePoints = [];
 
   BitmapDescriptor? _avatarIcon;
   bool _usingBike = false;
@@ -533,6 +535,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       // plot route but don't start tracking until explicit START
       _routePlotted = true;
       _routeActive = false;
+      _activeRoutePoints = points;
       _selectedRouteSuggestionIndex = index;
       _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
       _polylines.add(polyline);
@@ -633,6 +636,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       // plot destination route but wait for explicit START
       _routePlotted = true;
       _routeActive = false;
+      _activeRoutePoints = routePoints;
       _destinationPoint = destination;
       _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
       _polylines.add(polyline);
@@ -1155,14 +1159,63 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 ),
                 title: const Text('Okruh v okolí'),
                 subtitle: const Text('Najděte snadné okruhy start-cíl ve vašem dosahu'),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  setState(() {
-                    _showRouteSearch = false;
-                    _showRouteSuggestions = true;
-                    _isSelectingDestination = false;
-                  });
-                  _generateNearbyRoutes();
+                  if (_lastPosition == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Čeká se na získání GPS polohy...')),
+                    );
+                    return;
+                  }
+                  
+                  final result = await Navigator.of(context).push<Map<String, dynamic>>(
+                    MaterialPageRoute(
+                      builder: (context) => RouteSelectionScreen(
+                        startLocation: LatLng(_lastPosition!.latitude, _lastPosition!.longitude),
+                        isBikeDefault: _usingBike,
+                      ),
+                    ),
+                  );
+
+                  if (result != null) {
+                    final points = result['points'] as List<LatLng>;
+                    final title = result['title'] as String;
+                    final distance = result['distance'] as double;
+                    final eta = result['eta'] as int;
+
+                    final polyline = Polyline(
+                      polylineId: const PolylineId('active_route'),
+                      color: _usingBike ? Colors.blue : Colors.green,
+                      width: 5,
+                      points: points,
+                      geodesic: true,
+                    );
+
+                    setState(() {
+                      _activeRoutePoints = points;
+                      _routePlotted = true;
+                      _routeActive = false;
+                      _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+                      _polylines.add(polyline);
+                      _destinationPoint = points.last;
+                      
+                      _routeSuggestions = [
+                        {
+                          'title': title,
+                          'coordinates': points,
+                          'distance': distance,
+                          'eta': eta,
+                          'poi_count': 0,
+                        }
+                      ];
+                      _selectedRouteSuggestionIndex = 0;
+                      _showRouteSuggestions = true;
+                      _showRouteSearch = false;
+                      _taskCardExpanded = false;
+                    });
+
+                    _fitMapBounds(points);
+                  }
                 },
               ),
               ListTile(
@@ -1636,7 +1689,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   }
 
   void _onArPressed() {
-    if (_polylineCoordinates.isEmpty) {
+    if (_activeRoutePoints.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Nejprve vyberte nebo zapněte trasu na mapě.')),
       );
@@ -1653,7 +1706,33 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   void _openArNavigation() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => ArNavigationScreen(routePoints: _polylineCoordinates),
+        builder: (context) => ArNavigationScreen(routePoints: _activeRoutePoints),
+      ),
+    );
+  }
+
+  void _fitMapBounds(List<LatLng> points) {
+    if (_mapController == null || points.isEmpty) return;
+    
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLon = points.first.longitude;
+    double maxLon = points.first.longitude;
+
+    for (final point in points) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLon) minLon = point.longitude;
+      if (point.longitude > maxLon) maxLon = point.longitude;
+    }
+
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(minLat - 0.001, minLon - 0.001),
+          northeast: LatLng(maxLat + 0.001, maxLon + 0.001),
+        ),
+        50.0,
       ),
     );
   }
@@ -1834,7 +1913,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         ),
       );
       
-      if (_polylineCoordinates.isNotEmpty) {
+      if (_activeRoutePoints.isNotEmpty) {
         _openArNavigation();
       }
     }
