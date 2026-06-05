@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
+import 'add_friends_screen.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -255,6 +256,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
       appBar: AppBar(
         title: const Text('ŽEBŘÍČEK A PŘÁTELÉ'),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code),
+            tooltip: 'QR Kód / Přidat přátele',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
+              );
+            },
+          ),
+        ],
       ),
       backgroundColor: Colors.white,
       body: SafeArea(

@@ -39,12 +39,18 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   }
 
   Future<bool> _isUsernameTaken(String username) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .where('username', isEqualTo: username)
-        .limit(1)
-        .get();
-    return snap.docs.isNotEmpty;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 4));
+      return snap.docs.isNotEmpty;
+    } catch (_) {
+      // Fallback on network timeout
+      return false;
+    }
   }
 
   Future<void> _submit() async {
@@ -79,8 +85,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         'friend_code': '#${username.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}',
         'updated_at': FieldValue.serverTimestamp(),
       };
-      await AuthService().saveProfile(user.uid, profile);
-      await AuthService().saveUserName(username);
+      // Save profile basics (non-blocking)
+      AuthService().saveProfile(user.uid, profile);
+      AuthService().saveUserName(username);
 
       // Go directly to MainShell
       if (!mounted) return;

@@ -75,6 +75,8 @@
 	<string>Potřebujeme přístup k pohybovým senzorům pro sledování kroků a tras.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Potřebujeme přístup k fotoaparátu pro zobrazení trasy v rozšířené realitě (AR).</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Potřebujeme přístup k galerii pro nahrání QR kódu přítele.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>
