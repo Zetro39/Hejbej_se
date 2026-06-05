@@ -62,12 +62,32 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
         data: _myFriendCode,
         version: QrVersions.auto,
         color: const Color(0xFF000000),
-        emptyColor: const ui.Color(0xFFFFFFFF),
-        gapless: true,
+        emptyColor: const Color(0xFFFFFFFF),
+        gapless: false,
+        errorCorrectionLevel: QrErrorCorrectLevel.Q,
       );
 
-      final image = await qrPainter.toImage(300);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      // Create a canvas to draw the QR code with a solid white background and padding (quiet zone)
+      const double qrSize = 512.0;
+      const double padding = 64.0;
+      const double canvasSize = qrSize + (padding * 2);
+
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, canvasSize, canvasSize));
+      
+      // 1. Draw solid white background
+      final paint = Paint()..color = const Color(0xFFFFFFFF);
+      canvas.drawRect(const Rect.fromLTWH(0, 0, canvasSize, canvasSize), paint);
+      
+      // 2. Draw the QR code centered
+      canvas.save();
+      canvas.translate(padding, padding);
+      qrPainter.paint(canvas, const Size(qrSize, qrSize));
+      canvas.restore();
+
+      final picture = recorder.endRecording();
+      final img = await picture.toImage(canvasSize.toInt(), canvasSize.toInt());
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return;
       final bytes = byteData.buffer.asUint8List();
 
@@ -129,8 +149,8 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
   }
 
   Future<void> _connectFriend(String code) async {
-    final targetCode = code.trim().toUpperCase();
-    if (targetCode.isEmpty) return;
+    String searchCode = code.trim();
+    if (searchCode.isEmpty) return;
 
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
@@ -144,26 +164,45 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
       final myDoc = await _firestore.collection('users').doc(currentUser.uid).get();
       final myData = myDoc.data() ?? {};
       final currentFriendCode = myData['friend_code'] as String?;
+      final currentUsername = myData['username'] as String?;
 
-      if (currentFriendCode == targetCode) {
+      String targetCode = searchCode.toUpperCase();
+      if (!targetCode.startsWith('#')) {
+        targetCode = '#$targetCode';
+      }
+
+      if (currentFriendCode == targetCode || currentUsername?.toLowerCase() == searchCode.toLowerCase()) {
         throw Exception('Nemůžeš přidat sám sebe.');
       }
 
-      // 2. Query target user document by friend_code
-      final query = await _firestore
+      // 2. Query target user document by friend_code or username
+      QuerySnapshot query;
+      
+      // Try querying by friend_code (with # prepended)
+      query = await _firestore
           .collection('users')
           .where('friend_code', isEqualTo: targetCode)
           .limit(1)
           .get();
 
+      // If not found, try querying by username (lowercase)
       if (query.docs.isEmpty) {
-        throw Exception('Uživatel s tímto kódem nebyl nalezen.');
+        query = await _firestore
+            .collection('users')
+            .where('username', isEqualTo: searchCode.toLowerCase())
+            .limit(1)
+            .get();
+      }
+
+      if (query.docs.isEmpty) {
+        throw Exception('Uživatel s tímto kódem nebo přezdívkou nebyl nalezen.');
       }
 
       final targetDoc = query.docs.first;
       final targetUid = targetDoc.id;
-      final targetData = targetDoc.data();
+      final targetData = targetDoc.data() as Map<String, dynamic>;
       final targetUsername = targetData['username'] ?? 'Uživatel';
+      final resolvedTargetCode = targetData['friend_code'] as String? ?? targetCode;
 
       // 3. Create bidirectional 'friends' relationship instantly
       final batch = _firestore.batch();
@@ -177,7 +216,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
       batch.set(myFriendRef, {
         'uid': targetUid,
         'username': targetUsername,
-        'friend_code': targetCode,
+        'friend_code': resolvedTargetCode,
         'status': 'friends',
         'updatedAt': FieldValue.serverTimestamp(),
       });
