@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:qr_code_dart_decoder/qr_code_dart_decoder.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -110,7 +110,11 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
 
   Future<void> _pickAndDecodeQr() async {
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery);
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+    );
     if (image == null) return;
 
     setState(() {
@@ -118,14 +122,17 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
     });
 
     try {
-      final bytes = await image.readAsBytes();
-      final decoder = QrCodeDartDecoder(formats: [BarcodeFormat.qrCode]);
-      final result = await decoder.decodeFile(bytes);
+      final controller = MobileScannerController();
+      final barcodeCapture = await controller.analyzeImage(image.path);
 
-      if (result != null && result.text.isNotEmpty) {
-        final code = result.text.trim();
-        _codeController.text = code;
-        _connectFriend(code);
+      if (barcodeCapture != null && barcodeCapture.barcodes.isNotEmpty) {
+        final code = barcodeCapture.barcodes.first.rawValue?.trim() ?? '';
+        if (code.isNotEmpty) {
+          _codeController.text = code;
+          _connectFriend(code);
+        } else {
+          throw Exception('QR kód v obrázku je prázdný.');
+        }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -133,6 +140,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
           );
         }
       }
+      await controller.dispose();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

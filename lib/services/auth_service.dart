@@ -77,15 +77,13 @@ class AuthService {
     // Create basic user document with registration timestamp and default stats
     final uid = cred.user?.uid;
     if (uid != null) {
-      _firestore.collection('users').doc(uid).set({
+      await _firestore.collection('users').doc(uid).set({
         'email': email,
         'emailVerified': cred.user?.emailVerified ?? false,
         'registration_date': FieldValue.serverTimestamp(),
         'strikes': 0,
         'limetky': 0,
-      }, SetOptions(merge: true)).catchError((e) {
-        if (kDebugMode) debugPrint('Failed to write basic user doc: $e');
-      });
+      }, SetOptions(merge: true));
     }
 
     return cred;
@@ -114,9 +112,7 @@ class AuthService {
     if (data['strikes'] == null) data['strikes'] = 0;
     if (data['limetky'] == null) data['limetky'] = 0;
     if (data['registration_date'] == null) data['registration_date'] = FieldValue.serverTimestamp();
-    docRef.set(data, SetOptions(merge: true)).catchError((e) {
-      if (kDebugMode) debugPrint('Failed to save profile: $e');
-    });
+    await docRef.set(data, SetOptions(merge: true));
   }
 
   // Sync distance to Firestore (updates total, weekly, monthly and resets them if time changes)

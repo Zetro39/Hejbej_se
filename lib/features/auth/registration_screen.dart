@@ -85,9 +85,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         'friend_code': '#${username.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}',
         'updated_at': FieldValue.serverTimestamp(),
       };
-      // Save profile basics (non-blocking)
-      AuthService().saveProfile(user.uid, profile);
-      AuthService().saveUserName(username);
+      // Save profile basics (blocking so we catch database errors)
+      await AuthService().saveProfile(user.uid, profile);
+      await AuthService().saveUserName(username);
 
       // Go directly to MainShell
       if (!mounted) return;
