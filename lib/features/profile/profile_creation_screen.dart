@@ -133,10 +133,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
     };
 
     try {
-      // Save profile in Firestore
-      await AuthService().saveProfile(user.uid, data);
-
-      // Save locally in SharedPreferences
+      // 1. Save locally in SharedPreferences first for instant responsiveness
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('selected_avatar', avatarToSave);
       await prefs.setDouble('walk_range_min', _walkMin);
@@ -146,8 +143,18 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
       await prefs.setString('default_activity', _defaultActivity);
       await prefs.setString('birth_date', _birthDate!.toIso8601String());
 
+      // 2. Write to Firestore with a timeout so it doesn't block redirection on slow networks
+      try {
+        await AuthService().saveProfile(user.uid, data).timeout(const Duration(seconds: 4));
+      } catch (e) {
+        debugPrint('Firestore saveProfile timed out or failed: $e');
+      }
+
       // Sync name & stats locally
-      await AuthService().syncFirestoreToLocal();
+      try {
+        await AuthService().syncFirestoreToLocal().timeout(const Duration(seconds: 3));
+      } catch (_) {}
+      
       final userName = await AuthService().getUserName() ?? 'Hráč';
 
       if (!mounted) return;

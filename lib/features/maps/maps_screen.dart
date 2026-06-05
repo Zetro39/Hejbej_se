@@ -1161,17 +1161,74 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 subtitle: const Text('Najděte snadné okruhy start-cíl ve vašem dosahu'),
                 onTap: () async {
                   Navigator.pop(context);
-                  if (_lastPosition == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Čeká se na získání GPS polohy...')),
-                    );
+                  
+                  // Check if GPS is enabled
+                  final gpsEnabled = await _locationService.isLocationServiceEnabled();
+                  if (!gpsEnabled) {
+                    if (mounted) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('GPS vypnuto'),
+                          content: const Text('Zapněte prosím GPS (služby polohy) v nastavení telefonu, abyste mohli vybrat okruh ve svém okolí.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Rozumím'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
                     return;
                   }
+
+                  // Check location permissions
+                  final permission = await Geolocator.checkPermission();
+                  if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+                    final requested = await _locationService.requestLocationPermission();
+                    if (!requested) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Přístup k poloze byl zamítnut. Povolte polohu v nastavení.')),
+                        );
+                      }
+                      return;
+                    }
+                  }
+
+                  // If _lastPosition is still null, try to actively fetch it
+                  Position? currentPos = _lastPosition;
+                  if (currentPos == null) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Získávám GPS polohu...'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                    currentPos = await _locationService.getCurrentLocation();
+                  }
+
+                  if (currentPos == null) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Nepodařilo se získat GPS polohu. Zkontrolujte signál.')),
+                      );
+                    }
+                    return;
+                  }
+
+                  // Update _lastPosition
+                  _lastPosition = currentPos;
+
+                  if (!mounted) return;
                   
                   final result = await Navigator.of(context).push<Map<String, dynamic>>(
                     MaterialPageRoute(
                       builder: (context) => RouteSelectionScreen(
-                        startLocation: LatLng(_lastPosition!.latitude, _lastPosition!.longitude),
+                        startLocation: LatLng(currentPos!.latitude, currentPos!.longitude),
                         isBikeDefault: _usingBike,
                       ),
                     ),
