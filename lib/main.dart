@@ -105,9 +105,12 @@ void main() async {
   String? savedUser;
   bool isProfileCompleted = false;
   try {
-    savedUser = await AuthService().getUserName();
-    if (savedUser != null && AuthService().currentUser != null) {
+    final firebaseUser = AuthService().currentUser;
+    if (firebaseUser != null) {
+      savedUser = await AuthService().getUserName();
       isProfileCompleted = await AuthService().isProfileCompleted();
+    } else {
+      savedUser = null;
     }
   } catch (e) {
     if (kDebugMode) {
