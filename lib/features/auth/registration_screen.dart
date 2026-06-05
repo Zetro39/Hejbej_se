@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../profile/profile_creation_screen.dart';
 import '../auth/email_verification_waiting.dart';
+import '../../main_shell.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
