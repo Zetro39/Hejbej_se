@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 import 'add_friends_screen.dart';
+import 'friends_list_screen.dart';
+import 'friend_profile_screen.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -292,8 +294,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.qr_code),
-            tooltip: 'QR Kód / Přidat přátele',
+            icon: const Icon(Icons.people),
+            tooltip: 'Moji přátelé',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const FriendsListScreen()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_add),
+            tooltip: 'Přidat přátele',
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
@@ -536,7 +547,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                             dist = (data['totalDistance'] as num?)?.toDouble() ?? 0.0;
                           }
 
-                          return Container(
+                          final itemContent = Container(
                             color: isMe ? Colors.lime.withOpacity(0.12) : null,
                             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                             child: Row(
@@ -583,6 +594,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                                 ),
                               ],
                             ),
+                          );
+
+                          if (isMe) {
+                            return itemContent;
+                          }
+
+                          return InkWell(
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => FriendProfileScreen(friendUid: doc.id),
+                                ),
+                              );
+                            },
+                            child: itemContent,
                           );
                         },
                       );

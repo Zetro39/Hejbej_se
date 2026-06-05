@@ -324,6 +324,18 @@ class _GameScreenState extends State<GameScreen> {
                           ],
                         ),
                       );
+                    } else if (type == 'nudge') {
+                      final message = details['message'] as String? ?? 'Tě popíchl k pohybu!';
+                      icon = Icons.notifications_active;
+                      iconColor = Colors.orange;
+                      content = RichText(
+                        text: TextSpan(
+                          style: const TextStyle(color: Colors.black87, fontSize: 14),
+                          children: [
+                            TextSpan(text: message),
+                          ],
+                        ),
+                      );
                     } else {
                       return const SizedBox.shrink();
                     }
