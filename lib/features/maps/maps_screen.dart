@@ -70,6 +70,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   double _bikeRangeMax = 30.0;
   final double _dailyTargetKm = 1.0;
   bool _routeActive = false;
+  double _remainingDistance = 0.0;
+  int _remainingEta = 0;
+  int _closestWaypointIndex = 0;
   bool _isLoadingRoutes = false;
   bool _showRouteSuggestions = false;
   List<Map<String, dynamic>> _routeSuggestions = [];
@@ -696,6 +699,64 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     return max(1, (distanceKm / speedKmH * 60).round());
   }
 
+  double _calculateBearing(LatLng from, LatLng to) {
+    final lat1 = from.latitude * pi / 180.0;
+    final lon1 = from.longitude * pi / 180.0;
+    final lat2 = to.latitude * pi / 180.0;
+    final lon2 = to.longitude * pi / 180.0;
+    
+    final dLon = lon2 - lon1;
+    final y = sin(dLon) * cos(lat2);
+    final x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon);
+    
+    final radians = atan2(y, x);
+    return (radians * 180.0 / pi + 360.0) % 360.0;
+  }
+
+  int _findClosestRoutePointIndex(LatLng currentPos) {
+    if (_activeRoutePoints.isEmpty) return 0;
+    int closestIndex = 0;
+    double minDistance = double.infinity;
+    for (int i = 0; i < _activeRoutePoints.length; i++) {
+      final d = Geolocator.distanceBetween(
+        currentPos.latitude,
+        currentPos.longitude,
+        _activeRoutePoints[i].latitude,
+        _activeRoutePoints[i].longitude,
+      );
+      if (d < minDistance) {
+        minDistance = d;
+        closestIndex = i;
+      }
+    }
+    return closestIndex;
+  }
+
+  double _calculateRemainingDistance(LatLng currentPos, int closestIndex) {
+    if (_activeRoutePoints.isEmpty) return 0.0;
+    double distance = 0.0;
+    
+    if (closestIndex + 1 < _activeRoutePoints.length) {
+      distance += Geolocator.distanceBetween(
+        currentPos.latitude,
+        currentPos.longitude,
+        _activeRoutePoints[closestIndex + 1].latitude,
+        _activeRoutePoints[closestIndex + 1].longitude,
+      );
+      
+      for (int i = closestIndex + 1; i < _activeRoutePoints.length - 1; i++) {
+        distance += Geolocator.distanceBetween(
+          _activeRoutePoints[i].latitude,
+          _activeRoutePoints[i].longitude,
+          _activeRoutePoints[i + 1].latitude,
+          _activeRoutePoints[i + 1].longitude,
+        );
+      }
+    }
+    
+    return distance / 1000.0; // in km
+  }
+
   Future<List<LatLng>> _fetchRouteGeometryFromOSRM(List<LatLng> coordinates, String profile) async {
     if (coordinates.length < 2) return [];
     final coordString = coordinates.map((point) => '${point.longitude},${point.latitude}').join(';');
@@ -765,7 +826,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   Future<void> _generateNearbyRoutes() async {
     if (_lastPosition == null) return;
     final start = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
-    final profile = _usingBike ? 'bike' : 'foot';
+    final profile = _usingBike ? 'cycling' : 'foot';
     final minRange = _usingBike ? _bikeRangeMin : _walkRangeMin;
     final maxRange = _usingBike ? _bikeRangeMax : _walkRangeMax;
     setState(() {
@@ -787,11 +848,13 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     for (int i = 0; i < 5; i++) {
       final distanceKm = minRange + random.nextDouble() * (maxRange - minRange);
       final bearing = random.nextDouble() * 360;
-      // create two waypoints to form a true loop and avoid retracing
-      final wp1 = _destinationFromDistanceBearing(start, distanceKm / 3, bearing - 45);
-      final wp2 = _destinationFromDistanceBearing(start, distanceKm / 3, bearing + 45);
+      // create a teardrop loop with 3 waypoints to form a smooth loop
+      final d = distanceKm / 3.0;
+      final wp1 = _destinationFromDistanceBearing(start, d, bearing - 25.0);
+      final wp2 = _destinationFromDistanceBearing(start, d * 1.2, bearing);
+      final wp3 = _destinationFromDistanceBearing(start, d, bearing + 25.0);
       
-      futures.add(_fetchRouteGeometryFromOSRM([start, wp1, wp2, start], profile));
+      futures.add(_fetchRouteGeometryFromOSRM([start, wp1, wp2, wp3, start], profile));
       poiCounts.add(random.nextInt(3) + 1);
       names.add(routeNames[i % routeNames.length]);
     }
@@ -829,7 +892,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   Future<void> _generateDestinationRoute(LatLng destination) async {
     if (_lastPosition == null) return;
     final start = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
-    final profile = _usingBike ? 'bike' : 'foot';
+    final profile = _usingBike ? 'cycling' : 'foot';
     final routePoints = await _fetchRouteGeometryFromOSRM([start, destination], profile);
     if (routePoints.isEmpty) {
       if (!mounted) return;
@@ -917,13 +980,107 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _clearCachedRoute();
   }
 
+  Future<void> _completeRoute() async {
+    setState(() {
+      _routeActive = false;
+      _trackingEnabled = false;
+      _routePlotted = false;
+      _destinationPoint = null;
+      _showRouteSearch = false;
+      _showRouteSuggestions = false;
+      _routeSuggestions.clear();
+      _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+      _markers.removeWhere((m) => m.markerId.value.startsWith('route_'));
+    });
+    
+    await _clearCachedRoute();
+
+    final bonusLimetky = 50;
+    setState(() {
+      _limetkyBalance += bonusLimetky;
+    });
+    await _savePersistentData();
+
+    if (mounted) {
+      HapticFeedback.vibrate();
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('🎉 Trasa dokončena!', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.stars, color: Colors.amber, size: 64),
+              const SizedBox(height: 16),
+              const Text(
+                'Skvělá práce! Dokončili jste celou naplánovanou trasu.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Získáváte bonus +$bonusLimetky Limetků!',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFBFFF00),
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: const Text('Super!'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   void _startRoute() {
+    double initialRemaining = 0.0;
+    int initialEta = 0;
+    if (_activeRoutePoints.isNotEmpty) {
+      LatLng currentPos = _lastPosition != null
+          ? LatLng(_lastPosition!.latitude, _lastPosition!.longitude)
+          : _activeRoutePoints.first;
+      initialRemaining = _calculateRemainingDistance(currentPos, 0);
+      initialEta = _calculateRouteEta(initialRemaining);
+    }
+
     setState(() {
       _trackingEnabled = true;
       _routeActive = true;
       _routePlotted = false;
+      _closestWaypointIndex = 0;
+      _remainingDistance = initialRemaining;
+      _remainingEta = initialEta;
     });
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('START / VYRAZIT — trasa spuštěna')));
+
+    if (_lastPosition != null && _activeRoutePoints.isNotEmpty) {
+      final currentPos = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
+      final closestIndex = _findClosestRoutePointIndex(currentPos);
+      final nextWp = _activeRoutePoints[min(closestIndex + 1, _activeRoutePoints.length - 1)];
+      final bearing = _calculateBearing(currentPos, nextWp);
+      
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: currentPos,
+            zoom: 17.5,
+            bearing: bearing,
+            tilt: 45.0,
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildRouteInfoChip(String text) {
@@ -1389,11 +1546,57 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       }
       _addMarker(position);
       _checkCheckpointProximity(position);
+
+      // Active navigation tracking details
+      int closestIndex = 0;
+      double remainingD = 0.0;
+      int remainingE = 0;
+      double bearing = position.heading;
+
+      if (_routeActive && _activeRoutePoints.isNotEmpty) {
+        closestIndex = _findClosestRoutePointIndex(newPoint);
+        remainingD = _calculateRemainingDistance(newPoint, closestIndex);
+        remainingE = _calculateRouteEta(remainingD);
+
+        // Compute segment direction bearing if user is stationary or has invalid heading
+        if (position.speed < 1.0 && closestIndex + 1 < _activeRoutePoints.length) {
+          bearing = _calculateBearing(newPoint, _activeRoutePoints[closestIndex + 1]);
+        }
+
+        // Check if destination was reached
+        if (closestIndex == _activeRoutePoints.length - 1 || 
+            Geolocator.distanceBetween(
+              newPoint.latitude,
+              newPoint.longitude,
+              _activeRoutePoints.last.latitude,
+              _activeRoutePoints.last.longitude,
+            ) < 20.0) {
+          _completeRoute();
+          return;
+        }
+      }
+
       setState(() {
         _todayDistance = _calculatePolylineDistance();
         _lastPosition = position;
+        if (_routeActive) {
+          _closestWaypointIndex = closestIndex;
+          _remainingDistance = remainingD;
+          _remainingEta = remainingE;
+        }
       });
-      if (_isFollowingUser) {
+
+      if (_routeActive) {
+        final cameraPosition = CameraPosition(
+          target: newPoint,
+          zoom: 17.5,
+          bearing: bearing,
+          tilt: 45.0,
+        );
+        _mapController?.animateCamera(
+          CameraUpdate.newCameraPosition(cameraPosition),
+        );
+      } else if (_isFollowingUser) {
         double baseZoom = 16.0;
         if (position.speed > 0) {
           final speedFactor = position.speed.clamp(0.0, 5.0) / 5.0;
@@ -1659,6 +1862,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
     final bottomOffset = MediaQuery.of(context).padding.bottom + 80;
+    final fabBaseOffset = _routeActive ? bottomOffset + 110 : bottomOffset + 76;
 
     return Scaffold(
       extendBody: true,
@@ -1703,75 +1907,150 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          Positioned(
-            top: topPadding + 12,
-            left: 16,
-            right: 80,
-            child: GestureDetector(
-              onTap: () => setState(() => _taskCardExpanded = !_taskCardExpanded),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                height: _taskCardExpanded ? 160 : 72,
-                child: Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.directions_walk, color: Colors.lightBlue, size: 26),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Úkol: Ujdi 1 km dnes',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          if (!_routeActive)
+            Positioned(
+              top: topPadding + 12,
+              left: 16,
+              right: 80,
+              child: GestureDetector(
+                onTap: () => setState(() => _taskCardExpanded = !_taskCardExpanded),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  height: _taskCardExpanded ? 160 : 72,
+                  child: Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.directions_walk, color: Colors.lightBlue, size: 26),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Úkol: Ujdi 1 km dnes',
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundColor: _todayDistance >= _dailyTargetKm * 1000 ? Colors.green : Colors.lightBlue.shade50,
+                                child: Icon(_todayDistance >= _dailyTargetKm * 1000 ? Icons.check : Icons.timer, color: _todayDistance >= _dailyTargetKm * 1000 ? Colors.white : Colors.lightBlue),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(_taskCardExpanded ? Icons.expand_less : Icons.expand_more),
+                            ],
+                          ),
+                          if (_taskCardExpanded) ...[
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: LinearProgressIndicator(
+                                value: min(_todayDistance / 1000.0 / _dailyTargetKm, 1.0),
+                                minHeight: 10,
+                                backgroundColor: Colors.lightBlue.shade50,
+                                valueColor: const AlwaysStoppedAnimation<Color>(Colors.lightBlue),
                               ),
                             ),
-                            CircleAvatar(
-                              radius: 18,
-                              backgroundColor: _todayDistance >= _dailyTargetKm * 1000 ? Colors.green : Colors.lightBlue.shade50,
-                              child: Icon(_todayDistance >= _dailyTargetKm * 1000 ? Icons.check : Icons.timer, color: _todayDistance >= _dailyTargetKm * 1000 ? Colors.white : Colors.lightBlue),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(_taskCardExpanded ? Icons.expand_less : Icons.expand_more),
-                          ],
-                        ),
-                        if (_taskCardExpanded) ...[
-                          const SizedBox(height: 12),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: LinearProgressIndicator(
-                              value: min(_todayDistance / 1000.0 / _dailyTargetKm, 1.0),
-                              minHeight: 10,
-                              backgroundColor: Colors.lightBlue.shade50,
-                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.lightBlue),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _showNavigationMenu,
-                              icon: const Icon(Icons.menu),
-                              label: const Text('Výběr trasy'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFBFFF00),
-                                foregroundColor: Colors.black,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _showNavigationMenu,
+                                icon: const Icon(Icons.menu),
+                                label: const Text('Výběr trasy'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFBFFF00),
+                                  foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
                               ),
                             ),
-                          ),
-                        ]
-                      ],
+                          ]
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
+          if (_routeActive)
+            Positioned(
+              top: topPadding + 12,
+              left: 16,
+              right: 80,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.lightBlue.shade800.withOpacity(0.95), Colors.lightBlue.shade900.withOpacity(0.95)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.white24, width: 1),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.navigation,
+                          color: Color(0xFFBFFF00),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'AKTIVNÍ NAVIGACE',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _routeSuggestions.isNotEmpty && _selectedRouteSuggestionIndex < _routeSuggestions.length
+                                  ? _routeSuggestions[_selectedRouteSuggestionIndex]['title'] as String
+                                  : 'Sledujte vyznačenou trasu',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           if (_isSelectingDestination)
             Positioned(
               top: topPadding + 210,
@@ -2031,24 +2310,118 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                       ),
               ),
             ),
-          Positioned(
-            bottom: bottomOffset,
-            left: 20,
-            right: 20,
-            child: ElevatedButton.icon(
-              onPressed: _showNavigationMenu,
-              icon: const Icon(Icons.menu),
-              label: const Text('Výběr trasy'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFBFFF00),
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          if (!_routeActive)
+            Positioned(
+              bottom: bottomOffset,
+              left: 20,
+              right: 20,
+              child: ElevatedButton.icon(
+                onPressed: _showNavigationMenu,
+                icon: const Icon(Icons.menu),
+                label: const Text('Výběr trasy'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFBFFF00),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
               ),
             ),
-          ),
+          if (_routeActive)
+            Positioned(
+              bottom: bottomOffset,
+              left: 16,
+              right: 16,
+              child: Card(
+                elevation: 10,
+                color: Colors.white.withOpacity(0.95),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'ZBÝVÁ',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.black54,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${_remainingDistance.toStringAsFixed(1)} km',
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              width: 1,
+                              height: 36,
+                              color: Colors.black12,
+                            ),
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'ČAS',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.black54,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$_remainingEta min',
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: _cancelRoute,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent.shade100,
+                          foregroundColor: Colors.red.shade900,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        ),
+                        child: const Text(
+                          'Konec',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           Positioned(
-            bottom: bottomOffset + 76 + 76 + 76,
+            bottom: fabBaseOffset + 76 + 76,
             right: 20,
             child: FloatingActionButton(
               heroTag: 'map_style_button',
@@ -2066,7 +2439,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             ),
           ),
           Positioned(
-            bottom: bottomOffset + 76 + 76,
+            bottom: fabBaseOffset + 76,
             right: 20,
             child: FloatingActionButton(
               heroTag: 'share_location_button',
@@ -2080,7 +2453,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             ),
           ),
           Positioned(
-            bottom: bottomOffset + 76,
+            bottom: fabBaseOffset,
             right: 20,
             child: FloatingActionButton(
               heroTag: 'ar_nav_button',

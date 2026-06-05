@@ -142,6 +142,7 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
         'description': desc,
         'targetDistance': _selectedTargetKm,
         'exactDistance': actualOptionKm, // Store expected distance before OSRM resolves
+        'estimatedDistance': actualOptionKm, // Keep constant estimated base distance to prevent accumulation bug
         'bearing': startBearing + (i * 36), // Distribute in 10 directions
         'poi_count': random.nextInt(3) + 1,
       });
@@ -167,14 +168,14 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
     final option = _routeOptions[_selectedOptionIndex];
     final start = widget.startLocation;
     final double bearing = option['bearing'] as double;
-    final double targetDistance = option['exactDistance'] as double;
-    final profile = _usingBike ? 'bike' : 'foot';
+    final double targetDistance = option['estimatedDistance'] as double? ?? option['exactDistance'] as double;
+    final profile = _usingBike ? 'cycling' : 'foot';
 
-    // Calculate a triangle loop around the center to force a closed loop shape
-    final double radius = targetDistance / (2 * pi); // radius in km
-    final wp1 = _destinationFromDistanceBearing(start, radius, bearing - 30);
-    final wp2 = _destinationFromDistanceBearing(start, radius * 1.25, bearing + 90);
-    final wp3 = _destinationFromDistanceBearing(start, radius, bearing + 210);
+    // Calculate a teardrop loop starting and ending at the user's location
+    final double d = targetDistance / 3.0;
+    final wp1 = _destinationFromDistanceBearing(start, d, bearing - 25.0);
+    final wp2 = _destinationFromDistanceBearing(start, d * 1.2, bearing);
+    final wp3 = _destinationFromDistanceBearing(start, d, bearing + 25.0);
 
     final List<LatLng> waypoints = [start, wp1, wp2, wp3, start];
     final coordString = waypoints.map((point) => '${point.longitude},${point.latitude}').join(';');
