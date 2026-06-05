@@ -30,6 +30,15 @@ class _MainShellState extends State<MainShell> {
     _verifyTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
       await _checkBlocked();
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🎉 Funguje to! Testovací build proběhl úspěšně.'),
+          backgroundColor: Colors.lime,
+          duration: Duration(seconds: 5),
+        ),
+      );
+    });
   }
 
   @override
