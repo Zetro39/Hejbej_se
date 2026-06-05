@@ -287,7 +287,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               Marker(
                 markerId: MarkerId('friend_${doc.id}'),
                 position: latLng,
-                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueLime),
+                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
                 infoWindow: InfoWindow(
                   title: username,
                   snippet: timeText,
@@ -1578,7 +1578,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          Position(
+          Positioned(
             bottom: bottomOffset + 76 + 76,
             right: 20,
             child: FloatingActionButton(
