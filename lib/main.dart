@@ -12,12 +12,49 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+Future<void> _initializeFirebaseMessaging() async {
+  try {
+    final messaging = FirebaseMessaging.instance;
+    
+    // Request permission (essential for iOS)
+    final settings = await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+    
+    if (kDebugMode) {
+      debugPrint('FCM Permission status: ${settings.authorizationStatus}');
+    }
+
+    // Get FCM Token
+    final token = await messaging.getToken();
+    if (kDebugMode) {
+      debugPrint('🔥 FCM Token: $token');
+    }
+
+    // Listen to foreground messages
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (kDebugMode) {
+        debugPrint('FCM Message received in foreground: ${message.notification?.title}');
+      }
+    });
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('FCM Init error: $e');
+    }
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await _initializeFirebaseMessaging();
   } catch (e) {
     if (kDebugMode) {
       debugPrint('Firebase init error: $e');

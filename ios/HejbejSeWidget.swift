@@ -19,7 +19,7 @@ struct Provider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
         // Read data shared from Flutter via App Groups / SharedPreferences
         // iOS requires configuring App Groups in Xcode (e.g. group.com.example.hejbejSe)
-        let sharedDefaults = UserDefaults(suiteName: "group.com.example.hejbejSe")
+        let sharedDefaults = UserDefaults(suiteName: "group.com.zetro39.hejbejse")
         
         let totalDistance = sharedDefaults?.double(forKey: "totalDistance") ?? 0.0
         let streak = sharedDefaults?.integer(forKey: "streak") ?? 0

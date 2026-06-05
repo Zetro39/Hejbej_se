@@ -123,6 +123,9 @@ class AuthService {
   // Sync distance to Firestore (updates total, weekly, monthly and resets them if time changes)
   Future<void> _syncToHomeWidget(double totalDistance, int streak) async {
     try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        await HomeWidget.setAppGroupId('group.com.zetro39.hejbejse');
+      }
       await HomeWidget.saveWidgetData<double>('totalDistance', totalDistance);
       await HomeWidget.saveWidgetData<int>('streak', streak);
       await HomeWidget.updateWidget(
