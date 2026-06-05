@@ -401,7 +401,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
     final routeNames = ['Lesní okruh', 'Říční cesta', 'Městský okruh', 'Zelená stezka', 'Vyhlídkový okruh'];
     final random = Random();
-    final suggestions = <Map<String, dynamic>>[];
+    
+    final List<Future<List<LatLng>>> futures = [];
+    final List<int> poiCounts = [];
+    final List<String> names = [];
 
     for (int i = 0; i < 5; i++) {
       final distanceKm = minRange + random.nextDouble() * (maxRange - minRange);
@@ -409,15 +412,26 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       // create two waypoints to form a true loop and avoid retracing
       final wp1 = _destinationFromDistanceBearing(start, distanceKm / 3, bearing - 45);
       final wp2 = _destinationFromDistanceBearing(start, distanceKm / 3, bearing + 45);
-      final routePoints = await _fetchRouteGeometryFromOSRM([start, wp1, wp2, start], profile);
+      
+      futures.add(_fetchRouteGeometryFromOSRM([start, wp1, wp2, start], profile));
+      poiCounts.add(random.nextInt(3) + 1);
+      names.add(routeNames[i % routeNames.length]);
+    }
+
+    // Fetch all route geometries concurrently
+    final results = await Future.wait(futures);
+    final suggestions = <Map<String, dynamic>>[];
+
+    for (int i = 0; i < results.length; i++) {
+      final routePoints = results[i];
       if (routePoints.length < 2) continue;
       final actualDistance = _calculateRouteLength(routePoints);
       suggestions.add({
-        'title': '${routeNames[i % routeNames.length]} ${actualDistance.toStringAsFixed(1)} km',
+        'title': '${names[i]} ${actualDistance.toStringAsFixed(1)} km',
         'coordinates': routePoints,
         'distance': actualDistance,
         'eta': _calculateRouteEta(actualDistance),
-        'poi_count': random.nextInt(3) + 1,
+        'poi_count': poiCounts[i],
       });
       if (suggestions.length >= 4) break;
     }
