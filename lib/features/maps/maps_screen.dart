@@ -569,11 +569,19 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       if (byteData == null) throw Exception('Failed to serialize image');
       
       // Determine device pixel ratio for correct scaling on high-res displays
-      double pixelRatio = 1.0;
+      double pixelRatio = 2.0;
       if (mounted) {
-        pixelRatio = MediaQuery.of(context).devicePixelRatio;
+        try {
+          pixelRatio = MediaQuery.of(context).devicePixelRatio;
+        } catch (_) {
+          try {
+            pixelRatio = ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
+          } catch (_) {}
+        }
       } else {
-        pixelRatio = ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
+        try {
+          pixelRatio = ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
+        } catch (_) {}
       }
 
       return BitmapDescriptor.bytes(
