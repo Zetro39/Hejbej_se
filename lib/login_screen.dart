@@ -12,6 +12,7 @@ import 'services/auth_service.dart';
 import 'features/profile/distance_preference_setup_screen.dart';
 import 'features/auth/registration_screen.dart';
 import 'features/profile/profile_creation_screen.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -183,7 +184,39 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       debugPrint('Apple sign-in failed: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Přihlášení přes Apple selhalo')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Přihlášení přes Apple selhalo: $e')));
+    }
+  }
+
+  Future<void> _signInWithFacebook() async {
+    try {
+      final LoginResult result = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+
+      if (result.status == LoginStatus.success) {
+        final AccessToken accessToken = result.accessToken!;
+        
+        // Sign in to Firebase Auth!
+        final cred = await AuthService().signInWithFacebook(accessToken.tokenString);
+        final user = cred.user;
+        final name = user?.displayName ?? user?.email ?? 'Uživatel';
+
+        await AuthService().saveAuthCredentials('facebook', {
+          'accessToken': accessToken.tokenString,
+          'email': user?.email,
+        });
+
+        await _handleUserRouting(name);
+      } else if (result.status == LoginStatus.cancelled) {
+        debugPrint('Facebook sign-in cancelled by user');
+      } else {
+        throw Exception(result.message);
+      }
+    } catch (e) {
+      debugPrint('Facebook sign-in failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Přihlášení přes Facebook selhalo: $e')));
     }
   }
 
@@ -297,7 +330,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       size: 28,
                       color: Colors.blue.shade800,
                     ),
-                    onTap: _showSocialLoginNotice,
+                    onTap: _signInWithFacebook,
                   ),
                 ],
               ),

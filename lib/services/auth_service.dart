@@ -345,6 +345,14 @@ class AuthService {
     return userCred;
   }
 
+  // Sign in with Facebook credentials in Firebase Auth and ensure user document
+  Future<UserCredential> signInWithFacebook(String accessToken) async {
+    final credential = FacebookAuthProvider.credential(accessToken);
+    final userCred = await _auth.signInWithCredential(credential);
+    await _ensureUserDocument(userCred.user);
+    return userCred;
+  }
+
   // Helper to check if two dates fall in the same ISO week
   bool _isSameISOWeek(DateTime date1, DateTime date2) {
     final monday1 = date1.subtract(Duration(days: date1.weekday - 1));
