@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:home_widget/home_widget.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -116,6 +117,17 @@ class AuthService {
   }
 
   // Sync distance to Firestore (updates total, weekly, monthly and resets them if time changes)
+  Future<void> _syncToHomeWidget(double totalDistance, int streak) async {
+    try {
+      await HomeWidget.saveWidgetData<double>('totalDistance', totalDistance);
+      await HomeWidget.saveWidgetData<int>('streak', streak);
+      await HomeWidget.updateWidget(
+        name: 'HejbejSeWidgetProvider',
+        androidName: 'HejbejSeWidgetProvider',
+      );
+    } catch (_) {}
+  }
+
   Future<void> updateDistance(double totalDistance, int limetky) async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -158,6 +170,52 @@ class AuthService {
           'lastDistanceUpdate': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       });
+
+      // Update walk logging and sync to home widget after success
+      try {
+        final finalDoc = await docRef.get();
+        final finalData = finalDoc.data() ?? {};
+        final username = finalData['username'] as String? ?? 'Uživatel';
+        final streak = finalData['streak'] as int? ?? 0;
+
+        // Sync to home widget
+        await _syncToHomeWidget(totalDistance, streak);
+
+        // Rate-limited walk activity log
+        double lastLoggedDist = (finalData['lastWalkLogDistance'] as num?)?.toDouble() ?? 0.0;
+        Timestamp? lastLoggedTimeTs = finalData['lastWalkLogTime'] as Timestamp?;
+        DateTime? lastLoggedTime = lastLoggedTimeTs?.toDate();
+
+        bool shouldLog = false;
+        if (lastLoggedTime == null) {
+          shouldLog = totalDistance > 0.1;
+        } else {
+          final timeDiff = now.difference(lastLoggedTime);
+          final distDiff = totalDistance - lastLoggedDist;
+          if ((distDiff >= 0.5 && timeDiff.inMinutes >= 10) || distDiff >= 2.0) {
+            shouldLog = true;
+          }
+        }
+
+        if (shouldLog) {
+          final distWalked = totalDistance - lastLoggedDist;
+          await _firestore.collection('activities').add({
+            'uid': user.uid,
+            'username': username,
+            'type': 'walk',
+            'timestamp': FieldValue.serverTimestamp(),
+            'details': {
+              'distance': distWalked,
+              'totalDistance': totalDistance,
+            },
+          });
+
+          await docRef.update({
+            'lastWalkLogDistance': totalDistance,
+            'lastWalkLogTime': FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (_) {}
     } catch (e) {
       if (kDebugMode) debugPrint('Failed to sync distance to Firestore: $e');
     }
@@ -226,6 +284,11 @@ class AuthService {
       await _firestore.collection('users').doc(user.uid).set({
         'streak': streak,
       }, SetOptions(merge: true));
+
+      // Sync to home widget as well
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      final totalDistance = (doc.data()?['totalDistance'] as num?)?.toDouble() ?? 0.0;
+      await _syncToHomeWidget(totalDistance, streak);
     } catch (e) {
       if (kDebugMode) debugPrint('Failed to sync streak to Firestore: $e');
     }

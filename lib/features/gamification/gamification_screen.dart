@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
 
 class GameScreen extends StatefulWidget {
@@ -13,6 +14,327 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showWidgetPromoIfNeeded();
+    });
+  }
+
+  Future<void> _showWidgetPromoIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool('widget_setup_prompt_shown') ?? false;
+    if (shown) return;
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: Colors.white,
+        title: Column(
+          children: [
+            const Icon(Icons.widgets_outlined, color: Colors.lime, size: 48),
+            const SizedBox(height: 12),
+            const Text(
+              'Přidej si widget na plochu!',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Sleduj své denní kroky, vzdálenost a streak přímo z domovské obrazovky svého telefonu.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.black54, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            // Mock Widget Preview
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.lime.shade100,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.lime, width: 2),
+              ),
+              child: Row(
+                children: [
+                  const Text('🏃', style: TextStyle(fontSize: 32)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text('Hejbej se!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        SizedBox(height: 4),
+                        Text('Dnes: 1.2 km', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        Text('Streak: 🔥 5 dnů', style: TextStyle(fontSize: 13, color: Colors.black87)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Jak na to?\n1. Dlouze podrž plochu telefonu.\n2. Klikni na symbol + nebo Widgety.\n3. Vyhledej „Hejbej se“ a přidej widget na plochu.',
+              style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('Připomenout později', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await prefs.setBool('widget_setup_prompt_shown', true);
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.lime,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Rozumím, zkusím to', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Stream<List<String>> _getFriendsUidsStream(String currentUid) {
+    return _firestore
+        .collection('users')
+        .doc(currentUid)
+        .collection('friends')
+        .where('status', isEqualTo: 'friends')
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => doc.id).toList());
+  }
+
+  String _formatRelativeTime(Timestamp? timestamp) {
+    if (timestamp == null) return 'nyní';
+    final date = timestamp.toDate();
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inSeconds < 60) {
+      return 'před chvílí';
+    } else if (diff.inMinutes < 60) {
+      return 'před ${diff.inMinutes} ${diff.inMinutes == 1 ? 'minutou' : diff.inMinutes < 5 ? 'minutami' : 'minutami'}';
+    } else if (diff.inHours < 24) {
+      return 'před ${diff.inHours} ${diff.inHours == 1 ? 'hodinou' : diff.inHours < 5 ? 'hodinami' : 'hodinami'}';
+    } else if (diff.inDays < 7) {
+      return 'před ${diff.inDays} ${diff.inDays == 1 ? 'dnem' : diff.inDays < 5 ? 'dny' : 'dny'}';
+    } else {
+      return '${date.day}. ${date.month}.';
+    }
+  }
+
+  Widget _buildFriendActivityFeed(String currentUid) {
+    return StreamBuilder<List<String>>(
+      stream: _getFriendsUidsStream(currentUid),
+      builder: (context, friendsSnap) {
+        if (!friendsSnap.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final friendUids = friendsSnap.data ?? [];
+        final uidsForQuery = [currentUid, ...friendUids];
+        final queryUids = uidsForQuery.take(30).toList();
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: _firestore
+              .collection('activities')
+              .where('uid', whereIn: queryUids)
+              .orderBy('timestamp', descending: true)
+              .limit(8)
+              .snapshots(),
+          builder: (context, activitySnap) {
+            if (activitySnap.hasError) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16.0),
+                child: Center(
+                  child: Text(
+                    'Aktivity přátel se načítají... (Vytváří se databázový index)',
+                    style: TextStyle(color: Colors.black54, fontSize: 13, fontStyle: FontStyle.italic),
+                  ),
+                ),
+              );
+            }
+
+            if (!activitySnap.hasData) {
+              return const SizedBox.shrink();
+            }
+
+            final docs = activitySnap.data?.docs ?? [];
+
+            if (docs.isEmpty) {
+              return const SizedBox.shrink();
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 16),
+                Row(
+                  children: const [
+                    Icon(Icons.rss_feed, color: Colors.lightBlue),
+                    SizedBox(width: 8),
+                    Text(
+                      'Aktivita přátel',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: docs.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data() as Map<String, dynamic>;
+                    final username = data['username'] as String? ?? 'Uživatel';
+                    final type = data['type'] as String? ?? '';
+                    final timestamp = data['timestamp'] as Timestamp?;
+                    final details = data['details'] as Map<String, dynamic>? ?? {};
+
+                    IconData icon;
+                    Color iconColor;
+                    Widget content;
+
+                    if (type == 'walk') {
+                      final dist = (details['distance'] as num?)?.toDouble() ?? 0.0;
+                      icon = Icons.directions_walk;
+                      iconColor = Colors.lightBlue;
+                      content = RichText(
+                        text: TextSpan(
+                          style: const TextStyle(color: Colors.black87, fontSize: 14),
+                          children: [
+                            TextSpan(text: username, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            const TextSpan(text: ' ušel/ušla '),
+                            TextSpan(text: '${dist.toStringAsFixed(1)} km', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.lightBlue)),
+                            const TextSpan(text: '!'),
+                          ],
+                        ),
+                      );
+                    } else if (type == 'challenge_completed') {
+                      final opponentName = details['opponentName'] as String? ?? 'kamarádem';
+                      final winnerUid = details['winnerUid'] as String?;
+                      final targetKm = (details['targetKm'] as num?)?.toDouble() ?? 0.0;
+                      final isDraw = winnerUid == 'draw';
+
+                      icon = Icons.emoji_events;
+                      iconColor = Colors.orange;
+
+                      if (isDraw) {
+                        content = RichText(
+                          text: TextSpan(
+                            style: const TextStyle(color: Colors.black87, fontSize: 14),
+                            children: [
+                              TextSpan(text: username, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const TextSpan(text: ' remizoval/a v souboji na '),
+                              TextSpan(text: '${targetKm.toInt()} km', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const TextSpan(text: ' s uživatelem '),
+                              TextSpan(text: opponentName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const TextSpan(text: '.'),
+                            ],
+                          ),
+                        );
+                      } else {
+                        content = RichText(
+                          text: TextSpan(
+                            style: const TextStyle(color: Colors.black87, fontSize: 14),
+                            children: [
+                              TextSpan(text: username, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const TextSpan(text: ' vyhrál/a 1v1 výzvu na '),
+                              TextSpan(text: '${targetKm.toInt()} km', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const TextSpan(text: ' proti '),
+                              TextSpan(text: opponentName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const TextSpan(text: '! 🏆'),
+                            ],
+                          ),
+                        );
+                      }
+                    } else if (type == 'friend_added') {
+                      final friendName = details['friendName'] as String? ?? 'uživatelem';
+                      icon = Icons.person_add;
+                      iconColor = Colors.green;
+                      content = RichText(
+                        text: TextSpan(
+                          style: const TextStyle(color: Colors.black87, fontSize: 14),
+                          children: [
+                            TextSpan(text: username, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            const TextSpan(text: ' se propojil/a a spřátelil/a s uživatelem '),
+                            TextSpan(text: friendName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            const TextSpan(text: '.'),
+                          ],
+                        ),
+                      );
+                    } else {
+                      return const SizedBox.shrink();
+                    }
+
+                    return Card(
+                      color: Colors.grey.shade50,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.grey.shade100),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: iconColor.withOpacity(0.1),
+                              foregroundColor: iconColor,
+                              radius: 20,
+                              child: Icon(icon, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  content,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _formatRelativeTime(timestamp),
+                                    style: const TextStyle(color: Colors.black38, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +357,9 @@ class _GameScreenState extends State<GameScreen> {
                     // Steps Card (from template)
                     _buildStepsCard(),
                     const SizedBox(height: 24),
+
+                    // Friend Activity Feed
+                    _buildFriendActivityFeed(currentUser.uid),
                     
                     // 1v1 Challenges Section Header
                     Row(
@@ -519,9 +844,36 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     try {
+      final challengeDoc = await _firestore.collection('challenges').doc(challengeId).get();
+      final chalData = challengeDoc.data() ?? {};
+      if (chalData['status'] == 'completed' || chalData['isActivityLogged'] == true) {
+        return; // Already completed or logged
+      }
+
       await _firestore.collection('challenges').doc(challengeId).update({
         'status': 'completed',
         'winnerUid': winnerUid,
+        'isActivityLogged': true,
+      });
+
+      // Write to activities feed
+      final creatorUsername = chalData['creatorUsername'] ?? 'Uživatel';
+      final opponentUsername = chalData['opponentUsername'] ?? 'Uživatel';
+      final winnerName = winnerUid == 'draw' 
+          ? 'Remíza' 
+          : (winnerUid == creatorUid ? creatorUsername : opponentUsername);
+
+      await _firestore.collection('activities').add({
+        'uid': winnerUid == 'draw' ? creatorUid : winnerUid,
+        'username': winnerName,
+        'type': 'challenge_completed',
+        'timestamp': FieldValue.serverTimestamp(),
+        'details': {
+          'opponentName': winnerUid == creatorUid ? opponentUsername : creatorUsername,
+          'creatorName': creatorUsername,
+          'targetKm': targetKm,
+          'winnerUid': winnerUid,
+        },
       });
     } catch (_) {}
   }

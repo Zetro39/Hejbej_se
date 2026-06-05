@@ -77,6 +77,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   Position? _lastPosition;
   Position? _initialPosition;
   Position? _previousPosition;
+  bool _shareLocation = false;
+  DateTime? _lastLocationShareTime;
+  StreamSubscription<QuerySnapshot>? _friendsLocationsSubscription;
 
   double _totalDistance = 0.0;
   int _limetkyBalance = 0;
@@ -117,6 +120,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _setupMap();
     _initPedometer();
     _loadPremiumStatus();
+    _loadLocationSharingPreference();
   }
 
   Future<void> _loadReachedCheckpoints() async {
@@ -204,14 +208,170 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     }
   }
 
-  @override
   void dispose() {
     _mapController?.dispose();
     _positionSubscription?.cancel();
+    _friendsLocationsSubscription?.cancel();
     _destinationController.dispose();
     _routePageController.dispose();
     _stepCountSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadLocationSharingPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _shareLocation = prefs.getBool('share_location') ?? false;
+      });
+      if (_shareLocation) {
+        _startListeningToFriendsLocations();
+      }
+    }
+  }
+
+  Future<void> _startListeningToFriendsLocations() async {
+    _friendsLocationsSubscription?.cancel();
+    _friendsLocationsSubscription = null;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final friendsSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('friends')
+          .where('status', isEqualTo: 'friends')
+          .get();
+
+      final friendUids = friendsSnap.docs.map((doc) => doc.id).toList();
+      if (friendUids.isEmpty) return;
+
+      final queryUids = friendUids.take(30).toList();
+
+      _friendsLocationsSubscription = FirebaseFirestore.instance
+          .collection('users')
+          .where(FieldPath.documentId, whereIn: queryUids)
+          .snapshots()
+          .listen((snapshot) {
+        if (!mounted) return;
+
+        setState(() {
+          _markers.removeWhere((m) => m.markerId.value.startsWith('friend_'));
+
+          final now = DateTime.now();
+
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            final shareLoc = data['share_location'] as bool? ?? false;
+            if (!shareLoc) continue;
+
+            final locationGeo = data['last_location'] as GeoPoint?;
+            final lastUpdateTs = data['last_location_time'] as Timestamp?;
+
+            if (locationGeo == null || lastUpdateTs == null) continue;
+
+            final lastUpdate = lastUpdateTs.toDate();
+            if (now.difference(lastUpdate).inHours >= 2) continue;
+
+            final username = data['username'] as String? ?? 'Uživatel';
+            final latLng = LatLng(locationGeo.latitude, locationGeo.longitude);
+            final minutesAgo = now.difference(lastUpdate).inMinutes;
+
+            final timeText = minutesAgo <= 1
+                ? 'aktivní před chvílí'
+                : 'aktivní před $minutesAgo min';
+
+            _markers.add(
+              Marker(
+                markerId: MarkerId('friend_${doc.id}'),
+                position: latLng,
+                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueLime),
+                infoWindow: InfoWindow(
+                  title: username,
+                  snippet: timeText,
+                ),
+              ),
+            );
+          }
+        });
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleLocationSharing() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final newShare = !_shareLocation;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('share_location', newShare);
+
+    setState(() {
+      _shareLocation = newShare;
+    });
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'share_location': newShare,
+      });
+
+      if (newShare) {
+        _startListeningToFriendsLocations();
+        if (_lastPosition != null) {
+          await _uploadMyLocation(_lastPosition!);
+        }
+      } else {
+        _friendsLocationsSubscription?.cancel();
+        _friendsLocationsSubscription = null;
+        setState(() {
+          _markers.removeWhere((m) => m.markerId.value.startsWith('friend_'));
+        });
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'last_location': FieldValue.delete(),
+          'last_location_time': FieldValue.delete(),
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newShare 
+                ? 'Sdílení polohy zapnuto. Přátelé tě uvidí na své mapě.' 
+                : 'Sdílení polohy vypnuto.'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chyba při změně sdílení polohy: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _uploadMyLocation(Position position) async {
+    if (!_shareLocation) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final now = DateTime.now();
+    if (_lastLocationShareTime != null && now.difference(_lastLocationShareTime!).inSeconds < 60) {
+      return;
+    }
+
+    _lastLocationShareTime = now;
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'last_location': GeoPoint(position.latitude, position.longitude),
+        'last_location_time': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
   }
 
   Future<void> _createAvatarIcon(String avatar) async {
@@ -842,6 +1002,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       if (!mounted) return;
       final newPoint = LatLng(position.latitude, position.longitude);
 
+      // Sync position to Firestore for friends location map tracking
+      _uploadMyLocation(position);
+
       // Update streak
       final today = DateTime.now();
       if (_lastActivityDate == null || !_isSameDay(_lastActivityDate!, today)) {
@@ -1412,6 +1575,20 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ),
+          Position(
+            bottom: bottomOffset + 76 + 76,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: 'share_location_button',
+              onPressed: _toggleLocationSharing,
+              backgroundColor: _shareLocation ? Colors.lime : Colors.white,
+              foregroundColor: _shareLocation ? Colors.black : Colors.black54,
+              child: Icon(
+                _shareLocation ? Icons.location_on : Icons.location_off_outlined,
+                size: 28,
               ),
             ),
           ),

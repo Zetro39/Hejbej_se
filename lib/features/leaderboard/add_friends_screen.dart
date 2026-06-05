@@ -273,6 +273,20 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
 
       await batch.commit();
 
+      // Log friend connection to activity feed
+      try {
+        await _firestore.collection('activities').add({
+          'uid': currentUser.uid,
+          'username': myData['username'] ?? 'Uživatel',
+          'type': 'friend_added',
+          'timestamp': FieldValue.serverTimestamp(),
+          'details': {
+            'friendName': targetUsername,
+            'friendUid': targetUid,
+          },
+        });
+      } catch (_) {}
+
       if (!mounted) return;
       showDialog(
         context: context,
