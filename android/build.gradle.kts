@@ -24,7 +24,7 @@ tasks.register<Delete>("clean") {
 }
 
 subprojects {
-    afterEvaluate {
+    val configureAction = {
         val android = extensions.findByName("android")
         if (android != null) {
             try {
@@ -39,6 +39,14 @@ subprojects {
             } catch (e: Exception) {
                 // Ignore if method not found or throws
             }
+        }
+    }
+
+    if (state.executed) {
+        configureAction()
+    } else {
+        afterEvaluate {
+            configureAction()
         }
     }
 }

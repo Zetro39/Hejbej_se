@@ -352,7 +352,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'v1.2.3+38',
+                  'v1.2.3+39',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                 ),
                 const SizedBox(height: 20),
