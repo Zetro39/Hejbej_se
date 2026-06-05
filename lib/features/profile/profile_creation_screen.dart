@@ -203,34 +203,6 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
     }
 
     try {
-      // Check if username is taken by another user
-      final cleanUser = _cleanStringForSearch(enteredUsername);
-      final snap = await FirebaseFirestore.instance
-          .collection('users')
-          .where('username_clean', isEqualTo: cleanUser)
-          .get();
-      
-      bool isTaken = false;
-      for (final doc in snap.docs) {
-        if (doc.id != user.uid) {
-          isTaken = true;
-          break;
-        }
-      }
-      
-      if (isTaken) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Tato přezdívka už je obsazena.'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-        setState(() => _isSaving = false);
-        return;
-      }
-
       final docSnap = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       final existingData = docSnap.data() ?? {};
       String finalFriendCode = existingData['friend_code'] as String? ?? '';

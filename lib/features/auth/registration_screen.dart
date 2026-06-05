@@ -51,22 +51,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     return buffer.toString().replaceAll('#', '');
   }
 
-  Future<bool> _isUsernameTaken(String username) async {
-    try {
-      final clean = _cleanStringForSearch(username);
-      final snap = await FirebaseFirestore.instance
-          .collection('users')
-          .where('username_clean', isEqualTo: clean)
-          .limit(1)
-          .get()
-          .timeout(const Duration(seconds: 4));
-      return snap.docs.isNotEmpty;
-    } catch (_) {
-      // Fallback on network timeout
-      return false;
-    }
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -76,13 +60,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     try {
       final username = _username.text.trim();
-      if (await _isUsernameTaken(username)) {
-        setState(() {
-          _error = 'Tato přezdívka už je obsazena.';
-          _isSubmitting = false;
-        });
-        return;
-      }
 
       final email = _email.text.trim();
       final password = _password.text;
