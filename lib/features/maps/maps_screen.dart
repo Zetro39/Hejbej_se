@@ -12,6 +12,9 @@ import 'package:pedometer/pedometer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/location_service.dart';
+import '../../services/auth_service.dart';
+import 'package:pay/pay.dart';
+import 'ar_navigation_screen.dart';
 
 class PlacePrediction {
   final String description;
@@ -111,6 +114,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _loadPersistentData();
     _setupMap();
     _initPedometer();
+    _loadPremiumStatus();
   }
 
   Future<void> _loadReachedCheckpoints() async {
@@ -150,6 +154,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     if (_lastActivityDate != null) {
       await prefs.setString('lastActivityDate', _lastActivityDate!.toIso8601String());
     }
+
+    // Sync to Firestore
+    await AuthService().updateDistance(_totalDistance, _limetkyBalance);
+    await AuthService().updateStreak(_streak);
   }
 
   bool _isSameDay(DateTime a, DateTime b) {
@@ -1391,8 +1399,251 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+          Positioned(
+            bottom: bottomOffset + 76,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: 'ar_nav_button',
+              onPressed: _onArPressed,
+              backgroundColor: const Color(0xFFBFFF00),
+              foregroundColor: Colors.black,
+              child: const Icon(Icons.remove_red_eye, size: 28),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  // Premium & AR Methods
+  bool _isPremium = false;
+
+  Future<void> _loadPremiumStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _isPremium = prefs.getBool('isPremium') ?? false;
+      });
+    }
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final data = doc.data() ?? {};
+        final isPremiumDb = data['isPremium'] as bool? ?? false;
+        if (isPremiumDb != _isPremium && mounted) {
+          setState(() {
+            _isPremium = isPremiumDb;
+          });
+          await prefs.setBool('isPremium', isPremiumDb);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _onArPressed() {
+    if (_polylineCoordinates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nejprve vyberte nebo zapněte trasu na mapě.')),
+      );
+      return;
+    }
+
+    if (_isPremium) {
+      _openArNavigation();
+    } else {
+      _showPaywall();
+    }
+  }
+
+  void _openArNavigation() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ArNavigationScreen(routePoints: _polylineCoordinates),
+      ),
+    );
+  }
+
+  void _showPaywall() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(28.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Icon(Icons.stars, size: 72, color: Colors.amber),
+              const SizedBox(height: 16),
+              const Text(
+                'Aktivujte Hejbej se Premium!',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Získejte přístup k AR Navigaci přímo na silnici! Uvidíte trasu vykreslenou v rozšířené realitě přímo před sebou.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.black54, fontSize: 14),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.lime.shade50.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.lime),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: const [
+                    Text(
+                      'Měsíční předplatné',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    Text(
+                      '25 Kč / měsíc',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.lightBlue),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              if (Platform.isAndroid)
+                GooglePayButton(
+                  paymentConfiguration: PaymentConfiguration.fromJsonString(
+                    r'''{
+                      "provider": "google_pay",
+                      "data": {
+                        "environment": "TEST",
+                        "apiVersion": 2,
+                        "apiVersionMinor": 0,
+                        "allowedPaymentMethods": [
+                          {
+                            "type": "CARD",
+                            "tokenizationSpecification": {
+                              "type": "PAYMENT_GATEWAY",
+                              "parameters": {
+                                "gateway": "example",
+                                "gatewayMerchantId": "exampleGatewayMerchantId"
+                              }
+                            },
+                            "parameters": {
+                              "allowedAuthMethods": ["PAN_ONLY", "CRYPTOGRAM_3DS"],
+                              "allowedCardNetworks": ["AMEX", "DISCOVER", "JCB", "MASTERCARD", "VISA"]
+                            }
+                          }
+                        ],
+                        "merchantInfo": {
+                          "merchantName": "Hejbej se"
+                        },
+                        "transactionInfo": {
+                          "countryCode": "CZ",
+                          "currencyCode": "CZK",
+                          "totalPriceStatus": "FINAL",
+                          "totalPrice": "25.00"
+                        }
+                      }
+                    }'''
+                  ),
+                  paymentItems: const [
+                    PaymentItem(
+                      label: 'Hejbej se Premium',
+                      amount: '25.00',
+                      status: PaymentItemStatus.final_price,
+                    )
+                  ],
+                  type: GooglePayButtonType.subscribe,
+                  width: double.infinity,
+                  height: 50,
+                  margin: const EdgeInsets.only(top: 8.0),
+                  onPaymentResult: (result) => _unlockPremium(),
+                  loadingIndicator: const Center(child: CircularProgressIndicator()),
+                )
+              else if (Platform.isIOS)
+                ApplePayButton(
+                  paymentConfiguration: PaymentConfiguration.fromJsonString(
+                    r'''{
+                      "provider": "apple_pay",
+                      "data": {
+                        "merchantIdentifier": "merchant.com.zetro39.hejbejse",
+                        "supportedNetworks": ["visa", "masterCard", "amex"],
+                        "countryCode": "CZ",
+                        "currencyCode": "CZK"
+                      }
+                    }'''
+                  ),
+                  paymentItems: const [
+                    PaymentItem(
+                      label: 'Hejbej se Premium',
+                      amount: '25.00',
+                      status: PaymentItemStatus.final_price,
+                    )
+                  ],
+                  style: ApplePayButtonStyle.black,
+                  width: double.infinity,
+                  height: 50,
+                  margin: const EdgeInsets.only(top: 8.0),
+                  onPaymentResult: (result) => _unlockPremium(),
+                ),
+              
+              const SizedBox(height: 12),
+              
+              OutlinedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _unlockPremium();
+                },
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.lime, width: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text(
+                  '[Test Bypass] Odemknout zdarma',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _unlockPremium() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isPremium', true);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'isPremium': true,
+      }, SetOptions(merge: true));
+    }
+    
+    setState(() {
+      _isPremium = true;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🎉 Premium aktivováno! Nyní můžete používat AR navigaci.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      
+      if (_polylineCoordinates.isNotEmpty) {
+        _openArNavigation();
+      }
+    }
   }
 }

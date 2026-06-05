@@ -54,4 +54,7 @@
     
     <!-- Permissions for Step Counter -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    
+    <!-- Permission for Camera/AR -->
+    <uses-permission android:name="android.permission.CAMERA" />
 </manifest>

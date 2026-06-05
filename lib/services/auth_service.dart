@@ -142,4 +142,126 @@ class AuthService {
     if (data['registration_date'] == null) data['registration_date'] = FieldValue.serverTimestamp();
     await docRef.set(data, SetOptions(merge: true));
   }
+
+  // Sync distance to Firestore (updates total, weekly, monthly and resets them if time changes)
+  Future<void> updateDistance(double totalDistance, int limetky) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final docRef = _firestore.collection('users').doc(user.uid);
+    final now = DateTime.now();
+
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        final data = snapshot.data() ?? {};
+
+        double weeklyDistance = (data['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
+        double monthlyDistance = (data['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
+
+        Timestamp? lastUpdateTs = data['lastDistanceUpdate'] as Timestamp?;
+
+        if (lastUpdateTs != null) {
+          final lastUpdate = lastUpdateTs.toDate();
+          if (!_isSameISOWeek(now, lastUpdate)) {
+            weeklyDistance = 0.0;
+          }
+          if (now.month != lastUpdate.month || now.year != lastUpdate.year) {
+            monthlyDistance = 0.0;
+          }
+        }
+
+        double oldTotalDistance = (data['totalDistance'] as num?)?.toDouble() ?? 0.0;
+        double delta = totalDistance - oldTotalDistance;
+        if (delta < 0) delta = 0.0;
+
+        weeklyDistance += delta;
+        monthlyDistance += delta;
+
+        transaction.set(docRef, {
+          'totalDistance': totalDistance,
+          'weeklyDistance': weeklyDistance,
+          'monthlyDistance': monthlyDistance,
+          'limetky': limetky,
+          'lastDistanceUpdate': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('Failed to sync distance to Firestore: $e');
+    }
+  }
+
+  // Sync streak to Firestore
+  Future<void> updateStreak(int streak) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    try {
+      await _firestore.collection('users').doc(user.uid).set({
+        'streak': streak,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Failed to sync streak to Firestore: $e');
+    }
+  }
+
+  // Sign in with Google credentials in Firebase Auth and ensure user document
+  Future<UserCredential> signInWithGoogle(String accessToken, String? idToken) async {
+    final credential = GoogleAuthProvider.credential(
+      accessToken: accessToken,
+      idToken: idToken,
+    );
+    final userCred = await _auth.signInWithCredential(credential);
+    await _ensureUserDocument(userCred.user);
+    return userCred;
+  }
+
+  // Sign in with Apple credentials in Firebase Auth and ensure user document
+  Future<UserCredential> signInWithApple(String idToken, String? rawNonce) async {
+    final credential = OAuthProvider('apple.com').credential(
+      idToken: idToken,
+      rawNonce: rawNonce,
+    );
+    final userCred = await _auth.signInWithCredential(credential);
+    await _ensureUserDocument(userCred.user);
+    return userCred;
+  }
+
+  // Helper to check if two dates fall in the same ISO week
+  bool _isSameISOWeek(DateTime date1, DateTime date2) {
+    final monday1 = date1.subtract(Duration(days: date1.weekday - 1));
+    final monday2 = date2.subtract(Duration(days: date2.weekday - 1));
+    return monday1.year == monday2.year &&
+        monday1.month == monday2.month &&
+        monday1.day == monday2.day;
+  }
+
+  // Ensures user document exists in Firestore with a valid friend_code and username
+  Future<void> _ensureUserDocument(User? user) async {
+    if (user == null) return;
+    final docRef = _firestore.collection('users').doc(user.uid);
+    final doc = await docRef.get();
+    if (!doc.exists) {
+      final emailName = user.email != null ? user.email!.split('@')[0] : 'user';
+      final cleanedName = emailName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+      final username = cleanedName.isNotEmpty ? cleanedName : 'user';
+      
+      final friendCode = '#${username.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}';
+      
+      await docRef.set({
+        'email': user.email,
+        'username': username,
+        'friend_code': friendCode,
+        'first_name': user.displayName != null ? user.displayName!.split(' ').first : '',
+        'last_name': user.displayName != null && user.displayName!.split(' ').length > 1 
+            ? user.displayName!.split(' ').sublist(1).join(' ') 
+            : '',
+        'registration_date': FieldValue.serverTimestamp(),
+        'strikes': 0,
+        'limetky': 0,
+        'totalDistance': 0.0,
+        'weeklyDistance': 0.0,
+        'monthlyDistance': 0.0,
+      }, SetOptions(merge: true));
+    }
+  }
 }

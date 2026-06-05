@@ -108,15 +108,20 @@ class _LoginScreenState extends State<LoginScreen> {
       final account = await google.signIn();
       if (account == null) return; // user canceled
       final auth = await account.authentication;
-      final name = account.displayName ?? account.email;
-      await AuthService().saveUserName(name ?? '');
+      
+      // Sign in to Firebase Auth!
+      final cred = await AuthService().signInWithGoogle(auth.accessToken ?? '', auth.idToken);
+      final user = cred.user;
+      final name = user?.displayName ?? user?.email ?? 'Uživatel';
+
+      await AuthService().saveUserName(name);
       await AuthService().saveAuthCredentials('google', {
         'accessToken': auth.accessToken,
         'idToken': auth.idToken,
         'email': account.email,
       });
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: name ?? '')));
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MainShell(userName: name)));
     } catch (e) {
       debugPrint('Google sign-in failed: $e');
       if (!mounted) return;
@@ -136,8 +141,12 @@ class _LoginScreenState extends State<LoginScreen> {
         scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
       );
 
+      // Sign in to Firebase Auth!
+      final cred = await AuthService().signInWithApple(credential.identityToken ?? '', null);
+      final user = cred.user;
+
       final name = ([credential.givenName, credential.familyName].where((s) => s != null).join(' ').trim()).isEmpty
-          ? (credential.email ?? 'Apple User')
+          ? (user?.email ?? 'Apple User')
           : '${credential.givenName ?? ''} ${credential.familyName ?? ''}'.trim();
 
       await AuthService().saveUserName(name);

@@ -1,7 +1,9 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'auth_service.dart';
 
-const String _distanceKey = 'total_distance_km';
+const String _distanceKey = 'totalDistance';
 
 class DistanceManager {
   static final DistanceManager _instance = DistanceManager._internal();
@@ -25,12 +27,26 @@ class DistanceManager {
     _totalDistance += kilometers;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_distanceKey, _totalDistance);
+
+    // Sync to Firestore if logged in
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final limetky = prefs.getInt('limetkyBalance') ?? 0;
+      await AuthService().updateDistance(_totalDistance, limetky);
+    }
   }
 
   Future<void> setDistance(double kilometers) async {
     _totalDistance = kilometers.clamp(0, 40000);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_distanceKey, _totalDistance);
+
+    // Sync to Firestore if logged in
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final limetky = prefs.getInt('limetkyBalance') ?? 0;
+      await AuthService().updateDistance(_totalDistance, limetky);
+    }
   }
 
   Future<void> reset() async {
