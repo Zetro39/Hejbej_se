@@ -175,7 +175,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
         throw Exception('Nemůžeš přidat sám sebe.');
       }
 
-      // 2. Query target user document by friend_code or username
+      // 2. Query target user document by friend_code or username (with multiple casing fallbacks)
       QuerySnapshot query;
       
       // Try querying by friend_code (with # prepended)
@@ -185,11 +185,39 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
           .limit(1)
           .get();
 
-      // If not found, try querying by username (lowercase)
+      // If not found, try querying by exact username
+      if (query.docs.isEmpty) {
+        query = await _firestore
+            .collection('users')
+            .where('username', isEqualTo: searchCode)
+            .limit(1)
+            .get();
+      }
+
+      // If not found, try querying by lowercase username
       if (query.docs.isEmpty) {
         query = await _firestore
             .collection('users')
             .where('username', isEqualTo: searchCode.toLowerCase())
+            .limit(1)
+            .get();
+      }
+
+      // If not found, try querying by uppercase username
+      if (query.docs.isEmpty) {
+        query = await _firestore
+            .collection('users')
+            .where('username', isEqualTo: searchCode.toUpperCase())
+            .limit(1)
+            .get();
+      }
+
+      // If not found, try querying by capitalized username (e.g. Pepa)
+      if (query.docs.isEmpty && searchCode.isNotEmpty) {
+        final capitalized = searchCode[0].toUpperCase() + searchCode.substring(1).toLowerCase();
+        query = await _firestore
+            .collection('users')
+            .where('username', isEqualTo: capitalized)
             .limit(1)
             .get();
       }
