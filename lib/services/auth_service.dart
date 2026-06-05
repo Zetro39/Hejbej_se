@@ -107,7 +107,41 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
 
   Future<bool> isBlockedDueToUnverified() async {
-    return false; // Email verification bypass for smoother testing & onboarding
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    
+    try {
+      await user.reload().timeout(const Duration(seconds: 4));
+    } catch (_) {}
+
+    final updatedUser = _auth.currentUser;
+    if (updatedUser == null) return false;
+    if (updatedUser.emailVerified) return false;
+
+    // Check registration date. If registered less than 1 hour ago, do not block yet
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(updatedUser.uid)
+          .get()
+          .timeout(const Duration(seconds: 4));
+      if (doc.exists) {
+        final data = doc.data() ?? {};
+        final regDate = data['registration_date'] as Timestamp?;
+        if (regDate != null) {
+          final regTime = regDate.toDate();
+          final diff = DateTime.now().difference(regTime);
+          if (diff.inHours < 1) {
+            return false; // grace period of 1 hour
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking verification blocked status: $e');
+      // If offline/error, let them pass for now instead of hard blocking
+      return false; 
+    }
+    return true; // blocked if not verified after 1 hour
   }
 
   Future<void> saveProfile(String uid, Map<String, dynamic> profile) async {
@@ -404,8 +438,14 @@ class AuthService {
   Future<void> _ensureUserDocument(User? user, {String? firstName, String? lastName}) async {
     if (user == null) return;
     final docRef = _firestore.collection('users').doc(user.uid);
-    final doc = await docRef.get();
-    final data = doc.data();
+    
+    Map<String, dynamic>? data;
+    try {
+      final doc = await docRef.get().timeout(const Duration(seconds: 4));
+      data = doc.data();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Failed to get user doc in _ensureUserDocument (offline?): $e');
+    }
     
     final emailName = user.email != null ? user.email!.split('@')[0] : 'user';
     final cleanedName = emailName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
@@ -421,21 +461,25 @@ class AuthService {
         ? user.displayName!.split(' ').sublist(1).join(' ') 
         : '');
 
-    await docRef.set({
-      'email': user.email,
-      'username': finalUsername,
-      'username_clean': _cleanStringForSearch(finalUsername),
-      'friend_code': finalFriendCode,
-      'friend_code_clean': _cleanStringForSearch(finalFriendCode),
-      'first_name': finalFirstName,
-      'last_name': finalLastName,
-      'registration_date': data?['registration_date'] ?? FieldValue.serverTimestamp(),
-      'strikes': data?['strikes'] ?? 0,
-      'limetky': data?['limetky'] ?? 0,
-      'totalDistance': data?['totalDistance'] ?? 0.0,
-      'weeklyDistance': data?['weeklyDistance'] ?? 0.0,
-      'monthlyDistance': data?['monthlyDistance'] ?? 0.0,
-    }, SetOptions(merge: true));
+    try {
+      await docRef.set({
+        'email': user.email,
+        'username': finalUsername,
+        'username_clean': _cleanStringForSearch(finalUsername),
+        'friend_code': finalFriendCode,
+        'friend_code_clean': _cleanStringForSearch(finalFriendCode),
+        'first_name': finalFirstName,
+        'last_name': finalLastName,
+        'registration_date': data?['registration_date'] ?? FieldValue.serverTimestamp(),
+        'strikes': data?['strikes'] ?? 0,
+        'limetky': data?['limetky'] ?? 0,
+        'totalDistance': data?['totalDistance'] ?? 0.0,
+        'weeklyDistance': data?['weeklyDistance'] ?? 0.0,
+        'monthlyDistance': data?['monthlyDistance'] ?? 0.0,
+      }, SetOptions(merge: true)).timeout(const Duration(seconds: 4));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Failed to set user doc in _ensureUserDocument (offline?): $e');
+    }
   }
 
   Future<bool> isProfileCompleted() async {
