@@ -15,6 +15,8 @@ import '../../services/location_service.dart';
 import '../../services/auth_service.dart';
 import 'package:pay/pay.dart';
 import 'ar_navigation_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PlacePrediction {
   final String description;

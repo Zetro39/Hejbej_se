@@ -497,8 +497,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                               children: [
                                 SizedBox(
                                   width: 40,
-                                  alignment: Alignment.center,
-                                  child: _buildMedal(index),
+                                  child: Center(
+                                    child: _buildMedal(index),
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
                                 CircleAvatar(
