@@ -18,6 +18,41 @@ class ProfileCreationScreen extends StatefulWidget {
 class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   final ImagePicker _picker = ImagePicker();
   
+  // Text controllers for basic info
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingProfileBasics();
+  }
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _usernameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadExistingProfileBasics() async {
+    final user = AuthService().currentUser;
+    if (user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists && mounted) {
+        final data = doc.data() ?? {};
+        setState(() {
+          _firstNameController.text = data['first_name'] as String? ?? '';
+          _lastNameController.text = data['last_name'] as String? ?? '';
+          _usernameController.text = data['username'] as String? ?? '';
+        });
+      }
+    } catch (_) {}
+  }
+
   // Data state
   DateTime? _birthDate;
   double _walkMin = 5.0;
@@ -124,7 +159,32 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
     }
   }
 
+  String _cleanStringForSearch(String input) {
+    var str = input.toLowerCase().trim();
+    const diacritics = {
+      'á': 'a', 'č': 'c', 'ď': 'd', 'é': 'e', 'ě': 'e', 'í': 'i', 'ň': 'n', 
+      'ó': 'o', 'ř': 'r', 'š': 's', 'ť': 't', 'ú': 'u', 'ů': 'u', 'ý': 'y', 'ž': 'z'
+    };
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      final char = str[i];
+      buffer.write(diacritics[char] ?? char);
+    }
+    return buffer.toString().replaceAll('#', '');
+  }
+
   Future<void> _saveProfile() async {
+    final enteredUsername = _usernameController.text.trim();
+    if (enteredUsername.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Zadejte prosím herní přezdívku.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     if (_birthDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -142,23 +202,65 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
       return;
     }
 
-    final age = _calculateAge(_birthDate!);
-    final avatarToSave = _selectedAvatarBase64 ?? _presetAvatarId ?? 'boy';
-
-    final data = {
-      'birth_date': Timestamp.fromDate(_birthDate!),
-      'age': age,
-      'gender': _gender,
-      'walk_range_min': _walkMin,
-      'walk_range_max': _walkMax,
-      'bike_range_min': _bikeMin,
-      'bike_range_max': _bikeMax,
-      'default_activity': _defaultActivity,
-      'selected_avatar': avatarToSave,
-      'updated_at': FieldValue.serverTimestamp(),
-    };
-
     try {
+      // Check if username is taken by another user
+      final cleanUser = _cleanStringForSearch(enteredUsername);
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('username_clean', isEqualTo: cleanUser)
+          .get();
+      
+      bool isTaken = false;
+      for (final doc in snap.docs) {
+        if (doc.id != user.uid) {
+          isTaken = true;
+          break;
+        }
+      }
+      
+      if (isTaken) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Tato přezdívka už je obsazena.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        setState(() => _isSaving = false);
+        return;
+      }
+
+      final docSnap = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final existingData = docSnap.data() ?? {};
+      String finalFriendCode = existingData['friend_code'] as String? ?? '';
+      
+      if (finalFriendCode.isEmpty || existingData['username'] != enteredUsername) {
+        finalFriendCode = '#${enteredUsername.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}';
+      }
+
+      final age = _calculateAge(_birthDate!);
+      final avatarToSave = _selectedAvatarBase64 ?? _presetAvatarId ?? 'boy';
+
+      final data = {
+        'first_name': _firstNameController.text.trim(),
+        'last_name': _lastNameController.text.trim(),
+        'username': enteredUsername,
+        'username_clean': _cleanStringForSearch(enteredUsername),
+        'friend_code': finalFriendCode,
+        'friend_code_clean': _cleanStringForSearch(finalFriendCode),
+        'birth_date': Timestamp.fromDate(_birthDate!),
+        'age': age,
+        'gender': _gender,
+        'walk_range_min': _walkMin,
+        'walk_range_max': _walkMax,
+        'bike_range_min': _bikeMin,
+        'bike_range_max': _bikeMax,
+        'default_activity': _defaultActivity,
+        'selected_avatar': avatarToSave,
+        'updated_at': FieldValue.serverTimestamp(),
+      };
+
       // 1. Save locally in SharedPreferences first for instant responsiveness
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('selected_avatar', avatarToSave);
@@ -182,7 +284,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
         await AuthService().syncFirestoreToLocal().timeout(const Duration(seconds: 3));
       } catch (_) {}
       
-      final userName = await AuthService().getUserName() ?? 'Hráč';
+      final userName = await AuthService().getUserName() ?? enteredUsername;
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -200,6 +302,51 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Widget _buildSectionTextField({
+    required TextEditingController controller,
+    required String labelText,
+    required IconData prefixIcon,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: TextFormField(
+        controller: controller,
+        style: const TextStyle(fontSize: 14, color: Colors.black87),
+        decoration: InputDecoration(
+          labelText: labelText,
+          labelStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+          prefixIcon: Icon(prefixIcon, color: Colors.lightBlue.shade300, size: 20),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey.shade100, width: 1.2),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey.shade100, width: 1.2),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.lightBlue, width: 1.8),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      ),
+    );
   }
 
   @override
@@ -235,6 +382,29 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                 'Vyplňte dodatečné údaje pro správné generování tras a odemčení her.',
                 style: TextStyle(fontSize: 14, color: Colors.black54),
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+
+              // SECTION: Basic Information
+              const Text(
+                'Osobní údaje a Přezdívka',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _buildSectionTextField(
+                controller: _firstNameController,
+                labelText: 'Jméno',
+                prefixIcon: Icons.badge_outlined,
+              ),
+              _buildSectionTextField(
+                controller: _lastNameController,
+                labelText: 'Příjmení',
+                prefixIcon: Icons.badge_outlined,
+              ),
+              _buildSectionTextField(
+                controller: _usernameController,
+                labelText: 'Herní přezdívka',
+                prefixIcon: Icons.sports_esports_outlined,
               ),
               const SizedBox(height: 24),
 
