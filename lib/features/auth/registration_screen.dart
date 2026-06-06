@@ -21,6 +21,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
   final _username = TextEditingController();
+  final _phone = TextEditingController();
+  
+  bool _useSmsVerification = false;
+  String _verificationId = '';
   bool _isSubmitting = false;
   String? _error;
   bool _obscurePassword = true;
@@ -34,6 +38,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _firstName.dispose();
     _lastName.dispose();
     _username.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
@@ -51,6 +56,191 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     return buffer.toString().replaceAll('#', '');
   }
 
+  Future<void> _finalizeRegistration(User user) async {
+    final username = _username.text.trim();
+    final friendCode = '#${username.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}';
+    
+    final profile = {
+      'first_name': _firstName.text.trim(),
+      'last_name': _lastName.text.trim(),
+      'username': username,
+      'username_clean': _cleanStringForSearch(username),
+      'friend_code': friendCode,
+      'friend_code_clean': _cleanStringForSearch(friendCode),
+      'phone_number': _useSmsVerification ? _phone.text.trim().replaceAll(' ', '') : null,
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+    
+    try {
+      await AuthService().saveProfile(user.uid, profile)
+          .timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint('Failed to save profile basics to Firestore: $e');
+    }
+        
+    try {
+      await AuthService().saveUserName(username)
+          .timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint('Failed to save username to local storage: $e');
+    }
+  }
+
+  Future<void> _startPhoneVerification(User user, String phoneNumber) async {
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await AuthService().verifyPhoneNumber(
+        phoneNumber: phoneNumber,
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          await user.linkWithCredential(credential);
+          await _finalizeRegistration(user);
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const ProfileCreationScreen()));
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          setState(() {
+            _error = 'Ověření telefonu selhalo: ${e.code == 'invalid-phone-number' ? 'Neplatné telefonní číslo.' : (e.message ?? e.code)}';
+            _isSubmitting = false;
+          });
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          setState(() {
+            _verificationId = verificationId;
+            _isSubmitting = false;
+          });
+          _showOtpDialog(user);
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          _verificationId = verificationId;
+        },
+      );
+    } catch (e) {
+      setState(() {
+        _error = 'Chyba při inicializaci SMS: $e';
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  void _showOtpDialog(User user) {
+    final otpController = TextEditingController();
+    bool isVerifyingOtp = false;
+    String? otpError;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Text('✉️ Ověření přes SMS', style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Zadejte 6místný kód zaslaný na číslo\n${_phone.text.trim()}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 14, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: otpController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 4),
+                    decoration: InputDecoration(
+                      hintText: '000000',
+                      counterText: '',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Colors.lightBlue, width: 2),
+                      ),
+                    ),
+                  ),
+                  if (otpError != null) ...[
+                    const SizedBox(height: 12),
+                    Text(otpError!, style: const TextStyle(color: Colors.red, fontSize: 13), textAlign: TextAlign.center),
+                  ],
+                  if (isVerifyingOtp) ...[
+                    const SizedBox(height: 20),
+                    const Center(child: CircularProgressIndicator(color: Colors.lightBlue)),
+                  ],
+                ],
+              ),
+              actions: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: isVerifyingOtp
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                                FirebaseAuth.instance.signOut();
+                              },
+                        child: const Text('Zrušit', style: TextStyle(color: Colors.grey)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: isVerifyingOtp
+                            ? null
+                            : () async {
+                                final code = otpController.text.trim();
+                                if (code.length != 6) {
+                                  setDialogState(() {
+                                    otpError = 'Zadejte platný 6místný kód';
+                                  });
+                                  return;
+                                }
+
+                                setDialogState(() {
+                                  isVerifyingOtp = true;
+                                  otpError = null;
+                                });
+
+                                try {
+                                  await AuthService().linkPhoneNumber(_verificationId, code);
+                                  await _finalizeRegistration(user);
+                                  
+                                  if (!mounted) return;
+                                  Navigator.pop(context); // Pop dialog
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(builder: (_) => const ProfileCreationScreen()),
+                                  );
+                                } catch (e) {
+                                  setDialogState(() {
+                                    isVerifyingOtp = false;
+                                    otpError = 'Neplatný kód: ${e.toString().replaceAll('Exception: ', '').replaceAll('FirebaseAuthException: ', '')}';
+                                  });
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.lime,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Ověřit', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -59,8 +249,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     });
 
     try {
-      final username = _username.text.trim();
-
       final email = _email.text.trim();
       final password = _password.text;
       
@@ -70,36 +258,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final user = cred.user;
       if (user == null) throw Exception('Registrace selhala');
 
-      // Save profile basics with clean fields
-      final friendCode = '#${username.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}';
-      final profile = {
-        'first_name': _firstName.text.trim(),
-        'last_name': _lastName.text.trim(),
-        'username': username,
-        'username_clean': _cleanStringForSearch(username),
-        'friend_code': friendCode,
-        'friend_code_clean': _cleanStringForSearch(friendCode),
-        'updated_at': FieldValue.serverTimestamp(),
-      };
-      
-      // Save profile basics (non-blocking timeouts so network delay doesn't halt registration)
-      try {
-        await AuthService().saveProfile(user.uid, profile)
-            .timeout(const Duration(seconds: 4));
-      } catch (e) {
-        debugPrint('Failed to save profile basics to Firestore: $e');
+      if (_useSmsVerification) {
+        final cleanPhone = _phone.text.trim().replaceAll(' ', '');
+        await _startPhoneVerification(user, cleanPhone);
+      } else {
+        await _finalizeRegistration(user);
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const ProfileCreationScreen()));
       }
-          
-      try {
-        await AuthService().saveUserName(username)
-            .timeout(const Duration(seconds: 4));
-      } catch (e) {
-        debugPrint('Failed to save username to local storage: $e');
-      }
-
-      // Go to Profile Complete / Setup Screen
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const ProfileCreationScreen()));
     } on TimeoutException catch (e) {
       setState(() {
         _error = e.message;
@@ -274,6 +440,84 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       return null;
                     },
                   ),
+                  
+                  const SizedBox(height: 8),
+                  Text(
+                    'Způsob ověření účtu',
+                    style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Center(child: Text('Přes E-mail')),
+                          selected: !_useSmsVerification,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() {
+                                _useSmsVerification = false;
+                              });
+                            }
+                          },
+                          selectedColor: Colors.lightBlue.shade100,
+                          backgroundColor: Colors.white,
+                          labelStyle: TextStyle(
+                            color: !_useSmsVerification ? Colors.lightBlue.shade800 : Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: !_useSmsVerification ? Colors.lightBlue : Colors.grey.shade300),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Center(child: Text('Přes SMS (číslo)')),
+                          selected: _useSmsVerification,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() {
+                                _useSmsVerification = true;
+                              });
+                            }
+                          },
+                          selectedColor: Colors.lightBlue.shade100,
+                          backgroundColor: Colors.white,
+                          labelStyle: TextStyle(
+                            color: _useSmsVerification ? Colors.lightBlue.shade800 : Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: _useSmsVerification ? Colors.lightBlue : Colors.grey.shade300),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  if (_useSmsVerification) ...[
+                    _buildTextField(
+                      controller: _phone,
+                      labelText: 'Telefonní číslo (např. +420 777 123 456)',
+                      prefixIcon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                      validator: (v) {
+                        if (_useSmsVerification) {
+                          if (v == null || v.trim().isEmpty) return 'Vyplňte telefonní číslo';
+                          final clean = v.trim().replaceAll(' ', '');
+                          if (!RegExp(r'^\+[1-9]\d{1,14}$').hasMatch(clean)) {
+                            return 'Neplatný formát. Použijte např. +420 777 123 456';
+                          }
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
 
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8.0),

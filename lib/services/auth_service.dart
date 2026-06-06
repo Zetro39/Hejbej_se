@@ -584,4 +584,41 @@ class AuthService {
     } catch (_) {}
     return null;
   }
+
+  Future<void> verifyPhoneNumber({
+    required String phoneNumber,
+    required void Function(PhoneAuthCredential) verificationCompleted,
+    required void Function(FirebaseAuthException) verificationFailed,
+    required void Function(String, int?) codeSent,
+    required void Function(String) codeAutoRetrievalTimeout,
+  }) async {
+    await _auth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      verificationCompleted: verificationCompleted,
+      verificationFailed: verificationFailed,
+      codeSent: codeSent,
+      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+      timeout: const Duration(seconds: 60),
+    );
+  }
+
+  Future<UserCredential?> linkPhoneNumber(String verificationId, String smsCode) async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    
+    final PhoneAuthCredential credential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+    
+    final cred = await user.linkWithCredential(credential);
+    
+    try {
+      await _firestore.collection('users').doc(user.uid).update({
+        'phone_number': user.phoneNumber ?? cred.user?.phoneNumber,
+      });
+    } catch (_) {}
+    
+    return cred;
+  }
 }
