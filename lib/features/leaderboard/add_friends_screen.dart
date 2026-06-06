@@ -269,7 +269,74 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
       final targetUsername = targetData['username'] ?? 'Uživatel';
       final resolvedTargetCode = targetData['friend_code'] as String? ?? targetCode;
 
-      // 3. Create bidirectional 'friends' relationship instantly
+      // Check if relationship already exists
+      final existingFriendDoc = await _firestore
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('friends')
+          .doc(targetUid)
+          .get();
+
+      if (existingFriendDoc.exists) {
+        final status = existingFriendDoc.data()?['status'] as String?;
+        if (status == 'friends') {
+          throw Exception('Uživatel $targetUsername již je ve vašich přátelích.');
+        } else if (status == 'outgoing') {
+          throw Exception('Žádost o přátelství uživateli $targetUsername již byla odeslána.');
+        } else if (status == 'incoming') {
+          // If they sent me a request already, accept it instantly
+          final batch = _firestore.batch();
+          final myFriendRef = _firestore
+              .collection('users')
+              .doc(currentUser.uid)
+              .collection('friends')
+              .doc(targetUid);
+          batch.set(myFriendRef, {
+            'uid': targetUid,
+            'username': targetUsername,
+            'friend_code': resolvedTargetCode,
+            'status': 'friends',
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          final targetFriendRef = _firestore
+              .collection('users')
+              .doc(targetUid)
+              .collection('friends')
+              .doc(currentUser.uid);
+          batch.set(targetFriendRef, {
+            'uid': currentUser.uid,
+            'username': myData['username'] ?? 'Uživatel',
+            'friend_code': currentFriendCode ?? '',
+            'status': 'friends',
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          await batch.commit();
+
+          if (!mounted) return;
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('🎉 Přátelé propojeni!'),
+              content: Text('Uživatel $targetUsername vám již dříve odeslal žádost. Nyní jste přátelé!'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Super!'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+      }
+
+      // Create new request: outgoing for sender, incoming for target
       final batch = _firestore.batch();
 
       final myFriendRef = _firestore
@@ -282,7 +349,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
         'uid': targetUid,
         'username': targetUsername,
         'friend_code': resolvedTargetCode,
-        'status': 'friends',
+        'status': 'outgoing',
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -296,18 +363,18 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
         'uid': currentUser.uid,
         'username': myData['username'] ?? 'Uživatel',
         'friend_code': currentFriendCode ?? '',
-        'status': 'friends',
+        'status': 'incoming',
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
       await batch.commit();
 
-      // Log friend connection to activity feed
+      // Log friend connection request to activity feed
       try {
         await _firestore.collection('activities').add({
           'uid': currentUser.uid,
           'username': myData['username'] ?? 'Uživatel',
-          'type': 'friend_added',
+          'type': 'friend_requested',
           'timestamp': FieldValue.serverTimestamp(),
           'details': {
             'friendName': targetUsername,
@@ -320,15 +387,16 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('🎉 Přítel přidán!'),
-          content: Text('Nyní jste propojeni s uživatelem $targetUsername.'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('✉️ Žádost odeslána!'),
+          content: Text('Žádost o přátelství byla úspěšně odeslána uživateli $targetUsername.'),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context); // pop dialog
                 Navigator.pop(context); // pop screen
               },
-              child: const Text('Super!'),
+              child: const Text('Rozumím'),
             ),
           ],
         ),
