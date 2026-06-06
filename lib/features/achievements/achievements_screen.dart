@@ -84,20 +84,26 @@ class AchievementsScreen extends StatefulWidget {
 class _AchievementsScreenState extends State<AchievementsScreen> {
   late final DistanceManager _distanceManager;
   final List<bool> _loyaltyAchievements = [false, false, false];
+  final List<bool> _stepsAchievements = List.filled(6, false);
 
   @override
   void initState() {
     super.initState();
     _distanceManager = DistanceManager();
-    _loadLoyaltyAchievements();
+    _loadAchievements();
   }
 
-  Future<void> _loadLoyaltyAchievements() async {
+  Future<void> _loadAchievements() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _loyaltyAchievements[0] = prefs.getBool('loyaltyAchievement_0') ?? false;
       _loyaltyAchievements[1] = prefs.getBool('loyaltyAchievement_1') ?? false;
       _loyaltyAchievements[2] = prefs.getBool('loyaltyAchievement_2') ?? false;
+
+      final milestones = [5, 10, 25, 50, 100, 365];
+      for (int i = 0; i < milestones.length; i++) {
+        _stepsAchievements[i] = prefs.getBool('steps_achievement_${milestones[i]}') ?? false;
+      }
     });
   }
 
@@ -161,6 +167,18 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                       _buildSectionTile('10 dnů', _loyaltyAchievements[0]),
                       _buildSectionTile('50 dnů', _loyaltyAchievements[1]),
                       _buildSectionTile('250 dnů', _loyaltyAchievements[2]),
+                    ],
+                  ),
+                  ExpansionTile(
+                    leading: const Icon(Icons.check_circle_outline, color: Colors.lightBlue),
+                    title: const Text('Svědomitý (Plnění krokového cíle)'),
+                    children: [
+                      _buildSectionTile('5 dní plnění cíle', _stepsAchievements[0]),
+                      _buildSectionTile('10 dní plnění cíle', _stepsAchievements[1]),
+                      _buildSectionTile('25 dní plnění cíle', _stepsAchievements[2]),
+                      _buildSectionTile('50 dní plnění cíle', _stepsAchievements[3]),
+                      _buildSectionTile('100 dní plnění cíle', _stepsAchievements[4]),
+                      _buildSectionTile('365 dní plnění cíle', _stepsAchievements[5]),
                     ],
                   ),
                 ],

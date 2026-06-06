@@ -52,6 +52,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
           _firstNameController.text = data['first_name'] as String? ?? '';
           _lastNameController.text = data['last_name'] as String? ?? '';
           _usernameController.text = data['username'] as String? ?? '';
+          _dailyStepsGoal = data['daily_steps_goal'] as int? ?? 10000;
         });
       }
     } catch (_) {}
@@ -64,6 +65,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   double _bikeMin = 20.0;
   double _bikeMax = 35.0;
   String _defaultActivity = 'foot'; // 'foot' or 'bike'
+  int _dailyStepsGoal = 10000;
   
   String? _selectedAvatarBase64;
   String? _presetAvatarId = 'boy'; // Default preset
@@ -244,6 +246,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
         'bike_range_max': _bikeMax,
         'default_activity': _defaultActivity,
         'selected_avatar': avatarToSave,
+        'daily_steps_goal': _dailyStepsGoal,
         'updated_at': FieldValue.serverTimestamp(),
       };
 
@@ -257,6 +260,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
       await prefs.setDouble('bike_range_max', _bikeMax);
       await prefs.setString('default_activity', _defaultActivity);
       await prefs.setString('birth_date', _birthDate!.toIso8601String());
+      await prefs.setInt('daily_steps_goal', _dailyStepsGoal);
 
       // 2. Write to Firestore with a timeout so it doesn't block redirection on slow networks
       try {
@@ -704,6 +708,55 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                 rangeMax: 50.0,
                 onMinChanged: (v) => setState(() => _bikeMin = v),
                 onMaxChanged: (v) => setState(() => _bikeMax = v),
+              ),
+              const SizedBox(height: 24),
+
+              // Steps Goal Card
+              Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                color: Colors.white,
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '🎯 Denní cíl kroků',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Nastavte si, kolik kroků chcete denně ujít',
+                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${_dailyStepsGoal.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} ")} kroků',
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.lightBlue),
+                          ),
+                        ],
+                      ),
+                      Slider(
+                        value: _dailyStepsGoal.toDouble(),
+                        min: 1000.0,
+                        max: 30000.0,
+                        divisions: 29,
+                        activeColor: Colors.lightBlue,
+                        inactiveColor: Colors.lightBlue.shade100,
+                        label: '$_dailyStepsGoal',
+                        onChanged: (v) {
+                          setState(() {
+                            _dailyStepsGoal = v.toInt();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
               ),
 
               const SizedBox(height: 36),

@@ -1,7 +1,7 @@
 name: hejbej_se
 description: Hejbej se – trasy v ČR s gamifikací.
 publish_to: "none"
-version: 1.2.3+67
+version: 1.2.3+68
 
 
 
@@ -36,6 +36,8 @@ dependencies:
   home_widget: any
   share_plus: any
   path_provider: ^2.1.3
+  permission_handler: ^11.3.1
+  confetti: ^0.7.0
 
 dev_dependencies:
   flutter_test:

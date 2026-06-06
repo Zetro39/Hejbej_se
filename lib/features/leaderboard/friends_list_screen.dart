@@ -100,6 +100,43 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
 
+    final selectedMsg = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        final options = [
+          'Zvedej se z gauče, lenochu! 🛋️🏃‍♂️',
+          'Už ti dýchám na záda! 💨',
+          'Dneska spíš? Koukej hejbnout zadkem! 😜',
+        ];
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('💬 Vtipné popíchnutí', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options.map((opt) {
+              return Card(
+                elevation: 1,
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                child: ListTile(
+                  title: Text(opt, style: const TextStyle(fontSize: 14)),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                  onTap: () => Navigator.pop(context, opt),
+                ),
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Zrušit', style: TextStyle(color: Colors.grey)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (selectedMsg == null) return;
+
     final now = DateTime.now();
 
     try {
@@ -114,7 +151,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
         'type': 'nudge',
         'timestamp': FieldValue.serverTimestamp(),
         'details': {
-          'message': 'Uživatel $myUsername tě popíchnul k pohybu! 🏃‍♂️',
+          'message': 'Uživatel $myUsername tě popíchnul: "$selectedMsg"',
           'senderName': myUsername,
           'senderUid': currentUser.uid,
         },
@@ -133,7 +170,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Popíchl jsi uživatele $friendName k pohybu! 🏃‍♂️'),
+          content: Text('Popíchl jsi uživatele $friendName: "$selectedMsg"'),
           backgroundColor: Colors.lime.shade800,
         ),
       );

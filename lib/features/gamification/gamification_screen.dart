@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:confetti/confetti.dart';
 import '../../services/auth_service.dart';
+import '../../services/step_tracker_service.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -15,14 +18,42 @@ class _GameScreenState extends State<GameScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   int? _userAge;
+  String? _selectedAvatar;
+  late ConfettiController _confettiController;
 
   @override
   void initState() {
     super.initState();
+    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
+    StepTrackerService().initialize();
+    StepTrackerService().goalCompletedToday.addListener(_onGoalCompletedChange);
     _loadUserAge();
+    _loadSelectedAvatar();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showWidgetPromoIfNeeded();
     });
+  }
+
+  void _onGoalCompletedChange() {
+    if (StepTrackerService().goalCompletedToday.value) {
+      _confettiController.play();
+    }
+  }
+
+  Future<void> _loadSelectedAvatar() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _selectedAvatar = prefs.getString('selected_avatar');
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    StepTrackerService().goalCompletedToday.removeListener(_onGoalCompletedChange);
+    super.dispose();
   }
 
   Future<void> _loadUserAge() async {
@@ -399,122 +430,142 @@ class _GameScreenState extends State<GameScreen> {
       body: SafeArea(
         child: currentUser == null
             ? const Center(child: Text('Uživatel není přihlášen'))
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Steps Card (from template)
-                    _buildStepsCard(),
-                    const SizedBox(height: 24),
-
-                    // Special Games (e.g. Tour de Bear 18+)
-                    _buildSpecialGamesSection(),
-
-                    // Friend Activity Feed
-                    _buildFriendActivityFeed(currentUser.uid),
-                    
-                    // 1v1 Challenges Section Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            : Stack(
+                children: [
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Text(
-                          '1v1 Výzvy na míru',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: () => _showCreateChallengeDialog(context),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Nová výzva'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.lime,
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                        // Steps Card (from template)
+                        _buildStepsCard(),
+                        const SizedBox(height: 24),
+
+                        // Special Games (e.g. Tour de Bear 18+)
+                        _buildSpecialGamesSection(),
+
+                        // Friend Activity Feed
+                        _buildFriendActivityFeed(currentUser.uid),
+                        
+                        // 1v1 Challenges Section Header
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              '1v1 Výzvy na míru',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
                             ),
-                          ),
+                            ElevatedButton.icon(
+                              onPressed: () => _showCreateChallengeDialog(context),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Nová výzva'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lime,
+                                foregroundColor: Colors.black,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Challenges List
+                        StreamBuilder<QuerySnapshot>(
+                          stream: _firestore
+                              .collection('challenges')
+                              .where('participants', arrayContains: currentUser.uid)
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) {
+                              return const Center(child: Padding(
+                                padding: EdgeInsets.all(24.0),
+                                child: CircularProgressIndicator(),
+                              ));
+                            }
+
+                            final docs = snapshot.data?.docs ?? [];
+
+                            if (docs.isEmpty) {
+                              return Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: Colors.lightBlue.shade50.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: Colors.lightBlue.shade100),
+                                ),
+                                child: Column(
+                                  children: const [
+                                    Icon(Icons.bolt, size: 48, color: Colors.lightBlue),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'Zatím nemáš žádné výzvy.',
+                                      style: TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'Klikni na „Nová výzva“ a vyzvi přítele na souboj!',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.black54),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            // Split challenges
+                            final active = docs.where((doc) => doc['status'] == 'active').toList();
+                            final pending = docs.where((doc) => doc['status'] == 'pending').toList();
+                            final completed = docs.where((doc) => doc['status'] == 'completed').toList();
+
+                            List<Widget> challengeWidgets = [];
+
+                            if (active.isNotEmpty) {
+                              challengeWidgets.add(_buildSectionTitle('Aktivní výzvy'));
+                              challengeWidgets.addAll(active.map((doc) => _buildChallengeCard(doc, currentUser.uid)));
+                            }
+
+                            if (pending.isNotEmpty) {
+                              challengeWidgets.add(_buildSectionTitle('Čekající žádosti'));
+                              challengeWidgets.addAll(pending.map((doc) => _buildChallengeCard(doc, currentUser.uid)));
+                            }
+
+                            if (completed.isNotEmpty) {
+                              challengeWidgets.add(_buildSectionTitle('Dokončené výzvy'));
+                              challengeWidgets.addAll(completed.map((doc) => _buildChallengeCard(doc, currentUser.uid)));
+                            }
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: challengeWidgets,
+                            );
+                          },
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-
-                    // Challenges List
-                    StreamBuilder<QuerySnapshot>(
-                      stream: _firestore
-                          .collection('challenges')
-                          .where('participants', arrayContains: currentUser.uid)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return const Center(child: Padding(
-                            padding: EdgeInsets.all(24.0),
-                            child: CircularProgressIndicator(),
-                          ));
-                        }
-
-                        final docs = snapshot.data?.docs ?? [];
-
-                        if (docs.isEmpty) {
-                          return Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: Colors.lightBlue.shade50.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.lightBlue.shade100),
-                            ),
-                            child: Column(
-                              children: const [
-                                Icon(Icons.bolt, size: 48, color: Colors.lightBlue),
-                                SizedBox(height: 12),
-                                Text(
-                                  'Zatím nemáš žádné výzvy.',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                SizedBox(height: 6),
-                                Text(
-                                  'Klikni na „Nová výzva“ a vyzvi přítele na souboj!',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.black54),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-
-                        // Split challenges
-                        final active = docs.where((doc) => doc['status'] == 'active').toList();
-                        final pending = docs.where((doc) => doc['status'] == 'pending').toList();
-                        final completed = docs.where((doc) => doc['status'] == 'completed').toList();
-
-                        List<Widget> challengeWidgets = [];
-
-                        if (active.isNotEmpty) {
-                          challengeWidgets.add(_buildSectionTitle('Aktivní výzvy'));
-                          challengeWidgets.addAll(active.map((doc) => _buildChallengeCard(doc, currentUser.uid)));
-                        }
-
-                        if (pending.isNotEmpty) {
-                          challengeWidgets.add(_buildSectionTitle('Čekající žádosti'));
-                          challengeWidgets.addAll(pending.map((doc) => _buildChallengeCard(doc, currentUser.uid)));
-                        }
-
-                        if (completed.isNotEmpty) {
-                          challengeWidgets.add(_buildSectionTitle('Dokončené výzvy'));
-                          challengeWidgets.addAll(completed.map((doc) => _buildChallengeCard(doc, currentUser.uid)));
-                        }
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: challengeWidgets,
-                        );
-                      },
+                  ),
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: ConfettiWidget(
+                      confettiController: _confettiController,
+                      blastDirectionality: BlastDirectionality.explosive,
+                      shouldLoop: false,
+                      colors: const [
+                        Colors.green,
+                        Colors.blue,
+                        Colors.pink,
+                        Colors.orange,
+                        Colors.purple,
+                        Colors.lime,
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
       ),
     );
@@ -531,51 +582,82 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Widget _buildStepsCard() {
-    return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-      ),
-      color: Colors.white,
-      elevation: 4,
-      shadowColor: Colors.lightBlue.shade100,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Kroků dnes',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.lightBlue.shade700,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '0',
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.lightBlue,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Cíl: 10 000 kroků',
-              style: TextStyle(color: Colors.black87),
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: LinearProgressIndicator(
-                value: 0.0,
-                minHeight: 12,
-                backgroundColor: Colors.lightBlue.shade100,
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.lime),
+    return ValueListenableBuilder<int>(
+      valueListenable: StepTrackerService().stepsNotifier,
+      builder: (context, steps, _) {
+        return ValueListenableBuilder<int>(
+          valueListenable: StepTrackerService().goalNotifier,
+          builder: (context, goal, _) {
+            final progress = goal > 0 ? (steps / goal).clamp(0.0, 1.0) : 0.0;
+            return Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
               ),
-            ),
-          ],
-        ),
-      ),
+              color: Colors.white,
+              elevation: 4,
+              shadowColor: Colors.lightBlue.shade100,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Kroků dnes',
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    color: Colors.lightBlue.shade700,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              steps.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} "),
+                              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.lightBlue,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        if (_selectedAvatar != null)
+                          MascotWidget(
+                            avatar: _selectedAvatar!,
+                            progress: progress,
+                          )
+                        else
+                          MascotWidget(
+                            avatar: 'boy',
+                            progress: progress,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Cíl: ${goal.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} ")} kroků',
+                      style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 12,
+                        backgroundColor: Colors.lightBlue.shade100,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.lime),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -588,6 +670,7 @@ class _GameScreenState extends State<GameScreen> {
     final targetKm = (data['targetKm'] as num).toDouble();
     final durationDays = data['durationDays'] as int;
     final status = data['status'] as String;
+    final bet = data['bet'] as String? ?? '';
 
     final isCreator = creatorUid == currentUid;
     final otherPlayerName = isCreator ? opponentUsername : creatorUsername;
@@ -618,6 +701,33 @@ class _GameScreenState extends State<GameScreen> {
               ),
               const SizedBox(height: 8),
               Text('Cíl: $targetKm km  |  Trvání: $durationDays dní', style: const TextStyle(color: Colors.black54)),
+              if (bet.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade100),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.wine_bar, size: 16, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Sázka: $bet',
+                          style: TextStyle(
+                            color: Colors.orange.shade900,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               if (!isCreator)
                 Row(
@@ -723,6 +833,34 @@ class _GameScreenState extends State<GameScreen> {
                         ],
                       ),
                       const SizedBox(height: 14),
+
+                      if (bet.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade100),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.wine_bar, size: 16, color: Colors.orange),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Sázka: $bet',
+                                  style: TextStyle(
+                                    color: Colors.orange.shade900,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       
                       // Progress Player 1 (You)
                       Text('Ty (progres)', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
@@ -839,6 +977,21 @@ class _GameScreenState extends State<GameScreen> {
                       'Cíl: $targetKm km',
                       style: const TextStyle(fontSize: 12, color: Colors.black54),
                     ),
+                    if (bet.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        isDraw 
+                            ? 'Sázka ($bet) propadla.'
+                            : isWinner 
+                                ? 'Vyhráváš sázku: $bet! 🍻' 
+                                : 'Musíš splnit sázku: $bet 😢',
+                        style: TextStyle(
+                          fontSize: 12, 
+                          color: isWinner ? Colors.orange.shade900 : Colors.red.shade900,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -966,10 +1119,6 @@ class _GameScreenState extends State<GameScreen> {
 
     if (!context.mounted) return;
 
-    Map<String, dynamic>? selectedFriend = friends.first;
-    double selectedKm = 10.0;
-    int selectedDays = 7;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -977,140 +1126,10 @@ class _GameScreenState extends State<GameScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 24,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Vytvořit 1v1 výzvu',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 20),
-                  
-                  // Friend Picker (Task 5)
-                  const Text('Vyber přítele:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<Map<String, dynamic>>(
-                        value: selectedFriend,
-                        items: friends.map((f) {
-                          return DropdownMenuItem<Map<String, dynamic>>(
-                            value: f,
-                            child: Text(f['username'] as String),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          setModalState(() {
-                            selectedFriend = val;
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Distance Target
-                  const Text('Cíl výzvy:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [5.0, 10.0, 20.0, 50.0].map((km) {
-                      final isSelected = selectedKm == km;
-                      return ChoiceChip(
-                        label: Text('${km.toInt()} km'),
-                        selected: isSelected,
-                        onSelected: (_) {
-                          setModalState(() {
-                            selectedKm = km;
-                          });
-                        },
-                        selectedColor: Colors.lime,
-                        backgroundColor: Colors.grey.shade100,
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Duration Days
-                  const Text('Délka trvání:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [1, 3, 7, 14].map((days) {
-                      final isSelected = selectedDays == days;
-                      return ChoiceChip(
-                        label: Text('$days ${days == 1 ? 'den' : days < 5 ? 'dny' : 'dní'}'),
-                        selected: isSelected,
-                        onSelected: (_) {
-                          setModalState(() {
-                            selectedDays = days;
-                          });
-                        },
-                        selectedColor: Colors.lime,
-                        backgroundColor: Colors.grey.shade100,
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Submit
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (selectedFriend == null) return;
-                      
-                      try {
-                        final currentDoc = await _firestore.collection('users').doc(currentUser.uid).get();
-                        final currentUsername = currentDoc.data()?['username'] as String? ?? 'Uživatel';
-
-                        await _firestore.collection('challenges').add({
-                          'creatorUid': currentUser.uid,
-                          'creatorUsername': currentUsername,
-                          'opponentUid': selectedFriend!['uid'],
-                          'opponentUsername': selectedFriend!['username'],
-                          'participants': [currentUser.uid, selectedFriend!['uid']],
-                          'targetKm': selectedKm,
-                          'durationDays': selectedDays,
-                          'status': 'pending',
-                          'createdAt': FieldValue.serverTimestamp(),
-                        });
-                        
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Výzva byla odeslána.')));
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nepodařilo se vytvořit výzvu: $e')));
-                        }
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: const Text('Odeslat výzvu', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            );
-          },
+        return _CreateChallengeBottomSheet(
+          currentUid: currentUser.uid,
+          friends: friends,
+          firestore: _firestore,
         );
       },
     );
@@ -1232,4 +1251,499 @@ class _GameScreenState extends State<GameScreen> {
       ),
     );
   }
+}
+
+class _CreateChallengeBottomSheet extends StatefulWidget {
+  final String currentUid;
+  final List<Map<String, dynamic>> friends;
+  final FirebaseFirestore firestore;
+
+  const _CreateChallengeBottomSheet({
+    required this.currentUid,
+    required this.friends,
+    required this.firestore,
+  });
+
+  @override
+  State<_CreateChallengeBottomSheet> createState() => _CreateChallengeBottomSheetState();
+}
+
+class _CreateChallengeBottomSheetState extends State<_CreateChallengeBottomSheet> {
+  Map<String, dynamic>? _selectedFriend;
+  double _selectedKm = 10.0;
+  int _selectedDays = 7;
+  final TextEditingController _betController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.friends.isNotEmpty) {
+      _selectedFriend = widget.friends.first;
+    }
+  }
+
+  @override
+  void dispose() {
+    _betController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Vytvořit 1v1 výzvu',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          
+          // Friend Picker
+          const Text('Vyber přítele:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<Map<String, dynamic>>(
+                value: _selectedFriend,
+                items: widget.friends.map((f) {
+                  return DropdownMenuItem<Map<String, dynamic>>(
+                    value: f,
+                    child: Text(f['username'] as String),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  setState(() {
+                    _selectedFriend = val;
+                  });
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Distance Target
+          const Text('Cíl výzvy:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [5.0, 10.0, 20.0, 50.0].map((km) {
+              final isSelected = _selectedKm == km;
+              return ChoiceChip(
+                label: Text('${km.toInt()} km'),
+                selected: isSelected,
+                onSelected: (_) {
+                  setState(() {
+                    _selectedKm = km;
+                  });
+                },
+                selectedColor: Colors.lime,
+                backgroundColor: Colors.grey.shade100,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+
+          // Duration Days
+          const Text('Délka trvání:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [1, 3, 7, 14].map((days) {
+              final isSelected = _selectedDays == days;
+              return ChoiceChip(
+                label: Text('$days ${days == 1 ? 'den' : days < 5 ? 'dny' : 'dní'}'),
+                selected: isSelected,
+                onSelected: (_) {
+                  setState(() {
+                    _selectedDays = days;
+                  });
+                },
+                selectedColor: Colors.lime,
+                backgroundColor: Colors.grey.shade100,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+
+          // Sázka input field
+          const Text('O co se vsadíte? (Nepovinné):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _betController,
+            decoration: InputDecoration(
+              hintText: 'Např. pivo, čokoláda, mytí nádobí...',
+              hintStyle: const TextStyle(color: Colors.black38),
+              filled: true,
+              fillColor: Colors.grey.shade100,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              prefixIcon: const Icon(Icons.wine_bar, color: Colors.orange),
+            ),
+            style: const TextStyle(fontSize: 14),
+          ),
+          const SizedBox(height: 24),
+
+          // Submit
+          ElevatedButton(
+            onPressed: () async {
+              if (_selectedFriend == null) return;
+              
+              try {
+                final currentDoc = await widget.firestore.collection('users').doc(widget.currentUid).get();
+                final currentUsername = currentDoc.data()?['username'] as String? ?? 'Uživatel';
+
+                await widget.firestore.collection('challenges').add({
+                  'creatorUid': widget.currentUid,
+                  'creatorUsername': currentUsername,
+                  'opponentUid': _selectedFriend!['uid'],
+                  'opponentUsername': _selectedFriend!['username'],
+                  'participants': [widget.currentUid, _selectedFriend!['uid']],
+                  'targetKm': _selectedKm,
+                  'durationDays': _selectedDays,
+                  'status': 'pending',
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'bet': _betController.text.trim(),
+                });
+                
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Výzva byla odeslána.')));
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nepodařilo se vytvořit výzvu: $e')));
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.lightBlue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            child: const Text('Odeslat výzvu', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum MascotState { sleeping, running, celebrating }
+
+class MascotWidget extends StatefulWidget {
+  final String avatar;
+  final double progress;
+
+  const MascotWidget({
+    super.key,
+    required this.avatar,
+    required this.progress,
+  });
+
+  @override
+  State<MascotWidget> createState() => _MascotWidgetState();
+}
+
+class _MascotWidgetState extends State<MascotWidget> with TickerProviderStateMixin {
+  late AnimationController _idleController;
+  late AnimationController _runController;
+  late AnimationController _celebrateController;
+
+  // For particles
+  final List<_MascotParticle> _particles = [];
+  late AnimationController _particleController;
+
+  MascotState get _state {
+    if (widget.progress >= 1.0) {
+      return MascotState.celebrating;
+    } else if (widget.progress >= 0.3) {
+      return MascotState.running;
+    } else {
+      return MascotState.sleeping;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _idleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _runController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat(reverse: true);
+
+    _celebrateController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+
+    _particleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    )..addListener(_updateParticles);
+    _particleController.repeat();
+
+    _spawnParticleTimer();
+  }
+
+  void _updateParticles() {
+    if (!mounted) return;
+    setState(() {
+      for (int i = _particles.length - 1; i >= 0; i--) {
+        final p = _particles[i];
+        p.age += 0.02;
+        p.y -= p.speedY;
+        p.x += p.speedX;
+        if (p.age >= 1.0) {
+          _particles.removeAt(i);
+        }
+      }
+    });
+  }
+
+  void _spawnParticleTimer() async {
+    while (mounted) {
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) break;
+      _spawnParticle();
+    }
+  }
+
+  void _spawnParticle() {
+    final state = _state;
+    if (state == MascotState.sleeping) {
+      _particles.add(_MascotParticle(
+        text: 'Zzz',
+        x: 35.0,
+        y: 20.0,
+        speedX: 0.3 + (0.4 * (0.5 - (0.01 * (DateTime.now().millisecond % 100)))),
+        speedY: 0.8,
+        color: Colors.lightBlue.shade300,
+        fontSize: 12.0,
+      ));
+    } else if (state == MascotState.running) {
+      _particles.add(_MascotParticle(
+        text: '💨',
+        x: -15.0,
+        y: 50.0,
+        speedX: -1.2,
+        speedY: -0.2,
+        fontSize: 16.0,
+      ));
+    } else if (state == MascotState.celebrating) {
+      final emojis = ['🎉', '🥳', '🏆', '⭐', '✨'];
+      final text = emojis[DateTime.now().millisecond % emojis.length];
+      _particles.add(_MascotParticle(
+        text: text,
+        x: 10.0 + (DateTime.now().millisecond % 50),
+        y: 10.0,
+        speedX: -1.0 + (2.0 * ((DateTime.now().millisecond % 100) / 100)),
+        speedY: 1.5,
+        fontSize: 16.0,
+      ));
+    }
+  }
+
+  @override
+  void dispose() {
+    _idleController.dispose();
+    _runController.dispose();
+    _celebrateController.dispose();
+    _particleController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildMascotImage() {
+    final avatar = widget.avatar;
+    String assetName = 'bear.png';
+
+    // Preset mapping to mascot animals
+    if (avatar == 'boy' || avatar == 'chlap' || avatar == 'bear') {
+      assetName = 'bear.png';
+    } else if (avatar == 'girl' || avatar == 'fox') {
+      assetName = 'fox.png';
+    } else if (avatar == 'woman' || avatar == 'deer') {
+      assetName = 'deer.png';
+    } else if (avatar == 'man' || avatar == 'wolf') {
+      assetName = 'wolf.png';
+    }
+
+    if (avatar.startsWith('base64:')) {
+      try {
+        final bytes = base64Decode(avatar.substring(7));
+        return Image.memory(
+          bytes,
+          fit: BoxFit.contain,
+          width: 80,
+          height: 80,
+        );
+      } catch (_) {
+        // fallback
+      }
+    }
+
+    return Image.asset(
+      'assets/images/$assetName',
+      fit: BoxFit.contain,
+      width: 80,
+      height: 80,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget animatedMascot;
+    final state = _state;
+
+    if (state == MascotState.sleeping) {
+      animatedMascot = ScaleTransition(
+        scale: Tween<double>(begin: 0.94, end: 1.02).animate(
+          CurvedAnimation(parent: _idleController, curve: Curves.easeInOut),
+        ),
+        child: Opacity(
+          opacity: 0.9,
+          child: _buildMascotImage(),
+        ),
+      );
+    } else if (state == MascotState.running) {
+      animatedMascot = AnimatedBuilder(
+        animation: _runController,
+        builder: (context, child) {
+          final rotationValue = -0.06 + (0.06 - (-0.06)) * _runController.value;
+          final bounceValue = 0.0 + (-8.0 - 0.0) * _runController.value;
+          return Transform.translate(
+            offset: Offset(0, bounceValue),
+            child: Transform.rotate(
+              angle: rotationValue,
+              child: child,
+            ),
+          );
+        },
+        child: _buildMascotImage(),
+      );
+    } else {
+      // celebrating
+      animatedMascot = AnimatedBuilder(
+        animation: _celebrateController,
+        builder: (context, child) {
+          final bounceValue = 0.0 + (-20.0 - 0.0) * _celebrateController.value;
+          // squash and stretch effect
+          double scaleY = 1.0;
+          double scaleX = 1.0;
+          if (_celebrateController.value < 0.2) {
+            scaleY = 0.85 + (1.0 - 0.85) * (_celebrateController.value / 0.2);
+            scaleX = 1.15 + (1.0 - 1.15) * (_celebrateController.value / 0.2);
+          } else if (_celebrateController.value > 0.8) {
+            scaleY = 1.0 + (0.85 - 1.0) * ((_celebrateController.value - 0.8) / 0.2);
+            scaleX = 1.0 + (1.15 - 1.0) * ((_celebrateController.value - 0.8) / 0.2);
+          }
+          return Transform.translate(
+            offset: Offset(0, bounceValue),
+            child: Transform.scale(
+              scaleX: scaleX,
+              scaleY: scaleY,
+              child: child,
+            ),
+          );
+        },
+        child: _buildMascotImage(),
+      );
+    }
+
+    return SizedBox(
+      width: 110,
+      height: 110,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          // Mascot Base / shadow
+          Positioned(
+            bottom: 15,
+            child: Container(
+              width: 65,
+              height: 10,
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: state == MascotState.sleeping ? 6 : 4,
+                    spreadRadius: state == MascotState.sleeping ? 1 : -1,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // Emojis / Particle effects
+          ..._particles.map((p) {
+            return Positioned(
+              left: 55 + p.x,
+              top: 55 - p.y,
+              child: Opacity(
+                opacity: (1.0 - p.age).clamp(0.0, 1.0),
+                child: Text(
+                  p.text,
+                  style: TextStyle(
+                    fontSize: p.fontSize,
+                    fontWeight: FontWeight.bold,
+                    color: p.color,
+                  ),
+                ),
+              ),
+            );
+          }),
+
+          // Mascot animated image
+          Positioned(
+            bottom: 20,
+            child: animatedMascot,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MascotParticle {
+  final String text;
+  double x;
+  double y;
+  final double speedX;
+  final double speedY;
+  final Color? color;
+  final double fontSize;
+  double age = 0.0;
+
+  _MascotParticle({
+    required this.text,
+    required this.x,
+    required this.y,
+    required this.speedX,
+    required this.speedY,
+    this.color,
+    required this.fontSize,
+  });
 }
