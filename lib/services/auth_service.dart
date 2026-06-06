@@ -70,10 +70,12 @@ class AuthService {
   Future<UserCredential> registerWithEmail(String email, String password) async {
     final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
     
-    // Do not await email verification to prevent registration from hanging on slow SMTP networks
-    cred.user?.sendEmailVerification().catchError((e) {
-      if (kDebugMode) debugPrint('Failed to send email verification: $e');
-    });
+    try {
+      await cred.user?.sendEmailVerification();
+    } catch (e) {
+      debugPrint('Failed to send email verification: $e');
+      throw Exception('Odeslání ověřovacího e-mailu selhalo: $e');
+    }
 
     // Create basic user document with registration timestamp and default stats
     final uid = cred.user?.uid;
