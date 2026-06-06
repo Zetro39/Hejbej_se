@@ -23,5 +23,10 @@ service cloud.firestore {
     match /activities/{activityId} {
       allow read, write: if request.auth != null;
     }
+    
+    // Výzvy 1v1
+    match /challenges/{challengeId} {
+      allow read, write: if request.auth != null;
+    }
   }
 }
