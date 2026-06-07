@@ -30,6 +30,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<bool> distanceAchievements = List.filled(6, false); // 1,10,100,1000,10000,40000 km
   List<bool> loyaltyAchievements = List.filled(3, false); // 10,50,250 days
   bool isStreakFrozen = false;
+  bool _storyAmuletCompleted = false;
 
   String _firstName = '';
   String _lastName = '';
@@ -94,6 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       _stepsGoalHistory = prefs.getStringList('steps_goal_history') ?? [];
       _stepsStreak = prefs.getInt('steps_streak') ?? 0;
+      _storyAmuletCompleted = prefs.getBool('achievement_hero_lost_amulet') ?? false;
     });
     _updateAchievements();
   }
@@ -611,6 +613,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'icon': Icons.calendar_today,
       });
     }
+    achievementItems.add({
+      'title': 'Amulet',
+      'unlocked': _storyAmuletCompleted,
+      'type': 'story',
+      'value': 99999.0,
+      'icon': Icons.auto_stories,
+    });
 
     final visibleAchievements = List<Map<String, dynamic>>.from(achievementItems)
       ..sort((a, b) {
@@ -841,7 +850,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'v1.2.3+68',
+                  'v1.2.3+89',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                 ),
                 const SizedBox(height: 20),

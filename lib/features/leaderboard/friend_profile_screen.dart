@@ -102,6 +102,13 @@ class FriendProfileScreen extends StatelessWidget {
               'icon': Icons.calendar_today,
             });
           }
+          final completedLostAmulet = data['achievement_hero_lost_amulet'] as bool? ?? false;
+          achievements.add({
+            'title': 'Ztracený amulet',
+            'subtitle': 'Dokončit příběh Ztracený amulet',
+            'unlocked': completedLostAmulet,
+            'icon': Icons.auto_stories,
+          });
 
           return SingleChildScrollView(
             physics: const BouncingScrollPhysics(),

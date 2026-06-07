@@ -389,18 +389,36 @@ class StoryGameService {
 
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final currentLimetky = doc.data()?['limetky'] as int? ?? 0;
-      final newLimetky = currentLimetky + 50;
+      final data = doc.data() ?? {};
+      final alreadyCompleted = data['achievement_hero_lost_amulet'] as bool? ?? false;
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'limetky': newLimetky,
-        'achievement_hero_lost_amulet': true,
-      });
+      if (!alreadyCompleted) {
+        final currentLimetky = data['limetky'] as int? ?? 0;
+        final newLimetky = currentLimetky + 50;
 
-      // Also set locally
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('limetky', newLimetky);
-      await prefs.setBool('achievement_hero_lost_amulet', true);
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'limetky': newLimetky,
+          'achievement_hero_lost_amulet': true,
+        });
+
+        // Write to activities feed
+        final username = data['username'] as String? ?? 'Uživatel';
+        await FirebaseFirestore.instance.collection('activities').add({
+          'uid': user.uid,
+          'username': username,
+          'type': 'story_completion',
+          'timestamp': FieldValue.serverTimestamp(),
+          'details': {
+            'storyId': 'lost_amulet',
+            'storyName': 'Ztracený amulet',
+          },
+        });
+
+        // Also set locally
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('limetky', newLimetky);
+        await prefs.setBool('achievement_hero_lost_amulet', true);
+      }
     } catch (_) {}
   }
 }

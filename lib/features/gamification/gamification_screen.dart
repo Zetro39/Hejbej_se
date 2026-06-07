@@ -368,6 +368,24 @@ class _GameScreenState extends State<GameScreen> {
                           ],
                         ),
                       );
+                    } else if (type == 'story_completion') {
+                      final storyName = details['storyName'] as String? ?? 'Ztracený amulet';
+                      icon = Icons.auto_stories;
+                      iconColor = Colors.deepPurple;
+                      content = RichText(
+                        text: TextSpan(
+                          style: const TextStyle(color: Colors.black87, fontSize: 14),
+                          children: [
+                            TextSpan(text: username, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            const TextSpan(text: ' dokončil/a příběhovou linku '),
+                            TextSpan(
+                              text: storyName,
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                            ),
+                            const TextSpan(text: '! 🧭✨'),
+                          ],
+                        ),
+                      );
                     } else {
                       return const SizedBox.shrink();
                     }

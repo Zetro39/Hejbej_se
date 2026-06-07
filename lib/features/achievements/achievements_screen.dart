@@ -85,6 +85,8 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
   late final DistanceManager _distanceManager;
   final List<bool> _loyaltyAchievements = [false, false, false];
   final List<bool> _stepsAchievements = List.filled(6, false);
+  bool _storyAmuletCompleted = false;
+  final Map<String, bool> _checkpointAchievements = {};
 
   @override
   void initState() {
@@ -103,6 +105,12 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
       final milestones = [5, 10, 25, 50, 100, 365];
       for (int i = 0; i < milestones.length; i++) {
         _stepsAchievements[i] = prefs.getBool('steps_achievement_${milestones[i]}') ?? false;
+      }
+
+      _storyAmuletCompleted = prefs.getBool('achievement_hero_lost_amulet') ?? false;
+
+      for (int i = 1; i <= 5; i++) {
+        _checkpointAchievements['checkpoint_$i'] = prefs.getBool('achievement_checkpoint_${i}_reached') ?? false;
       }
     });
   }
@@ -181,6 +189,36 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                       _buildSectionTile('365 dní plnění cíle', _stepsAchievements[5]),
                     ],
                   ),
+                  ExpansionTile(
+                    leading: const Icon(Icons.map, color: Colors.lightBlue),
+                    title: const Text('Objevitel (Checkpointy)'),
+                    children: _achievementData
+                        .where((item) => item['type'] == 'checkpoint')
+                        .map((item) {
+                          final id = item['id'] as String;
+                          final reached = _checkpointAchievements[id] ?? false;
+                          return ListTile(
+                            leading: Icon(
+                              reached ? Icons.emoji_events : Icons.lock_outline,
+                              color: reached ? Colors.lime : Colors.grey,
+                            ),
+                            title: Text('${item['title']}'),
+                            subtitle: Text(item['description'] as String),
+                          );
+                        })
+                        .toList(),
+                  ),
+                  ExpansionTile(
+                    leading: const Icon(Icons.explore, color: Colors.lightBlue),
+                    title: const Text('Příběhové výpravy'),
+                    children: [
+                      _buildStoryTile(
+                        'Ztracený amulet',
+                        'Dokonči celou příběhovou linku Ztracený amulet a získej odměnu.',
+                        _storyAmuletCompleted,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -196,6 +234,31 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           color: unlocked ? Colors.lime : Colors.grey),
       title: Text(title),
       subtitle: Text(unlocked ? 'Odemčeno' : 'Ještě nedosaženo'),
+    );
+  }
+
+  Widget _buildStoryTile(String title, String description, bool unlocked) {
+    return ListTile(
+      leading: Icon(
+        unlocked ? Icons.auto_stories : Icons.auto_stories_outlined,
+        color: unlocked ? Colors.deepPurple : Colors.grey,
+        size: 28,
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: unlocked ? Colors.black87 : Colors.black54,
+        ),
+      ),
+      subtitle: Text(description),
+      trailing: Text(
+        unlocked ? '100%' : '0%',
+        style: TextStyle(
+          color: unlocked ? Colors.deepPurple.shade900 : Colors.black54,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 }
