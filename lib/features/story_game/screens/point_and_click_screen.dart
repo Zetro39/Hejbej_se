@@ -1085,21 +1085,21 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
         // Old Well (requires well handle)
         final wellHandlePlaced = state.roomStates['node4_well_handle'] == true;
-        final triangularKeyTaken = state.roomStates['node4_triangular_key_taken'] == true;
+        final waterTaken = state.roomStates['node4_water_taken'] == true;
 
         list.add(_Hotspot(
           name: "Kamenná studna",
           x: 0.4, y: 0.4, w: 0.24, h: 0.38,
           onTap: () {
-            if (triangularKeyTaken) {
-              _showDialog("Studna je prázdná, klíč jsi již vytáhl.");
+            if (waterTaken) {
+              _showDialog("Ve studni zbývá už jen zablácené dno, čistou pramenitou vodu jsi již nabral do kotlíku.");
               return;
             }
 
             if (wellHandlePlaced) {
               final wellBalanced = state.roomStates['node4_well_balanced'] == true;
               if (wellBalanced) {
-                _service.updateRoomState('node4_triangular_key_taken', true);
+                _service.updateRoomState('node4_water_taken', true);
                 _collectItem('pure_water', "⚙️ Otočil jsi klikou a bez námahy vytáhl kbelík nahoru. Našel jsi v něm čistou, pramenitou vodu! Nablízku v inventáři máš i kotlík, nabral jsi ji do něj.");
               } else {
                 Navigator.push(
@@ -1109,7 +1109,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                       puzzleType: "scales",
                       onSolved: () {
                         _service.updateRoomState('node4_well_balanced', true);
-                        _service.updateRoomState('node4_triangular_key_taken', true);
+                        _service.updateRoomState('node4_water_taken', true);
                         _collectItem('pure_water', "⚙️ Vyvážil jsi protizávaží studny! Lano jde otočit lehoučce a vytáhl jsi kbelík nahoru s čistou pramenitou vodou! Nablízku v inventáři máš i kotlík, nabral jsi ji do něj.");
                       },
                     ),
