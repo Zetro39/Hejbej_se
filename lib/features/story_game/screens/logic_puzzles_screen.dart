@@ -2055,3 +2055,121 @@ class _RuneRitualPainter extends CustomPainter {
   }
 }
 
+class _PadlockShacklePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.grey.shade600
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 14
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path();
+    final double w = size.width;
+    final double h = size.height;
+
+    // Semicircular shackle arch
+    path.moveTo(15, h);
+    path.lineTo(15, h * 0.5);
+    path.arcTo(
+      Rect.fromLTWH(15, 15, w - 30, h),
+      -math.pi,
+      math.pi,
+      false,
+    );
+    path.lineTo(w - 15, h);
+
+    canvas.drawPath(path, paint);
+
+    // Gold core line highlights
+    paint.color = Colors.amber.shade700;
+    paint.strokeWidth = 4;
+    
+    final accentPath = Path();
+    accentPath.moveTo(25, h);
+    accentPath.lineTo(25, h * 0.5);
+    accentPath.arcTo(
+      Rect.fromLTWH(25, 25, w - 50, h - 20),
+      -math.pi,
+      math.pi,
+      false,
+    );
+    accentPath.lineTo(w - 25, h);
+    canvas.drawPath(accentPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _WinchDialPainter extends CustomPainter {
+  final double currentWeight;
+
+  _WinchDialPainter({required this.currentWeight});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height - 4);
+    final radius = size.height - 8;
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round;
+
+    // Draw background arcs
+    paint.color = Colors.grey.shade700;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -3.14159,
+      3.14159 * (20 / 40),
+      false,
+      paint,
+    );
+
+    paint.color = Colors.green.shade600;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -3.14159 + 3.14159 * (20 / 40),
+      3.14159 * (8 / 40),
+      false,
+      paint,
+    );
+
+    paint.color = Colors.red.shade700;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -3.14159 + 3.14159 * (28 / 40),
+      3.14159 * (12 / 40),
+      false,
+      paint,
+    );
+
+    // Draw needle
+    final double clampWeight = currentWeight.clamp(0.0, 40.0);
+    final double needleAngle = -3.14159 + (3.14159 * (clampWeight / 40.0));
+    final needlePaint = Paint()
+      ..color = Colors.orangeAccent
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+
+    final needleEnd = Offset(
+      center.dx + radius * 0.85 * math.cos(needleAngle),
+      center.dy + radius * 0.85 * math.sin(needleAngle),
+    );
+
+    canvas.drawLine(center, needleEnd, needlePaint);
+
+    // Draw cap
+    final capPaint = Paint()..color = Colors.amber.shade800;
+    canvas.drawCircle(center, 4, capPaint);
+    capPaint.color = Colors.black;
+    canvas.drawCircle(center, 1.5, capPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WinchDialPainter oldDelegate) {
+    return oldDelegate.currentWeight != currentWeight;
+  }
+}
+

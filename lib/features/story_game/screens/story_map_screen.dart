@@ -374,7 +374,23 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
     );
   }
 
+  void _autoAdvance(QuestNode completedNode) {
+    final nextNodeIndex = _service.nodes.indexWhere((n) => n.id == completedNode.id) + 1;
+    if (nextNodeIndex < _service.nodes.length) {
+      final nextNode = _service.nodes[nextNodeIndex];
+      final latestState = _service.stateNotifier.value;
+      if (latestState.unlockedNodes.contains(nextNode.id)) {
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (mounted) {
+            _onNodeTap(nextNode, _service.stateNotifier.value);
+          }
+        });
+      }
+    }
+  }
+
   void _onNodeTap(QuestNode node, QuestState state) {
+
     final isUnlocked = state.unlockedNodes.contains(node.id);
     if (!isUnlocked) {
       final needed = node.requiredDistance - state.currentDistanceWalked;
