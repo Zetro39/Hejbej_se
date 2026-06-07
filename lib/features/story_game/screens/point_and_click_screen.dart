@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/story_quest_model.dart';
 import '../services/story_game_service.dart';
+import 'catching_game_screen.dart';
 import 'logic_puzzles_screen.dart';
 
 class PointAndClickScreen extends StatefulWidget {
