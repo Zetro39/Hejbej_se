@@ -280,6 +280,9 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
   double _angleMedved = 0;
   double _angleVlk = 0;
   double _angleJelen = 0;
+  bool _medvedSolvedSpoken = false;
+  bool _vlkSolvedSpoken = false;
+  bool _jelenSolvedSpoken = false;
 
   bool _isSolved = false;
 
@@ -291,6 +294,9 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
     if (widget.puzzleType == 'combination_lock') {
       final code = _dialValues.join();
       solved = (code == widget.correctCode);
+      if (solved) {
+        _speak('Zámek s těžkým kovovým cvaknutím povolil. Truhla je otevřená!');
+      }
     } else if (widget.puzzleType == 'scales') {
       solved = (_winchState == 'lifting');
     } else if (widget.puzzleType == 'bookshelf') {
@@ -301,15 +307,35 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
           break;
         }
       }
+      if (solved) {
+        _speak('Něco tiše cvaklo a regál s knihami se s rachotem odsunul!');
+      }
     } else if (widget.puzzleType == 'telescope') {
+      // Check individual alignments for spoken cues
+      if (_angleMedved == 45 && !_medvedSolvedSpoken) {
+        _medvedSolvedSpoken = true;
+        _speak('Hvězdy Medvěda se spojily a jasně zazářily!');
+      }
+      if (_angleVlk == 120 && !_vlkSolvedSpoken) {
+        _vlkSolvedSpoken = true;
+        _speak('Hvězdy Vlka se spojily a jasně zazářily!');
+      }
+      if (_angleJelen == 275 && !_jelenSolvedSpoken) {
+        _jelenSolvedSpoken = true;
+        _speak('Hvězdy Jelena se spojily a jasně zazářily!');
+      }
+
       solved = (_angleMedved == 45 && _angleVlk == 120 && _angleJelen == 275);
+      if (solved) {
+        _speak('Teleskop je dokonale zaměřen! Hvězdy se propojily a chrámové dveře se otevírají.');
+      }
     }
 
     if (solved) {
       setState(() {
         _isSolved = true;
       });
-      Future.delayed(const Duration(milliseconds: 1200), () {
+      Future.delayed(const Duration(milliseconds: 1500), () {
         if (mounted) {
           widget.onSolved();
           Navigator.pop(context);
@@ -390,48 +416,243 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
 
   // 1. Combination Lock Widget
   Widget _buildCombinationLock() {
+    final runes = ['ᛟ', 'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᚺ'];
+    final isCodeCorrect = _dialValues.join() == widget.correctCode;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text(
-          'Zadej správnou trojmístnou kombinaci:',
+          '🔐 Starodávný runový zámek',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
         ),
-        const SizedBox(height: 24),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(3, (index) {
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.lightBlue, width: 2),
-              ),
-              child: Column(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_drop_up, color: Colors.white, size: 32),
-                    onPressed: () {
-                      setState(() {
-                        _dialValues[index] = (_dialValues[index] + 1) % 10;
-                      });
-                      _checkSolution();
-                    },
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-                    child: Text(
-                      _dialValues[index].toString(),
-                      style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
+        const SizedBox(height: 6),
+        Text(
+          'Nastav správnou trojmístnou runovou kombinaci:',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 32),
+
+        // Padlock Interactive Area
+        SizedBox(
+          width: 300,
+          height: 280,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.topCenter,
+            children: [
+              // 1. Padlock Shackle/Arch (Metallic curve)
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOutBack,
+                top: isCodeCorrect ? -45 : -10,
+                child: AnimatedRotation(
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.easeOutBack,
+                  turns: isCodeCorrect ? -0.06 : 0.0,
+                  alignment: Alignment.bottomLeft,
+                  child: SizedBox(
+                    width: 140,
+                    height: 100,
+                    child: CustomPaint(
+                      painter: _PadlockShacklePainter(),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_drop_down, color: Colors.white, size: 32),
-                    onPressed: () {
-                      setState(() {
-                        _dialValues[index] = (_dialValues[index] - 1 + 10) % 10;
+                ),
+              ),
+
+              // 2. Padlock Body (Stone / Brass Plate)
+              Positioned(
+                top: 60,
+                child: Container(
+                  width: 280,
+                  height: 190,
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment.center,
+                      radius: 1.2,
+                      colors: [Colors.grey.shade800, Colors.grey.shade950],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isCodeCorrect ? Colors.amber.shade400 : Colors.amber.shade700,
+                      width: 4,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.6),
+                        blurRadius: 15,
+                        offset: const Offset(0, 10),
+                      ),
+                      if (isCodeCorrect)
+                        BoxShadow(
+                          color: Colors.amber.shade400.withOpacity(0.3),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      // Carved details/rivets
+                      Positioned(
+                        left: 12, top: 12,
+                        child: Icon(Icons.circle, size: 8, color: Colors.amber.shade900),
+                      ),
+                      Positioned(
+                        right: 12, top: 12,
+                        child: Icon(Icons.circle, size: 8, color: Colors.amber.shade900),
+                      ),
+                      Positioned(
+                        left: 12, bottom: 12,
+                        child: Icon(Icons.circle, size: 8, color: Colors.amber.shade900),
+                      ),
+                      Positioned(
+                        right: 12, bottom: 12,
+                        child: Icon(Icons.circle, size: 8, color: Colors.amber.shade900),
+                      ),
+
+                      // Runic Dial Rows
+                      Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: List.generate(3, (index) {
+                            final value = _dialValues[index];
+                            final rune = runes[value];
+
+                            return Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Arrow UP button
+                                _buildDialArrowButton(
+                                  icon: Icons.keyboard_arrow_up,
+                                  onPressed: isCodeCorrect
+                                      ? null
+                                      : () {
+                                          _speak('cvak');
+                                          setState(() {
+                                            _dialValues[index] = (_dialValues[index] + 1) % 10;
+                                          });
+                                          _checkSolution();
+                                        },
+                                ),
+
+                                // The Dial (Circular Brass Ring)
+                                Container(
+                                  width: 65,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [Colors.amber.shade800, Colors.amber.shade950],
+                                    ),
+                                    shape: BoxShape.rectangle,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isCodeCorrect
+                                          ? Colors.cyanAccent
+                                          : Colors.amber.shade600,
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.5),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      // Rune symbol
+                                      Text(
+                                        rune,
+                                        style: TextStyle(
+                                          color: isCodeCorrect
+                                              ? Colors.cyanAccent
+                                              : Colors.cyan.shade300,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          shadows: [
+                                            Shadow(
+                                              color: isCodeCorrect
+                                                  ? Colors.cyanAccent.withOpacity(0.8)
+                                                  : Colors.cyan.withOpacity(0.5),
+                                              blurRadius: 8,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      // Digit
+                                      Text(
+                                        value.toString(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                // Arrow DOWN button
+                                _buildDialArrowButton(
+                                  icon: Icons.keyboard_arrow_down,
+                                  onPressed: isCodeCorrect
+                                      ? null
+                                      : () {
+                                          _speak('cvak');
+                                          setState(() {
+                                            _dialValues[index] = (_dialValues[index] - 1 + 10) % 10;
+                                          });
+                                          _checkSolution();
+                                        },
+                                ),
+                              ],
+                            );
+                          }),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDialArrowButton({
+    required IconData icon,
+    required VoidCallback? onPressed,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      width: 44,
+      height: 36,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        icon: Icon(icon, color: Colors.amber.shade600, size: 28),
+        onPressed: onPressed,
+      ),
+    );
+  }
               Widget _buildScales() {
     int totalWeight = 0;
     for (var itemId in _selectedWinchItems) {
@@ -988,72 +1209,235 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
 
   // 3. Bookshelf Widget
   Widget _buildBookshelf() {
+    final Map<String, Map<String, dynamic>> bookSpecs = {
+      'Ambrož': {
+        'color': Colors.red.shade900,
+        'height': 155.0,
+        'width': 60.0,
+        'comment': 'Červená kniha od Ambrože pojednává o tajích lesních bylin.',
+        'trim': Colors.amber.shade700,
+        'subtitle': 'HERBARIUM',
+      },
+      'Bohumil': {
+        'color': Colors.blue.shade900,
+        'height': 140.0,
+        'width': 56.0,
+        'comment': 'Modrý svazek od Bohumila popisuje mapování noční oblohy.',
+        'trim': Colors.yellow.shade500,
+        'subtitle': 'ASTRONOMIA',
+      },
+      'Cyril': {
+        'color': Colors.green.shade900,
+        'height': 160.0,
+        'width': 62.0,
+        'comment': 'Zelená kronika od Cyrila vypráví o založení chrámu v bažinách.',
+        'trim': Colors.amber.shade600,
+        'subtitle': 'HISTORIA',
+      },
+      'David': {
+        'color': Colors.purple.shade900,
+        'height': 148.0,
+        'width': 58.0,
+        'comment': 'Fialová kniha od Davida je plná mystických runových vzorců.',
+        'trim': Colors.orangeAccent,
+        'subtitle': 'RUNOLOGIA',
+      },
+    };
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text(
-          'Seřaď svazky knih abecedně od A do Z tak, aby se aktivoval mechanismus:',
+          '📚 Starobylá knihovna',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
-        ),
-        const SizedBox(height: 24),
-        // Visual representation of books
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.brown.shade800,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.brown.shade900, width: 4),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(_books.length, (index) {
-              final bookName = _books[index];
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    // Tap a book to swap with the next one
-                    if (index < _books.length - 1) {
-                      setState(() {
-                        final temp = _books[index];
-                        _books[index] = _books[index + 1];
-                        _books[index + 1] = temp;
-                      });
-                      _checkSolution();
-                    }
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    height: 140,
-                    decoration: BoxDecoration(
-                      color: index % 2 == 0 ? Colors.red.shade900 : Colors.blue.shade900,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: Colors.yellow.shade800, width: 2),
-                    ),
-                    child: Center(
-                      child: RotatedBox(
-                        quarterTurns: 3,
-                        child: Text(
-                          bookName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.5,
-                          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Seřaď svazky knih abecedně od A do Z (podle jmen autorů):',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 28),
+
+        // Mahogany bookcase
+        Container(
+          width: 320,
+          height: 210,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.brown.shade700, Colors.brown.shade900],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.brown.shade950, width: 6),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.5),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Backing shelf shadows/lines
+              Positioned.fill(
+                child: Column(
+                  children: [
+                    Expanded(child: Container(color: Colors.black.withOpacity(0.15))),
+                    Container(
+                      height: 16,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.brown.shade900, Colors.black],
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              );
-            }),
+              ),
+
+              // Animated Books Stack
+              ...['Ambrož', 'Bohumil', 'Cyril', 'David'].map((bookName) {
+                final spec = bookSpecs[bookName]!;
+                final int currentIndex = _books.indexOf(bookName);
+                final double leftPos = 12.0 + currentIndex * 72.0;
+
+                return AnimatedPositioned(
+                  key: ValueKey(bookName),
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOutBack,
+                  left: leftPos,
+                  bottom: 16, // Sits on the shelf board
+                  width: spec['width'] as double,
+                  height: spec['height'] as double,
+                  child: GestureDetector(
+                    onTap: _isSolved
+                        ? null
+                        : () {
+                            // Tap a book to swap with the next one (wrap around)
+                            final nextIndex = (currentIndex + 1) % _books.length;
+                            setState(() {
+                              final temp = _books[currentIndex];
+                              _books[currentIndex] = _books[nextIndex];
+                              _books[nextIndex] = temp;
+                            });
+                            _speak(spec['comment'] as String);
+                            _checkSolution();
+                          },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            spec['color'] as Color,
+                            Colors.black.withOpacity(0.2),
+                            spec['color'] as Color,
+                          ],
+                          stops: const [0.0, 0.4, 1.0],
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                          bottomLeft: Radius.circular(2),
+                          bottomRight: Radius.circular(2),
+                        ),
+                        border: Border.symmetric(
+                          horizontal: BorderSide(
+                            color: spec['trim'] as Color,
+                            width: 3,
+                          ),
+                          vertical: const BorderSide(
+                            color: Colors.black38,
+                            width: 1,
+                          ),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.4),
+                            blurRadius: 4,
+                            offset: const Offset(2, 2),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Gold foil spine horizontal lines (3D look)
+                          Positioned(
+                            top: 15,
+                            left: 0, right: 0,
+                            child: Container(height: 1.5, color: spec['trim'] as Color),
+                          ),
+                          Positioned(
+                            bottom: 15,
+                            left: 0, right: 0,
+                            child: Container(height: 1.5, color: spec['trim'] as Color),
+                          ),
+
+                          // Book spine title
+                          Center(
+                            child: RotatedBox(
+                              quarterTurns: 3,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    bookName.toUpperCase(),
+                                    style: TextStyle(
+                                      color: Colors.amber.shade200,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.0,
+                                      shadows: const [
+                                        Shadow(
+                                          color: Colors.black,
+                                          blurRadius: 2,
+                                          offset: Offset(0, 1),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    spec['subtitle'] as String,
+                                    style: TextStyle(
+                                      color: Colors.amber.shade200.withOpacity(0.6),
+                                      fontSize: 7,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
         const Text(
           'Kliknutím na knihu ji prohodíš s knihou napravo.',
-          style: TextStyle(color: Colors.white38, fontSize: 11),
+          style: TextStyle(color: Colors.white38, fontSize: 11, fontStyle: FontStyle.italic),
         ),
       ],
     );
@@ -1061,97 +1445,123 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
 
   // 4. Telescope Widget
   Widget _buildTelescope() {
+    final isMedvedAligned = _angleMedved == 45;
+    final isVlkAligned = _angleVlk == 120;
+    final isJelenAligned = _angleJelen == 275;
+    final allAligned = isMedvedAligned && isVlkAligned && isJelenAligned;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'Zaměř dalekohled na správné úhly souhvězdí podle Poustevníkových indicií:',
+          '🔭 Hvězdný dalekohled',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Otáčením mosazných astro-ciferníků zaměř souhvězdí v průzoru:',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        // Live circular starry viewport
+        Container(
+          width: 180,
+          height: 180,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const RadialGradient(
+              center: Alignment.center,
+              radius: 1.0,
+              colors: [Color(0xFF0F172A), Color(0xFF020617)],
+            ),
+            border: Border.all(
+              color: allAligned ? Colors.cyanAccent : Colors.amber.shade700,
+              width: 5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.6),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+              if (allAligned)
+                BoxShadow(
+                  color: Colors.cyanAccent.withOpacity(0.35),
+                  blurRadius: 15,
+                  spreadRadius: 2,
+                ),
+            ],
+          ),
+          child: ClipOval(
+            child: CustomPaint(
+              painter: _TelescopeStarfieldPainter(
+                angleMedved: _angleMedved,
+                angleVlk: _angleVlk,
+                angleJelen: _angleJelen,
+              ),
+            ),
+          ),
         ),
         const SizedBox(height: 20),
 
-        // 1. Medved (45 deg)
-        _buildAngleSlider(
-          label: '🐻 Souhvězdí Medvěda',
-          value: _angleMedved,
-          target: 45,
-          onChanged: (val) {
-            setState(() {
-              _angleMedved = val;
-            });
-            _checkSolution();
-          },
-        ),
-
-        // 2. Vlk (120 deg)
-        _buildAngleSlider(
-          label: '🐺 Souhvězdí Vlka',
-          value: _angleVlk,
-          target: 120,
-          onChanged: (val) {
-            setState(() {
-              _angleVlk = val;
-            });
-            _checkSolution();
-          },
-        ),
-
-        // 3. Jelen (275 deg)
-        _buildAngleSlider(
-          label: '🦌 Souhvězdí Jelena',
-          value: _angleJelen,
-          target: 275,
-          onChanged: (val) {
-            setState(() {
-              _angleJelen = val;
-            });
-            _checkSolution();
-          },
+        // Astro-Dials Row
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _AstroDial(
+                label: '🐻 Medvěd',
+                value: _angleMedved,
+                target: 45,
+                onChanged: (val) {
+                  setState(() {
+                    _angleMedved = val;
+                  });
+                  _checkSolution();
+                },
+              ),
+            ),
+            Expanded(
+              child: _AstroDial(
+                label: '🐺 Vlk',
+                value: _angleVlk,
+                target: 120,
+                onChanged: (val) {
+                  setState(() {
+                    _angleVlk = val;
+                  });
+                  _checkSolution();
+                },
+              ),
+            ),
+            Expanded(
+              child: _AstroDial(
+                label: '🦌 Jelen',
+                value: _angleJelen,
+                target: 275,
+                onChanged: (val) {
+                  setState(() {
+                    _angleJelen = val;
+                  });
+                  _checkSolution();
+                },
+              ),
+            ),
+          ],
         ),
       ],
-    );
-  }
-
-  Widget _buildAngleSlider({
-    required String label,
-    required double value,
-    required double target,
-    required ValueChanged<double> onChanged,
-  }) {
-    final isAligned = value == target;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              Text(
-                '${value.toInt()}° ' + (isAligned ? '✅ (Zaměřeno)' : ''),
-                style: TextStyle(
-                  color: isAligned ? Colors.green : Colors.orange,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-          Slider(
-            value: value,
-            min: 0,
-            max: 360,
-            divisions: 72, // 5 degree steps
-            activeColor: isAligned ? Colors.green : Colors.lime,
-            inactiveColor: Colors.grey.shade800,
-            onChanged: onChanged,
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1226,3 +1636,341 @@ class _WinchDialPainter extends CustomPainter {
     return oldDelegate.currentWeight != currentWeight;
   }
 }
+
+class _PadlockShacklePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.grey.shade600
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 14
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path();
+    final double w = size.width;
+    final double h = size.height;
+
+    // Semicircular shackle arch
+    path.moveTo(15, h);
+    path.lineTo(15, h * 0.5);
+    path.arcTo(
+      Rect.fromLTWH(15, 15, w - 30, h),
+      -math.pi,
+      math.pi,
+      false,
+    );
+    path.lineTo(w - 15, h);
+
+    canvas.drawPath(path, paint);
+
+    // Gold core line highlights
+    paint.color = Colors.amber.shade700;
+    paint.strokeWidth = 4;
+    
+    final accentPath = Path();
+    accentPath.moveTo(25, h);
+    accentPath.lineTo(25, h * 0.5);
+    accentPath.arcTo(
+      Rect.fromLTWH(25, 25, w - 50, h - 20),
+      -math.pi,
+      math.pi,
+      false,
+    );
+    accentPath.lineTo(w - 25, h);
+    canvas.drawPath(accentPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _AstroDial extends StatelessWidget {
+  final String label;
+  final double value;
+  final double target;
+  final ValueChanged<double> onChanged;
+
+  const _AstroDial({
+    required this.label,
+    required this.value,
+    required this.target,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isAligned = (value - target).abs() < 1;
+
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${value.toInt()}°',
+          style: TextStyle(
+            color: isAligned ? Colors.greenAccent : Colors.amber.shade500,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        GestureDetector(
+          onPanUpdate: (details) {
+            final RenderBox box = context.findRenderObject() as RenderBox;
+            final center = box.size.center(Offset.zero);
+            final localPos = details.localPosition;
+            final rad = math.atan2(localPos.dy - center.dy, localPos.dx - center.dx);
+            double deg = rad * 180 / math.pi;
+            if (deg < 0) deg += 360;
+            deg = (deg / 5).round() * 5.0;
+            onChanged(deg);
+          },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Transform.rotate(
+                angle: value * math.pi / 180,
+                child: Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: SweepGradient(
+                      colors: [
+                        Colors.amber.shade800,
+                        Colors.amber.shade600,
+                        Colors.amber.shade950,
+                        Colors.amber.shade800,
+                      ],
+                    ),
+                    border: Border.all(
+                      color: isAligned ? Colors.greenAccent : Colors.amber.shade500,
+                      width: 2.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Positioned(
+                        top: 4,
+                        child: Container(
+                          width: 4,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: isAligned ? Colors.greenAccent : Colors.white,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.amber.shade900,
+                          border: Border.all(color: Colors.amber.shade600, width: 1.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              icon: Icon(Icons.arrow_left, color: Colors.amber.shade600, size: 28),
+              onPressed: isAligned
+                  ? null
+                  : () {
+                      double newVal = (value - 5 + 360) % 360;
+                      onChanged(newVal);
+                    },
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              icon: Icon(Icons.arrow_right, color: Colors.amber.shade600, size: 28),
+              onPressed: isAligned
+                  ? null
+                  : () {
+                      double newVal = (value + 5) % 360;
+                      onChanged(newVal);
+                    },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _TelescopeStarfieldPainter extends CustomPainter {
+  final double angleMedved;
+  final double angleVlk;
+  final double angleJelen;
+
+  _TelescopeStarfieldPainter({
+    required this.angleMedved,
+    required this.angleVlk,
+    required this.angleJelen,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    final gridPaint = Paint()
+      ..color = Colors.amber.shade900.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    
+    canvas.drawCircle(center, radius * 0.4, gridPaint);
+    canvas.drawCircle(center, radius * 0.7, gridPaint);
+    canvas.drawLine(Offset(center.dx - radius, center.dy), Offset(center.dx + radius, center.dy), gridPaint);
+    canvas.drawLine(Offset(center.dx, center.dy - radius), Offset(center.dx, center.dy + radius), gridPaint);
+
+    final starPaint = Paint()..color = Colors.white.withOpacity(0.3);
+    final randomStars = [
+      Offset(radius * 0.3, radius * 0.4),
+      Offset(radius * 1.5, radius * 0.5),
+      Offset(radius * 0.5, radius * 1.6),
+      Offset(radius * 1.6, radius * 1.4),
+      Offset(radius * 1.2, radius * 0.3),
+      Offset(radius * 0.4, radius * 1.2),
+    ];
+    for (var star in randomStars) {
+      canvas.drawCircle(star, 1.5, starPaint);
+    }
+
+    _drawConstellation(
+      canvas: canvas,
+      center: center,
+      currentAngle: angleMedved,
+      targetAngle: 45,
+      points: const [
+        Offset(-30, -5), Offset(-15, -12), Offset(0, -8), Offset(12, 4),
+        Offset(24, 20), Offset(8, 28), Offset(-12, 20)
+      ],
+      connections: const [
+        [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 3]
+      ],
+      glowColor: Colors.cyanAccent,
+    );
+
+    _drawConstellation(
+      canvas: canvas,
+      center: center,
+      currentAngle: angleVlk,
+      targetAngle: 120,
+      points: const [
+        Offset(-25, 25), Offset(-8, 12), Offset(8, 8), Offset(25, -4),
+        Offset(12, -20), Offset(-4, -16), Offset(-16, -4)
+      ],
+      connections: const [
+        [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 1], [5, 1]
+      ],
+      glowColor: Colors.tealAccent,
+    );
+
+    _drawConstellation(
+      canvas: canvas,
+      center: center,
+      currentAngle: angleJelen,
+      targetAngle: 275,
+      points: const [
+        Offset(-8, -30), Offset(8, -30), Offset(0, -16), Offset(0, 8),
+        Offset(-20, 20), Offset(20, 20), Offset(-12, -4), Offset(12, -4)
+      ],
+      connections: const [
+        [0, 2], [1, 2], [2, 3], [3, 4], [3, 5], [6, 3], [7, 3]
+      ],
+      glowColor: Colors.blueAccent,
+    );
+  }
+
+  void _drawConstellation({
+    required Canvas canvas,
+    required Offset center,
+    required double currentAngle,
+    required double targetAngle,
+    required List<Offset> points,
+    required List<List<int>> connections,
+    required Color glowColor,
+  }) {
+    final bool isAligned = (currentAngle - targetAngle).abs() < 1;
+
+    final silhouettePaint = Paint()
+      ..color = Colors.amber.shade900.withOpacity(0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(targetAngle * math.pi / 180);
+    for (var conn in connections) {
+      canvas.drawLine(points[conn[0]], points[conn[1]], silhouettePaint);
+    }
+    for (var pt in points) {
+      canvas.drawCircle(pt, 2.5, silhouettePaint);
+    }
+    canvas.restore();
+
+    final linePaint = Paint()
+      ..color = isAligned ? glowColor : Colors.white60
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = isAligned ? 2.5 : 1.5;
+
+    final starPaint = Paint()
+      ..color = isAligned ? glowColor : Colors.white
+      ..style = PaintingStyle.fill;
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(currentAngle * math.pi / 180);
+
+    for (var conn in connections) {
+      canvas.drawLine(points[conn[0]], points[conn[1]], linePaint);
+    }
+
+    for (var pt in points) {
+      if (isAligned) {
+        final auraPaint = Paint()
+          ..color = glowColor.withOpacity(0.4)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(pt, 7, auraPaint);
+      }
+      canvas.drawCircle(pt, isAligned ? 4.5 : 3.0, starPaint);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _TelescopeStarfieldPainter oldDelegate) {
+    return oldDelegate.angleMedved != angleMedved ||
+        oldDelegate.angleVlk != angleVlk ||
+        oldDelegate.angleJelen != angleJelen;
+  }
+}
+
+

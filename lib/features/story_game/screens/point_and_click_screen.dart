@@ -2197,9 +2197,17 @@ class InventoryItemIcon extends StatelessWidget {
           widthFactor: cols.toDouble(),
           heightFactor: rows.toDouble(),
           alignment: Alignment(alignX, alignY),
-          child: Image.asset(
-            assetPath,
-            fit: BoxFit.fill,
+          child: ColorFiltered(
+            colorFilter: const ColorFilter.matrix(<double>[
+              1, 0, 0, 0, 0,
+              0, 1, 0, 0, 0,
+              0, 0, 1, 0, 0,
+              -1, -1, -1, 3, 0,
+            ]),
+            child: Image.asset(
+              assetPath,
+              fit: BoxFit.fill,
+            ),
           ),
         ),
       ),
