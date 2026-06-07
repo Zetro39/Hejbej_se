@@ -875,7 +875,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                   const SizedBox(height: 16),
                   const Text(
                     "Na kůře stromu je vyrytá kresba dubu. Všimni si rozdělení a počtu hlavních větví směřujících k nebi zleva doprava. Tento počet větví (3 číslice) ti napoví kód k schránce.",
-                    style: TextStyle(color: Colors.white75, fontSize: 14),
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),
                 ],
