@@ -82,7 +82,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
     setState(() {
       _dialogueCharacterName = charName;
       _dialogueCharacterAsset = charAsset;
-      _playerCharacterAsset = 'assets/images/$_activeCompanion.png';
+      _playerCharacterAsset = 'assets/images/story_player_adventurer.png';
       _dialogueScript = script;
       _dialogueScriptIndex = 0;
       _dialogueChoices = choices;
@@ -914,7 +914,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
         list.add(_Hotspot(
           name: "Kamenná studna",
-          x: 0.45, y: 0.48, w: 0.16, h: 0.25,
+          x: 0.4, y: 0.4, w: 0.24, h: 0.38,
           onTap: () {
             if (triangularKeyTaken) {
               _showDialog("Studna je prázdná, klíč jsi již vytáhl.");
@@ -922,16 +922,34 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             }
 
             if (wellHandlePlaced) {
-              _service.updateRoomState('node4_triangular_key_taken', true);
-              _service.collectItem('triangular_key');
-              _showDialog("⚙️ Otočil jsi klikou a vytáhl kbelík nahoru. Na jeho dně leží těžký trojúhelníkový klíč!");
+              final wellBalanced = state.roomStates['node4_well_balanced'] == true;
+              if (wellBalanced) {
+                _service.updateRoomState('node4_triangular_key_taken', true);
+                _service.collectItem('triangular_key');
+                _showDialog("⚙️ Otočil jsi klikou a bez námahy vytáhl kbelík nahoru. Na jeho dně leží těžký trojúhelníkový klíč!");
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LogicPuzzlesScreen(
+                      puzzleType: "scales",
+                      onSolved: () {
+                        _service.updateRoomState('node4_well_balanced', true);
+                        _service.updateRoomState('node4_triangular_key_taken', true);
+                        _service.collectItem('triangular_key');
+                        _showDialog("⚙️ Vyvážil jsi protizávaží studny! Lano jde otočit lehoučce a vytáhl jsi kbelík nahoru, na jehož dně leží trojúhelníkový klíč!");
+                      },
+                    ),
+                  ),
+                );
+              }
             } else if (_selectedItemId == 'well_handle') {
               _service.updateRoomState('node4_well_handle', true);
               _service.removeItem('well_handle');
               setState(() => _selectedItemId = null);
-              _showDialog("Nasadil jsi kliku navijáku na osu studny.");
+              _showDialog("Nasadil jsi kliku navijáku na osu studny. Zkus ji otočit.");
             } else {
-              _showDialog("Stará studna je hluboká a navijáku chybí otočná rukojeť, lano nejde navinout.");
+              _showDialog("Stará studna je hluboká a navijáku chybí otočná rukojeť, lano nejde navinout. Zdvihací mechanismus je navíc zablokován těžkým kbelíkem (protizávažím).");
             }
           },
         ));
@@ -1002,24 +1020,22 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         final hasHerbs = state.roomStates['node4_has_herbs'] == true;
 
         list.add(_Hotspot(
-          name: "Kamenný oltář svatyně",
-          x: 0.38, y: 0.35, w: 0.25, h: 0.32,
+          name: "Kamenný oltář (Modré houby)",
+          x: 0.38, y: 0.35, w: 0.25, h: 0.35,
           onTap: () {
             if (hasHerbs) {
               _showDialog("Svatyně je tichá, modré houby jsi již nasbíral.");
               return;
             }
 
-            // Balance scale puzzle
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => LogicPuzzlesScreen(
-                  puzzleType: "scales",
+                builder: (context) => CatchingGameScreen(
                   onSolved: () {
                     _service.updateRoomState('node4_has_herbs', true);
                     _service.collectItem('blue_mushrooms');
-                    _showDialog("🎉 Váhy se vyrovnaly! Socha jelena ustoupila a pod ní jsi našel čerstvé modré bažinné houby.");
+                    _showDialog("🦟 Pochytal jsi dotěrné světlušky, které chránily oltář, a bezpečně jsi nasbíral léčivé modré houby!");
                   },
                 ),
               ),
@@ -1312,41 +1328,36 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
   String _getRoomBackground(QuestState state) {
     if (widget.nodeId == 'node1') {
-      return 'assets/images/story_room_gate.png';
+      final isGateOpen = state.roomStates['node1_gate_open'] == true;
+      return isGateOpen
+          ? 'assets/images/story_room_gate_open.png'
+          : 'assets/images/story_room_gate_closed.png';
     } else if (widget.nodeId == 'node2') {
       return 'assets/images/story_room_oak.png';
     } else if (widget.nodeId == 'node3') {
       if (_currentSubroom == "interior") {
-        return 'assets/images/story_room_cabin.png';
+        return 'assets/images/story_room_cabin_interior.png';
       }
-      return 'assets/images/story_room_gate.png'; // Reuses gate background with green overlay
+      return 'assets/images/story_room_cabin_exterior.png';
     } else if (widget.nodeId == 'node4') {
       if (_currentSubroom == "cave") {
-        return 'assets/images/story_room_cabin.png'; // Reuses cabin interior (cave fallback)
+        return 'assets/images/story_room_cave.png';
+      } else if (_currentSubroom == "shrine") {
+        return 'assets/images/story_room_shrine.png';
       }
       return 'assets/images/story_room_swamp.png';
     } else if (widget.nodeId == 'node5') {
       if (_currentSubroom == "library") {
         return 'assets/images/story_room_observatory.png';
       }
-      return 'assets/images/story_room_gate.png'; // Reuses gate with gray fortress wall tint
+      return 'assets/images/story_room_fortress_exterior.png';
     } else if (widget.nodeId == 'node6') {
       return 'assets/images/story_room_altar.png';
     }
-    return 'assets/images/story_room_gate.png';
+    return 'assets/images/story_room_gate_closed.png';
   }
 
   Color _getRoomColorFilter() {
-    // Add custom tint to reuse backgrounds effectively
-    if (widget.nodeId == 'node3' && _currentSubroom == "exterior") {
-      return Colors.brown.withOpacity(0.18); // brown forest clearing tint
-    }
-    if (widget.nodeId == 'node4' && _currentSubroom == "cave") {
-      return Colors.purple.withOpacity(0.35); // dark magic cave tint
-    }
-    if (widget.nodeId == 'node5' && _currentSubroom == "exterior") {
-      return Colors.blueGrey.withOpacity(0.3); // stone fortress tint
-    }
     return Colors.transparent;
   }
 
@@ -1516,10 +1527,18 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                                               transform: Matrix4.identity()
                                                 ..scale(_isPlayerActive ? 1.05 : 0.95),
                                               transformAlignment: Alignment.bottomCenter,
-                                              child: Image.asset(
-                                                _playerCharacterAsset!,
-                                                fit: BoxFit.contain,
-                                                alignment: Alignment.bottomRight,
+                                              child: ColorFiltered(
+                                                colorFilter: const ColorFilter.matrix(<double>[
+                                                  1, 0, 0, 0, 0,
+                                                  0, 1, 0, 0, 0,
+                                                  0, 0, 1, 0, 0,
+                                                  -1, -1, -1, 3, 0, // chromakey out white background
+                                                ]),
+                                                child: Image.asset(
+                                                  _playerCharacterAsset!,
+                                                  fit: BoxFit.contain,
+                                                  alignment: Alignment.bottomRight,
+                                                ),
                                               ),
                                             ),
                                           ),

@@ -21,7 +21,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
   final List<int> _dialValues = [0, 0, 0];
 
   // Balance Scales state
-  final List<String> _leftPan = ['Jelen (25 kg)'];
+  final List<String> _leftPan = ['Těžký kbelík (25 kg)'];
   final List<String> _rightPan = [];
   final List<String> _availableWeights = ['Medvěd (15 kg)', 'Vlk (10 kg)', 'Liška (5 kg)'];
 
@@ -223,7 +223,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'Vyrovnej váhu oltáře bažin. Na levé misce leží kámen Jelena (25 kg). Přetáhni správné kameny lesní zvěře na pravou misku:',
+          'Vyvaž protizávaží studny. Těžký kbelík na levé misce váží 25 kg. Přetáhni správná kamenná závaží lesní zvěře na pravou misku, aby se uvolnil naviják:',
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
         ),
