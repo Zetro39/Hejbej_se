@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:confetti/confetti.dart';
 import '../../services/auth_service.dart';
 import '../../services/step_tracker_service.dart';
+import '../story_game/screens/story_map_screen.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -1156,6 +1157,23 @@ class _GameScreenState extends State<GameScreen> {
             scrollDirection: Axis.horizontal,
             children: [
               _buildSpecialGameCard(
+                title: 'Ztracený amulet 💎',
+                description: 'Příběhové RPG. Ujdi 6 km a vyřeš záhadu ztraceného amuletu.',
+                icon: Icons.auto_awesome,
+                color: Colors.purple.shade50,
+                iconColor: Colors.purple.shade700,
+                is18Plus: false,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const StoryMapScreen(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 12),
+              _buildSpecialGameCard(
                 title: 'Zámecká stezka',
                 description: 'Objev historické zámky a parky ve svém okolí.',
                 icon: Icons.fort,
@@ -1198,56 +1216,60 @@ class _GameScreenState extends State<GameScreen> {
     required Color color,
     required Color iconColor,
     required bool is18Plus,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      width: 210,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: iconColor.withOpacity(0.2), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(icon, color: iconColor, size: 28),
-              if (is18Plus)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade700,
-                    borderRadius: BorderRadius.circular(8),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 210,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: iconColor.withOpacity(0.2), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, color: iconColor, size: 28),
+                if (is18Plus)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade700,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      '18+',
+                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  child: const Text(
-                    '18+',
-                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
-                ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            description,
-            style: const TextStyle(fontSize: 10, color: Colors.black54),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+              ],
+            ),
+            const Spacer(),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              description,
+              style: const TextStyle(fontSize: 10, color: Colors.black54),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }
