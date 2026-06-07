@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 class LogicPuzzlesScreen extends StatefulWidget {
   final String puzzleType; // 'combination_lock', 'scales', 'bookshelf', 'telescope'
@@ -30,16 +32,52 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
   int _iceWeight = 5;
   int _squirrelWeight = 2;
   int _iceMeltingCounter = 0;
+  final FlutterTts _tts = FlutterTts();
+  double _shakeOffset = 0.0;
 
   @override
   void initState() {
     super.initState();
     _startWinchTimer();
+    _initTts();
+  }
+
+  Future<void> _initTts() async {
+    try {
+      await _tts.setLanguage("cs-CZ");
+      await _tts.setPitch(0.85);
+      await _tts.setSpeechRate(0.45);
+    } catch (_) {}
+  }
+
+  Future<void> _speak(String text) async {
+    try {
+      await _tts.stop();
+      await _tts.speak(text);
+    } catch (_) {}
+  }
+
+  void _triggerScreenShake() {
+    int count = 0;
+    Timer.periodic(const Duration(milliseconds: 50), (timer) {
+      if (!mounted || count > 12) {
+        timer.cancel();
+        setState(() {
+          _shakeOffset = 0.0;
+        });
+        return;
+      }
+      setState(() {
+        _shakeOffset = (count % 2 == 0) ? 6.0 : -6.0;
+      });
+      count++;
+    });
   }
 
   @override
   void dispose() {
     _winchTimer?.cancel();
+    _tts.stop();
     super.dispose();
   }
 
@@ -394,26 +432,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                     onPressed: () {
                       setState(() {
                         _dialValues[index] = (_dialValues[index] - 1 + 10) % 10;
-                      });
-                      _checkSolution();
-                    },
-                  ),
-                ],
-              ),
-            );
-          }),
-        ),
-        const SizedBox(height: 32),
-        const Text(
-          'Nápovědu najdeš v hajného sešitě.',
-          style: TextStyle(color: Colors.white38, fontSize: 12),
-        ),
-      ],
-    );
-  }
-
-  // 2. Balance Scales Widget
-  Widget _buildScales() {
+              Widget _buildScales() {
     int totalWeight = 0;
     for (var itemId in _selectedWinchItems) {
       final item = _winchItems.firstWhere((it) => it['id'] == itemId);
@@ -461,327 +480,335 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         ),
         const SizedBox(height: 12),
 
-        // 2. The Interactive Altar & Well (Winch Area)
-        Container(
-          height: 200,
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment.center,
-              radius: 1.2,
-              colors: [Colors.grey.shade900, Colors.black],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: _winchState == 'lifting'
-                  ? Colors.green.withOpacity(0.5)
-                  : _winchState == 'snapped'
-                      ? Colors.red.withOpacity(0.5)
-                      : Colors.amber.withOpacity(0.2),
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
+        // 2. The Interactive Altar & Well (Winch Area with Shake Effect)
+        Transform.translate(
+          offset: Offset(_shakeOffset, 0),
+          child: Container(
+            height: 200,
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment.center,
+                radius: 1.2,
+                colors: [Colors.grey.shade900, Colors.black],
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
                 color: _winchState == 'lifting'
-                    ? Colors.green.withOpacity(0.15)
+                    ? Colors.green.withOpacity(0.5)
                     : _winchState == 'snapped'
-                        ? Colors.red.withOpacity(0.15)
-                        : Colors.black54,
-                blurRadius: 10,
-                spreadRadius: 2,
-              )
-            ],
-          ),
-          child: Stack(
-            children: [
-              // Background well brick pattern representation
-              Positioned(
-                left: 10,
-                top: 40,
-                bottom: 10,
-                width: 70,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white10,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white24, width: 1),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: List.generate(6, (index) => const Divider(color: Colors.white12, height: 1)),
-                  ),
-                ),
+                        ? Colors.red.withOpacity(0.5)
+                        : Colors.amber.withOpacity(0.2),
+                width: 2,
               ),
-
-              // Winch Drum (Center support bar & pulley)
-              Positioned(
-                left: 45,
-                right: 90,
-                top: 36,
-                height: 12,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.grey.shade800, Colors.grey.shade600, Colors.grey.shade900],
+              boxShadow: [
+                BoxShadow(
+                  color: _winchState == 'lifting'
+                      ? Colors.green.withOpacity(0.15)
+                      : _winchState == 'snapped'
+                          ? Colors.red.withOpacity(0.15)
+                          : Colors.black54,
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                )
+              ],
+            ),
+            child: Stack(
+              children: [
+                // Background well brick pattern representation
+                Positioned(
+                  left: 10,
+                  top: 40,
+                  bottom: 10,
+                  width: 70,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white24, width: 1),
                     ),
-                    borderRadius: BorderRadius.circular(4),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: List.generate(6, (index) => const Divider(color: Colors.white12, height: 1)),
+                    ),
                   ),
                 ),
-              ),
 
-              // Animated Winch Wheel (Pulleys)
-              Positioned(
-                left: 40,
-                top: 22,
-                width: 40,
-                height: 40,
-                child: AnimatedRotation(
-                  turns: winchTurns,
-                  duration: Duration(milliseconds: _winchState == 'lifting' ? 1200 : 300),
-                  child: Icon(Icons.incomplete_circle_rounded, color: Colors.amber.shade800, size: 40),
-                ),
-              ),
-              Positioned(
-                right: 85,
-                top: 22,
-                width: 40,
-                height: 40,
-                child: AnimatedRotation(
-                  turns: winchTurns,
-                  duration: Duration(milliseconds: _winchState == 'lifting' ? 1200 : 300),
-                  child: Icon(Icons.incomplete_circle_rounded, color: Colors.amber.shade800, size: 40),
-                ),
-              ),
-
-              // Winch Dial/Indicator (Shows current load)
-              Positioned(
-                left: 110,
-                top: 8,
-                right: 130,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black80,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.amber.shade600, width: 1),
+                // Winch Drum (Center support bar & pulley)
+                Positioned(
+                  left: 45,
+                  right: 90,
+                  top: 36,
+                  height: 12,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.grey.shade800, Colors.grey.shade600, Colors.grey.shade900],
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
+                ),
+
+                // Animated Winch Wheel (Pulleys)
+                Positioned(
+                  left: 40,
+                  top: 22,
+                  width: 40,
+                  height: 40,
+                  child: AnimatedRotation(
+                    turns: winchTurns,
+                    duration: Duration(milliseconds: _winchState == 'lifting' ? 1200 : 300),
+                    child: Icon(Icons.incomplete_circle_rounded, color: Colors.amber.shade800, size: 40),
+                  ),
+                ),
+                Positioned(
+                  right: 85,
+                  top: 22,
+                  width: 40,
+                  height: 40,
+                  child: AnimatedRotation(
+                    turns: winchTurns,
+                    duration: Duration(milliseconds: _winchState == 'lifting' ? 1200 : 300),
+                    child: Icon(Icons.incomplete_circle_rounded, color: Colors.amber.shade800, size: 40),
+                  ),
+                ),
+
+                // Winch Dial Gauge Indicator
+                Positioned(
+                  left: 100,
+                  right: 100,
+                  top: 6,
+                  height: 55,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0, end: totalWeight.toDouble()),
+                    duration: const Duration(milliseconds: 300),
+                    builder: (context, value, child) {
+                      return Column(
+                        children: [
+                          CustomPaint(
+                            size: const Size(80, 32),
+                            painter: _WinchDialPainter(currentWeight: value),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${value.toInt()} kg',
+                            style: TextStyle(
+                              color: totalWeight > 28
+                                  ? Colors.redAccent
+                                  : totalWeight > 20
+                                      ? Colors.greenAccent
+                                      : Colors.amberAccent,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+
+                // Winch Lever (Pull Lever)
+                Positioned(
+                  right: 10,
+                  top: 15,
+                  width: 60,
+                  height: 80,
+                  child: Column(
                     children: [
-                      const Text('Zátěž: ', style: TextStyle(color: Colors.white54, fontSize: 10)),
-                      Text(
-                        '$totalWeight kg',
-                        style: TextStyle(
-                          color: totalWeight > 28
-                              ? Colors.redAccent
-                              : totalWeight > 20
-                                  ? Colors.greenAccent
-                                  : Colors.amberAccent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
+                      GestureDetector(
+                        onTap: _leverPulled || _winchState == 'lifting'
+                            ? null
+                            : () {
+                                setState(() {
+                                  _leverPulled = true;
+                                });
+
+                                // Run simulation logic
+                                if (totalWeight <= 20) {
+                                  setState(() {
+                                    _winchState = 'too_light';
+                                    _winchFeedbackText = 'Zatahal jsi za páku... Plošina ($totalWeight kg) je moc lehká a kbelík (20 kg) se ani nehnul.';
+                                  });
+                                  _speak('To je moc lehké. Kbelík se ani nepohnul.');
+                                  Future.delayed(const Duration(milliseconds: 1500), () {
+                                    if (mounted) {
+                                      setState(() {
+                                        _winchState = 'idle';
+                                        _leverPulled = false;
+                                      });
+                                    }
+                                  });
+                                } else if (totalWeight >= 21 && totalWeight <= 28) {
+                                  setState(() {
+                                    _winchState = 'lifting';
+                                    _winchFeedbackText = 'Kolo navijáku se otáčí! Závaží ($totalWeight kg) stahuje plošinu dolů a kbelík stoupá nahoru!';
+                                  });
+                                  _speak('Mám to! Kbelík stoupá nahoru.');
+                                  _checkSolution();
+                                } else {
+                                  setState(() {
+                                    _winchState = 'snapped';
+                                    _winchFeedbackText = 'KŘUP! Plošina s váhou $totalWeight kg byla moc těžká! Lano nevydrželo nápor a prasklo!';
+                                  });
+                                  _triggerScreenShake();
+                                  _speak('Křup! Lano nevydrželo a prasklo.');
+                                  Future.delayed(const Duration(milliseconds: 3000), () {
+                                    if (mounted) {
+                                      setState(() {
+                                        _selectedWinchItems.clear();
+                                        _winchState = 'idle';
+                                        _winchFeedbackText = 'Vyber předměty znovu a opatrněji. Lano unese nejvýše 28 kg.';
+                                        _leverPulled = false;
+                                      });
+                                    }
+                                  });
+                                }
+                              },
+                        child: Container(
+                          height: 50,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _leverPulled ? Colors.red.shade900 : Colors.amber.shade900,
+                            border: Border.all(color: Colors.amber.shade300, width: 1.5),
+                            boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 4, offset: Offset(2, 2))],
+                          ),
+                          alignment: Alignment.center,
+                          child: AnimatedRotation(
+                            turns: _leverPulled ? 0.12 : 0.0,
+                            duration: const Duration(milliseconds: 300),
+                            child: const Icon(Icons.build_outlined, color: Colors.white, size: 24),
+                          ),
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      const Text('PÁKA', style: TextStyle(color: Colors.white60, fontSize: 9, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
-              ),
 
-              // Winch Lever (Pull Lever)
-              Positioned(
-                right: 10,
-                top: 15,
-                width: 60,
-                height: 80,
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      onTap: _leverPulled || _winchState == 'lifting'
-                          ? null
-                          : () {
-                              setState(() {
-                                _leverPulled = true;
-                              });
-
-                              // Run simulation logic
-                              if (totalWeight <= 20) {
-                                setState(() {
-                                  _winchState = 'too_light';
-                                  _winchFeedbackText = 'Zatahal jsi za páku... Plošina ($totalWeight kg) je moc lehká a kbelík (20 kg) se ani nehnul.';
-                                });
-                                Future.delayed(const Duration(milliseconds: 1500), () {
-                                  if (mounted) {
-                                    setState(() {
-                                      _winchState = 'idle';
-                                      _leverPulled = false;
-                                    });
-                                  }
-                                });
-                              } else if (totalWeight >= 21 && totalWeight <= 28) {
-                                setState(() {
-                                  _winchState = 'lifting';
-                                  _winchFeedbackText = 'Kolo navijáku se otáčí! Závaží ($totalWeight kg) stahuje plošinu dolů a kbelík stoupá nahoru!';
-                                });
-                                _checkSolution();
-                              } else {
-                                setState(() {
-                                  _winchState = 'snapped';
-                                  _winchFeedbackText = 'KŘUP! Plošina s váhou $totalWeight kg byla moc těžká! Lano nevydrželo nápor a prasklo!';
-                                });
-                                Future.delayed(const Duration(milliseconds: 3000), () {
-                                  if (mounted) {
-                                    setState(() {
-                                      _selectedWinchItems.clear();
-                                      _winchState = 'idle';
-                                      _winchFeedbackText = 'Vyber předměty znovu a opatrněji. Lano unese nejvýše 28 kg.';
-                                      _leverPulled = false;
-                                    });
-                                  }
-                                });
-                              }
-                            },
-                      child: Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _leverPulled ? Colors.red.shade900 : Colors.amber.shade900,
-                          border: Border.all(color: Colors.amber.shade300, width: 1.5),
-                          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 4, offset: Offset(2, 2))],
-                        ),
-                        alignment: Alignment.center,
-                        child: AnimatedRotation(
-                          turns: _leverPulled ? 0.12 : 0.0,
-                          duration: const Duration(milliseconds: 300),
-                          child: const Icon(Icons.build_outlined, color: Colors.white, size: 24),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text('PÁKA', style: TextStyle(color: Colors.white60, fontSize: 9, fontWeight: FontWeight.bold)),
-                  ],
+                // Ropes from drum
+                // Left Rope (connecting Pulley Left to Bucket)
+                Positioned(
+                  left: 59,
+                  top: 42,
+                  height: bucketY + 12,
+                  width: 2,
+                  child: Container(color: Colors.orange.shade800),
                 ),
-              ),
 
-              // Ropes from drum
-              // Left Rope (connecting Pulley Left to Bucket)
-              Positioned(
-                left: 59,
-                top: 42,
-                height: bucketY + 12,
-                width: 2,
-                child: Container(color: Colors.orange.shade800),
-              ),
-
-              // Right Rope (connecting Pulley Right to Platform)
-              Positioned(
-                right: 104,
-                top: 42,
-                height: platformY + 10,
-                width: 2,
-                child: Container(
-                  color: _winchState == 'snapped' ? Colors.transparent : Colors.orange.shade800,
+                // Right Rope (connecting Pulley Right to Platform)
+                Positioned(
+                  right: 104,
+                  top: 42,
+                  height: platformY + 10,
+                  width: 2,
+                  child: Container(
+                    color: _winchState == 'snapped' ? Colors.transparent : Colors.orange.shade800,
+                  ),
                 ),
-              ),
 
-              // Left Item: The Water Bucket (🪣)
-              AnimatedPositioned(
-                duration: Duration(milliseconds: _winchState == 'lifting' ? 1200 : _winchState == 'snapped' ? 300 : 400),
-                curve: _winchState == 'snapped' ? Curves.bounceOut : Curves.easeInOut,
-                left: 40,
-                top: bucketY,
-                width: 40,
-                height: 50,
-                child: Column(
-                  children: [
-                    const Text('🪣', style: TextStyle(fontSize: 26)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
-                      child: const Text('20 kg', style: TextStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Right Item: The Platform (basket with items)
-              AnimatedPositioned(
-                duration: Duration(milliseconds: _winchState == 'lifting' ? 1200 : _winchState == 'snapped' ? 300 : 400),
-                curve: Curves.easeInOut,
-                right: 75,
-                top: platformY,
-                width: 60,
-                height: 70,
-                child: AnimatedRotation(
-                  turns: platformTilt,
-                  duration: const Duration(milliseconds: 300),
+                // Left Item: The Water Bucket (🪣)
+                AnimatedPositioned(
+                  duration: Duration(milliseconds: _winchState == 'lifting' ? 1200 : _winchState == 'snapped' ? 300 : 400),
+                  curve: _winchState == 'snapped' ? Curves.bounceOut : Curves.easeInOut,
+                  left: 40,
+                  top: bucketY,
+                  width: 40,
+                  height: 50,
                   child: Column(
                     children: [
-                      // Placed items emojis (up to 5 stacked/shown)
-                      Container(
-                        height: 24,
-                        alignment: Alignment.bottomCenter,
-                        child: Wrap(
-                          spacing: -4,
-                          children: _selectedWinchItems.map((itemId) {
-                            final item = _winchItems.firstWhere((it) => it['id'] == itemId);
-                            return Text(item['emoji'] as String, style: const TextStyle(fontSize: 16));
-                          }).toList(),
-                        ),
-                      ),
-                      // The Basket Plate representation
-                      Container(
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade800,
-                          borderRadius: BorderRadius.circular(2),
-                          border: Border.all(color: Colors.amber.shade900),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
+                      const Text('🪣', style: TextStyle(fontSize: 26)),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                         decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
-                        child: Text(
-                          '$totalWeight kg',
-                          style: TextStyle(
-                            color: totalWeight > 28 ? Colors.redAccent : Colors.white70,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        child: const Text('20 kg', style: TextStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
                 ),
-              ),
 
-              // Broken Rope Indicator ("KŘUP! 💥")
-              Positioned.fill(
-                child: AnimatedOpacity(
-                  opacity: brokenOpacity,
-                  duration: const Duration(milliseconds: 200),
-                  child: IgnorePointer(
-                    child: Container(
-                      color: Colors.black54,
-                      alignment: Alignment.center,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Text(
-                            'KŘUP! 💥',
-                            style: TextStyle(color: Colors.redAccent, fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 2),
+                // Right Item: The Platform (basket with items)
+                AnimatedPositioned(
+                  duration: Duration(milliseconds: _winchState == 'lifting' ? 1200 : _winchState == 'snapped' ? 300 : 400),
+                  curve: Curves.easeInOut,
+                  right: 75,
+                  top: platformY,
+                  width: 60,
+                  height: 70,
+                  child: AnimatedRotation(
+                    turns: platformTilt,
+                    duration: const Duration(milliseconds: 300),
+                    child: Column(
+                      children: [
+                        // Placed items emojis (up to 5 stacked/shown)
+                        Container(
+                          height: 24,
+                          alignment: Alignment.bottomCenter,
+                          child: Wrap(
+                            spacing: -4,
+                            children: _selectedWinchItems.map((itemId) {
+                              final item = _winchItems.firstWhere((it) => it['id'] == itemId);
+                              return Text(item['emoji'] as String, style: const TextStyle(fontSize: 16));
+                            }).toList(),
                           ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Lano se přetrhlo pod obří vahou!',
-                            style: TextStyle(color: Colors.white, fontSize: 13),
+                        ),
+                        // The Basket Plate representation
+                        Container(
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade800,
+                            borderRadius: BorderRadius.circular(2),
+                            border: Border.all(color: Colors.amber.shade900),
                           ),
-                        ],
+                        ),
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
+                          child: Text(
+                            '$totalWeight kg',
+                            style: TextStyle(
+                              color: totalWeight > 28 ? Colors.redAccent : Colors.white70,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Broken Rope Indicator ("KŘUP! 💥")
+                Positioned.fill(
+                  child: AnimatedOpacity(
+                    opacity: brokenOpacity,
+                    duration: const Duration(milliseconds: 200),
+                    child: IgnorePointer(
+                      child: Container(
+                        color: Colors.black54,
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Text(
+                              'KŘUP! 💥',
+                              style: TextStyle(color: Colors.redAccent, fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 2),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Lano se přetrhlo pod obří vahou!',
+                              style: TextStyle(color: Colors.white, fontSize: 13),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -858,63 +885,89 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                 if (itemId == 'ice') displayWeight = _iceWeight;
                 if (itemId == 'squirrel') displayWeight = _squirrelWeight;
 
-                return GestureDetector(
-                  onTap: _leverPulled || _winchState == 'lifting'
-                      ? null
-                      : () {
-                          setState(() {
-                            if (isSelected) {
-                              _selectedWinchItems.remove(itemId);
-                              _winchFeedbackText = 'Odebráno: ${item['name']}.';
-                            } else {
-                              if (_selectedWinchItems.length >= 5) {
-                                _winchFeedbackText = 'Můžeš vybrat nejvýše 5 předmětů najednou!';
+                return AnimatedScale(
+                  scale: isSelected ? 0.95 : 1.0,
+                  duration: const Duration(milliseconds: 100),
+                  child: GestureDetector(
+                    onTap: _leverPulled || _winchState == 'lifting'
+                        ? null
+                        : () {
+                            setState(() {
+                              if (isSelected) {
+                                _selectedWinchItems.remove(itemId);
+                                _winchFeedbackText = 'Odebráno: ${item['name']}.';
                               } else {
-                                _selectedWinchItems.add(itemId);
-                                _winchFeedbackText = item['response'] as String;
+                                if (_selectedWinchItems.length >= 5) {
+                                  _winchFeedbackText = 'Můžeš vybrat nejvýše 5 předmětů najednou!';
+                                  _speak('Můžeš vybrat nejvýše pět předmětů.');
+                                } else {
+                                  _selectedWinchItems.add(itemId);
+                                  _winchFeedbackText = item['response'] as String;
+                                  final speakText = (item['response'] as String)
+                                      .replaceAll('!', '')
+                                      .replaceAll('...', '.');
+                                  _speak(speakText);
+                                }
                               }
-                            }
-                          });
-                        },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isSelected
-                            ? [Colors.amber.shade900, Colors.amber.shade950]
-                            : [Colors.grey.shade850, Colors.grey.shade900],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isSelected ? Colors.amber.shade500 : Colors.grey.shade700,
-                        width: isSelected ? 2.0 : 1.0,
-                      ),
-                      boxShadow: [
-                        if (isSelected)
-                          BoxShadow(color: Colors.amber.shade900.withOpacity(0.4), blurRadius: 4, spreadRadius: 1),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(6),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(item['emoji'] as String, style: const TextStyle(fontSize: 26)),
-                        const SizedBox(height: 4),
-                        Text(
-                          item['name'] as String,
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.grey.shade300,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
+                            });
+                          },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: isSelected
+                              ? [Colors.amber.shade900, Colors.amber.shade950]
+                              : [Colors.grey.shade855, Colors.grey.shade900],
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$displayWeight kg',
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected ? Colors.amber.shade500 : Colors.grey.shade700,
+                          width: isSelected ? 2.0 : 1.0,
+                        ),
+                        boxShadow: [
+                          if (isSelected)
+                            BoxShadow(color: Colors.amber.shade900.withOpacity(0.4), blurRadius: 4, spreadRadius: 1),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(6),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(item['emoji'] as String, style: const TextStyle(fontSize: 26)),
+                          const SizedBox(height: 4),
+                          Text(
+                            item['name'] as String,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : Colors.grey.shade300,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$displayWeight kg',
+                            style: TextStyle(
+                              color: isSelected ? Colors.amberAccent : Colors.grey.shade500,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }                        '$displayWeight kg',
                           style: TextStyle(
                             color: isSelected ? Colors.amberAccent : Colors.grey.shade500,
                             fontSize: 10,
@@ -1100,5 +1153,76 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         ],
       ),
     );
+  }
+}
+
+class _WinchDialPainter extends CustomPainter {
+  final double currentWeight;
+
+  _WinchDialPainter({required this.currentWeight});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height - 4);
+    final radius = size.height - 8;
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round;
+
+    // Draw background arcs
+    paint.color = Colors.grey.shade700;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -3.14159,
+      3.14159 * (20 / 40),
+      false,
+      paint,
+    );
+
+    paint.color = Colors.green.shade600;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -3.14159 + 3.14159 * (20 / 40),
+      3.14159 * (8 / 40),
+      false,
+      paint,
+    );
+
+    paint.color = Colors.red.shade700;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -3.14159 + 3.14159 * (28 / 40),
+      3.14159 * (12 / 40),
+      false,
+      paint,
+    );
+
+    // Draw needle
+    final double clampWeight = currentWeight.clamp(0.0, 40.0);
+    final double needleAngle = -3.14159 + (3.14159 * (clampWeight / 40.0));
+    final needlePaint = Paint()
+      ..color = Colors.orangeAccent
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+
+    final needleEnd = Offset(
+      center.dx + radius * 0.85 * math.cos(needleAngle),
+      center.dy + radius * 0.85 * math.sin(needleAngle),
+    );
+
+    canvas.drawLine(center, needleEnd, needlePaint);
+
+    // Draw cap
+    final capPaint = Paint()..color = Colors.amber.shade800;
+    canvas.drawCircle(center, 4, capPaint);
+    capPaint.color = Colors.black;
+    canvas.drawCircle(center, 1.5, capPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WinchDialPainter oldDelegate) {
+    return oldDelegate.currentWeight != currentWeight;
   }
 }
