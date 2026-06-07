@@ -24,8 +24,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
   void _speakHeroLine(String line) async {
     try {
       await _tts.setLanguage("cs-CZ");
-      await _tts.setPitch(1.05);
-      await _tts.setSpeechRate(0.85);
+      await _tts.setPitch(0.85); // Deeper pitch to sound like a man
+      await _tts.setSpeechRate(0.4); // Slower, natural reading speed
       await _tts.speak(line);
     } catch (_) {}
   }

@@ -6,6 +6,7 @@ import 'point_and_click_screen.dart';
 import 'logic_puzzles_screen.dart';
 import 'catching_game_screen.dart';
 import 'story_animations.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class StoryMapScreen extends StatefulWidget {
   const StoryMapScreen({super.key});
@@ -18,12 +19,28 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
   final StoryGameService _service = StoryGameService();
   bool _showIntro = false;
   int _introSlideIndex = 0;
+  final AudioPlayer _musicPlayer = AudioPlayer();
 
   @override
   void initState() {
     super.initState();
     _service.initialize();
     _checkIntro();
+    _initMusic();
+  }
+
+  void _initMusic() async {
+    try {
+      await _musicPlayer.setReleaseMode(ReleaseMode.loop);
+      await _musicPlayer.setVolume(0.12); // Low volume background music
+      await _musicPlayer.play(AssetSource('ambient_bg.mp3'));
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _musicPlayer.dispose();
+    super.dispose();
   }
 
   void _checkIntro() async {

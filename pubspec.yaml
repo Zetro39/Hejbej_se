@@ -1,7 +1,7 @@
 name: hejbej_se
 description: Hejbej se – trasy v ČR s gamifikací.
 publish_to: "none"
-version: 1.2.3+75
+version: 1.2.3+76
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -35,6 +35,7 @@ dependencies:
   permission_handler: ^11.3.1
   confetti: ^0.7.0
   flutter_tts: ^4.1.0
+  audioplayers: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -49,3 +50,4 @@ flutter:
     - assets/apple_pay_config.json
     - assets/map_style_light.json
     - assets/map_style_dark.json
+    - assets/ambient_bg.mp3
