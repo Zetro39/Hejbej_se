@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+
 
 class LogicPuzzlesScreen extends StatefulWidget {
   final String puzzleType; // 'combination_lock', 'scales', 'bookshelf', 'telescope'
@@ -34,13 +37,37 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
   int _iceMeltingCounter = 0;
   final FlutterTts _tts = FlutterTts();
   double _shakeOffset = 0.0;
+  double _winchDisplayWeight = 0.0;
+
+  // Concentric Rune image state
+  ui.Image? _runeBoardImage;
 
   @override
   void initState() {
     super.initState();
     _startWinchTimer();
     _initTts();
+    if (widget.puzzleType == 'rune_ritual') {
+      _loadRuneBoardImage();
+    }
   }
+
+  Future<void> _loadRuneBoardImage() async {
+    try {
+      final data = await rootBundle.load('assets/images/story_rune_board_bg.png');
+      final bytes = data.buffer.asUint8List();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frameInfo = await codec.getNextFrame();
+      if (mounted) {
+        setState(() {
+          _runeBoardImage = frameInfo.image;
+        });
+      }
+    } catch (e) {
+      debugPrint("Failed to load rune board image: $e");
+    }
+  }
+
 
   Future<void> _initTts() async {
     try {
@@ -277,12 +304,15 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
   final List<String> _correctBooksOrder = ['Ambrož', 'Bohumil', 'Cyril', 'David'];
 
   // Telescope state
-  double _angleMedved = 0;
-  double _angleVlk = 0;
-  double _angleJelen = 0;
-  bool _medvedSolvedSpoken = false;
-  bool _vlkSolvedSpoken = false;
-  bool _jelenSolvedSpoken = false;
+  int _telescopeStep = 0; // 0 = Medved, 1 = Vlk, 2 = Jelen
+  Offset _skyOffset = const Offset(-480, -280);
+  String? _astronomerSpeech;
+  Timer? _speechBubbleTimer;
+
+  // Concentric Rune state
+  double _outerAngle = 90.0;
+  double _middleAngle = 180.0;
+  double _innerAngle = 270.0;
 
   bool _isSolved = false;
 
@@ -311,24 +341,9 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         _speak('Něco tiše cvaklo a regál s knihami se s rachotem odsunul!');
       }
     } else if (widget.puzzleType == 'telescope') {
-      // Check individual alignments for spoken cues
-      if (_angleMedved == 45 && !_medvedSolvedSpoken) {
-        _medvedSolvedSpoken = true;
-        _speak('Hvězdy Medvěda se spojily a jasně zazářily!');
-      }
-      if (_angleVlk == 120 && !_vlkSolvedSpoken) {
-        _vlkSolvedSpoken = true;
-        _speak('Hvězdy Vlka se spojily a jasně zazářily!');
-      }
-      if (_angleJelen == 275 && !_jelenSolvedSpoken) {
-        _jelenSolvedSpoken = true;
-        _speak('Hvězdy Jelena se spojily a jasně zazářily!');
-      }
-
-      solved = (_angleMedved == 45 && _angleVlk == 120 && _angleJelen == 275);
-      if (solved) {
-        _speak('Teleskop je dokonale zaměřen! Hvězdy se propojily a chrámové dveře se otevírají.');
-      }
+      solved = _isSolved;
+    } else if (widget.puzzleType == 'rune_ritual') {
+      solved = _isSolved;
     }
 
     if (solved) {
@@ -361,6 +376,9 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
     } else if (widget.puzzleType == 'telescope') {
       title = "🔭 Hvězdný dalekohled";
       puzzleWidget = _buildTelescope();
+    } else if (widget.puzzleType == 'rune_ritual') {
+      title = "🔮 Runový Rituál";
+      puzzleWidget = _buildRuneRitual();
     }
 
     return Scaffold(
@@ -801,8 +819,8 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                   top: 6,
                   height: 55,
                   child: TweenAnimationBuilder<double>(
-                    tween: Tween<double>(begin: 0, end: totalWeight.toDouble()),
-                    duration: const Duration(milliseconds: 300),
+                    tween: Tween<double>(begin: 0, end: _winchDisplayWeight),
+                    duration: const Duration(milliseconds: 1200),
                     builder: (context, value, child) {
                       return Column(
                         children: [
@@ -811,14 +829,10 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                             painter: _WinchDialPainter(currentWeight: value),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            '${value.toInt()} kg',
+                          const Text(
+                            'ZATÍŽENÍ',
                             style: TextStyle(
-                              color: totalWeight > 28
-                                  ? Colors.redAccent
-                                  : totalWeight > 20
-                                      ? Colors.greenAccent
-                                      : Colors.amberAccent,
+                              color: Colors.white38,
                               fontSize: 9,
                               fontWeight: FontWeight.bold,
                             ),
@@ -897,7 +911,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                           alignment: Alignment.center,
                           child: AnimatedRotation(
                             turns: _leverPulled ? 0.12 : 0.0,
-                            duration: const Duration(milliseconds: 300),
+                            duration: const Duration(milliseconds: 1200),
                             child: const Icon(Icons.build_outlined, color: Colors.white, size: 24),
                           ),
                         ),
@@ -943,7 +957,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                         decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
-                        child: const Text('20 kg', style: TextStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.bold)),
+                        child: const Text('KBELÍK', style: TextStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -959,7 +973,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                   height: 70,
                   child: AnimatedRotation(
                     turns: platformTilt,
-                    duration: const Duration(milliseconds: 300),
+                    duration: const Duration(milliseconds: 1200),
                     child: Column(
                       children: [
                         // Placed items emojis (up to 5 stacked/shown)
@@ -987,10 +1001,10 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                           decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
-                          child: Text(
-                            '$totalWeight kg',
+                          child: const Text(
+                            'ZÁVAŽÍ',
                             style: TextStyle(
-                              color: totalWeight > 28 ? Colors.redAccent : Colors.white70,
+                              color: Colors.white70,
                               fontSize: 8,
                               fontWeight: FontWeight.bold,
                             ),
@@ -1070,6 +1084,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                 onPressed: () {
                   setState(() {
                     _selectedWinchItems.clear();
+                    _winchDisplayWeight = 0.0;
                     _winchFeedbackText = 'Plošina vyčištěna. Vyber předměty znovu.';
                   });
                 },
@@ -1169,14 +1184,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            '$displayWeight kg',
-                            style: TextStyle(
-                              color: isSelected ? Colors.amberAccent : Colors.grey.shade500,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          const SizedBox.shrink(),
                         ],
                       ),
                     ),
@@ -1425,13 +1433,89 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
       ],
     );
   }
+  // 4. Telescope Viewport Panning Widget
+  void _checkTelescopeConstellation() {
+    final double skyCenterX = 120.0 - _skyOffset.dx;
+    final double skyCenterY = 120.0 - _skyOffset.dy;
 
-  // 4. Telescope Widget
+    Offset targetCenter;
+    String cCzech;
+    if (_telescopeStep == 0) {
+      targetCenter = const Offset(300, 220);
+      cCzech = 'Velkého Medvěda';
+    } else if (_telescopeStep == 1) {
+      targetCenter = const Offset(850, 280);
+      cCzech = 'Vlka';
+    } else {
+      targetCenter = const Offset(600, 580);
+      cCzech = 'Jelena';
+    }
+
+    final double dx = skyCenterX - targetCenter.dx;
+    final double dy = skyCenterY - targetCenter.dy;
+    final double distance = math.sqrt(dx * dx + dy * dy);
+
+    _speechBubbleTimer?.cancel();
+    if (distance < 80.0) {
+      _speak('Super! Našel jsi souhvězdí ' + cCzech + '.');
+      setState(() {
+        _astronomerSpeech = 'Super! Našel jsi souhvězdí ' + cCzech + '.';
+        if (_telescopeStep < 2) {
+          _telescopeStep++;
+        } else {
+          _astronomerSpeech = 'Výborně! Všechna souhvězdí jsou zaměřena. Dveře observatoře se otevírají!';
+          _telescopeStep = 3;
+        }
+      });
+
+      if (_telescopeStep == 3) {
+        Future.delayed(const Duration(milliseconds: 3000), () {
+          if (mounted) {
+            setState(() {
+              _isSolved = true;
+            });
+            Future.delayed(const Duration(milliseconds: 1500), () {
+              if (mounted) {
+                widget.onSolved();
+                Navigator.pop(context);
+              }
+            });
+          }
+        });
+      } else {
+        _speechBubbleTimer = Timer(const Duration(seconds: 4), () {
+          if (mounted) {
+            setState(() {
+              _astronomerSpeech = null;
+            });
+          }
+        });
+      }
+    } else {
+      _speak('Ne, to není ono.');
+      setState(() {
+        _astronomerSpeech = 'Ne, to není ono. Podívej se znovu na pergamen a zkus zaměřit jinou část oblohy.';
+      });
+      _speechBubbleTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) {
+          setState(() {
+            _astronomerSpeech = null;
+          });
+        }
+      });
+    }
+  }
+
   Widget _buildTelescope() {
-    final isMedvedAligned = _angleMedved == 45;
-    final isVlkAligned = _angleVlk == 120;
-    final isJelenAligned = _angleJelen == 275;
-    final allAligned = isMedvedAligned && isVlkAligned && isJelenAligned;
+    String currentCluePath = 'assets/images/clue_telescope_medved.png';
+    String currentName = 'Velký Medvěd';
+    if (_telescopeStep == 1) {
+      currentCluePath = 'assets/images/clue_telescope_vlk.png';
+      currentName = 'Vlk';
+    } else if (_telescopeStep >= 2) {
+      currentCluePath = 'assets/images/clue_telescope_jelen.png';
+      currentName = 'Jelen';
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1448,7 +1532,226 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Otáčením mosazných astro-ciferníků zaměř souhvězdí v průzoru:',
+          _telescopeStep >= 3 
+            ? 'Všechna souhvězdí jsou úspěšně zaměřena!'
+            : 'Posouváním oblohy v dalekohledu najdi souhvězdí z nápovědy:',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Column(
+              children: [
+                Container(
+                  width: 180,
+                  height: 180,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _telescopeStep >= 3 ? Colors.greenAccent : Colors.amber.shade700,
+                      width: 5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.6),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                      if (_telescopeStep >= 3)
+                        BoxShadow(
+                          color: Colors.greenAccent.withOpacity(0.35),
+                          blurRadius: 15,
+                          spreadRadius: 2,
+                        ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: Stack(
+                      children: [
+                        GestureDetector(
+                          onPanUpdate: _telescopeStep >= 3
+                              ? null
+                              : (details) {
+                                  setState(() {
+                                    _skyOffset += details.delta;
+                                    _skyOffset = Offset(
+                                      _skyOffset.dx.clamp(-1020.0, 0.0),
+                                      _skyOffset.dy.clamp(-620.0, 0.0),
+                                    );
+                                  });
+                                },
+                          child: Stack(
+                            children: [
+                              Positioned(
+                                left: _skyOffset.dx,
+                                top: _skyOffset.dy,
+                                child: Image.asset(
+                                  'assets/images/story_telescope_sky.png',
+                                  width: 1200,
+                                  height: 800,
+                                  fit: BoxFit.none,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IgnorePointer(
+                          child: Center(
+                            child: Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.amber.shade500.withOpacity(0.25),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Center(
+                                child: Container(
+                                  width: 4,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.amber.shade500.withOpacity(0.4),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Hledáček dalekohledu',
+                  style: TextStyle(color: Colors.white38, fontSize: 10, fontStyle: FontStyle.italic),
+                ),
+              ],
+            ),
+            const SizedBox(width: 20),
+
+            Column(
+              children: [
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.amber.shade800.withOpacity(0.6), width: 2),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(2, 2)),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.asset(
+                      currentCluePath,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _telescopeStep >= 3 ? 'Hotovo!' : 'Cíl: ' + currentName,
+                  style: TextStyle(color: Colors.amber.shade600, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E24),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade800),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Image.asset(
+                'assets/images/story_npc_astronomer.png',
+                width: 44,
+                height: 44,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Astronom',
+                      style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _astronomerSpeech ??
+                          'Najdi v dalekohledu souhvězdí ' + currentName + ' podle této nápovědy a pak klikni na tlačítko níže.',
+                      style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _telescopeStep >= 3 ? Colors.green.shade800 : Colors.amber.shade800,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _telescopeStep >= 3 ? null : _checkTelescopeConstellation,
+              icon: const Icon(Icons.gps_fixed),
+              label: const Text('ZAMĚŘENO (NAJITO)', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // 5. Concentric Rune Ritual Puzzle Widget
+  Widget _buildRuneRitual() {
+    final bool outerAligned = (_outerAngle.round() % 360) == 0;
+    final bool middleAligned = (_middleAngle.round() % 360) == 0;
+    final bool innerAligned = (_innerAngle.round() % 360) == 0;
+    final bool allAligned = outerAligned && middleAligned && innerAligned;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          '🔮 Runový Rituál',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Otáčením kruhů propoj runové linie ze středu k okraji:',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.grey.shade400,
@@ -1457,24 +1760,18 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         ),
         const SizedBox(height: 18),
 
-        // Live circular starry viewport
         Container(
-          width: 180,
-          height: 180,
+          width: 200,
+          height: 200,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: const RadialGradient(
-              center: Alignment.center,
-              radius: 1.0,
-              colors: [Color(0xFF0F172A), Color(0xFF020617)],
-            ),
             border: Border.all(
-              color: allAligned ? Colors.cyanAccent : Colors.amber.shade700,
-              width: 5,
+              color: allAligned ? Colors.cyanAccent : Colors.grey.shade800,
+              width: 4,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.6),
+                color: Colors.black.withOpacity(0.5),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -1487,473 +1784,274 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
             ],
           ),
           child: ClipOval(
-            child: CustomPaint(
-              painter: _TelescopeStarfieldPainter(
-                angleMedved: _angleMedved,
-                angleVlk: _angleVlk,
-                angleJelen: _angleJelen,
-              ),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: _runeBoardImage == null
+                      ? Container(
+                          color: Colors.black45,
+                          alignment: Alignment.center,
+                          child: const CircularProgressIndicator(color: Colors.cyanAccent),
+                        )
+                      : CustomPaint(
+                          painter: _RuneRitualPainter(
+                            backgroundImage: _runeBoardImage!,
+                            outerAngle: _outerAngle,
+                            middleAngle: _middleAngle,
+                            innerAngle: _innerAngle,
+                            allAligned: allAligned,
+                          ),
+                        ),
+                ),
+              ],
             ),
           ),
         ),
         const SizedBox(height: 20),
 
-        // Astro-Dials Row
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _AstroDial(
-                label: '🐻 Medvěd',
-                value: _angleMedved,
-                target: 45,
-                onChanged: (val) {
-                  setState(() {
-                    _angleMedved = val;
-                  });
-                  _checkSolution();
-                },
-              ),
-            ),
-            Expanded(
-              child: _AstroDial(
-                label: '🐺 Vlk',
-                value: _angleVlk,
-                target: 120,
-                onChanged: (val) {
-                  setState(() {
-                    _angleVlk = val;
-                  });
-                  _checkSolution();
-                },
-              ),
-            ),
-            Expanded(
-              child: _AstroDial(
-                label: '🦌 Jelen',
-                value: _angleJelen,
-                target: 275,
-                onChanged: (val) {
-                  setState(() {
-                    _angleJelen = val;
-                  });
-                  _checkSolution();
-                },
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _WinchDialPainter extends CustomPainter {
-  final double currentWeight;
-
-  _WinchDialPainter({required this.currentWeight});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height - 4);
-    final radius = size.height - 8;
-
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round;
-
-    // Draw background arcs
-    paint.color = Colors.grey.shade700;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -3.14159,
-      3.14159 * (20 / 40),
-      false,
-      paint,
-    );
-
-    paint.color = Colors.green.shade600;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -3.14159 + 3.14159 * (20 / 40),
-      3.14159 * (8 / 40),
-      false,
-      paint,
-    );
-
-    paint.color = Colors.red.shade700;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -3.14159 + 3.14159 * (28 / 40),
-      3.14159 * (12 / 40),
-      false,
-      paint,
-    );
-
-    // Draw needle
-    final double clampWeight = currentWeight.clamp(0.0, 40.0);
-    final double needleAngle = -3.14159 + (3.14159 * (clampWeight / 40.0));
-    final needlePaint = Paint()
-      ..color = Colors.orangeAccent
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-
-    final needleEnd = Offset(
-      center.dx + radius * 0.85 * math.cos(needleAngle),
-      center.dy + radius * 0.85 * math.sin(needleAngle),
-    );
-
-    canvas.drawLine(center, needleEnd, needlePaint);
-
-    // Draw cap
-    final capPaint = Paint()..color = Colors.amber.shade800;
-    canvas.drawCircle(center, 4, capPaint);
-    capPaint.color = Colors.black;
-    canvas.drawCircle(center, 1.5, capPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _WinchDialPainter oldDelegate) {
-    return oldDelegate.currentWeight != currentWeight;
-  }
-}
-
-class _PadlockShacklePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.grey.shade600
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 14
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    final double w = size.width;
-    final double h = size.height;
-
-    // Semicircular shackle arch
-    path.moveTo(15, h);
-    path.lineTo(15, h * 0.5);
-    path.arcTo(
-      Rect.fromLTWH(15, 15, w - 30, h),
-      -math.pi,
-      math.pi,
-      false,
-    );
-    path.lineTo(w - 15, h);
-
-    canvas.drawPath(path, paint);
-
-    // Gold core line highlights
-    paint.color = Colors.amber.shade700;
-    paint.strokeWidth = 4;
-    
-    final accentPath = Path();
-    accentPath.moveTo(25, h);
-    accentPath.lineTo(25, h * 0.5);
-    accentPath.arcTo(
-      Rect.fromLTWH(25, 25, w - 50, h - 20),
-      -math.pi,
-      math.pi,
-      false,
-    );
-    accentPath.lineTo(w - 25, h);
-    canvas.drawPath(accentPath, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _AstroDial extends StatelessWidget {
-  final String label;
-  final double value;
-  final double target;
-  final ValueChanged<double> onChanged;
-
-  const _AstroDial({
-    required this.label,
-    required this.value,
-    required this.target,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isAligned = (value - target).abs() < 1;
-
-    return Column(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '${value.toInt()}°',
-          style: TextStyle(
-            color: isAligned ? Colors.greenAccent : Colors.amber.shade500,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
+        _buildRingControlRow(
+          label: 'Vnější kruh (Outer)',
+          onLeft: () => _rotateRing('outer', -30),
+          onRight: () => _rotateRing('outer', 30),
+          isAligned: outerAligned,
         ),
         const SizedBox(height: 8),
-
-        GestureDetector(
-          onPanUpdate: (details) {
-            final RenderBox box = context.findRenderObject() as RenderBox;
-            final center = box.size.center(Offset.zero);
-            final localPos = details.localPosition;
-            final rad = math.atan2(localPos.dy - center.dy, localPos.dx - center.dx);
-            double deg = rad * 180 / math.pi;
-            if (deg < 0) deg += 360;
-            deg = (deg / 5).round() * 5.0;
-            onChanged(deg);
-          },
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Transform.rotate(
-                angle: value * math.pi / 180,
-                child: Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const SweepGradient(
-                      colors: [
-                        Colors.amber,
-                        Colors.orange,
-                        Color(0xFF2A1B0A),
-                        Colors.amber,
-                      ],
-                    ),
-                    border: Border.all(
-                      color: isAligned ? Colors.greenAccent : Colors.amber.shade500,
-                      width: 2.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.5),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Positioned(
-                        top: 4,
-                        child: Container(
-                          width: 4,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: isAligned ? Colors.greenAccent : Colors.white,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: 22,
-                        height: 22,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.amber.shade900,
-                          border: Border.all(color: Colors.amber.shade600, width: 1.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+        _buildRingControlRow(
+          label: 'Střední kruh (Middle)',
+          onLeft: () => _rotateRing('middle', -30),
+          onRight: () => _rotateRing('middle', 30),
+          isAligned: middleAligned,
         ),
-        
-        const SizedBox(height: 6),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              icon: Icon(Icons.arrow_left, color: Colors.amber.shade600, size: 28),
-              onPressed: isAligned
-                  ? null
-                  : () {
-                      double newVal = (value - 5 + 360) % 360;
-                      onChanged(newVal);
-                    },
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              icon: Icon(Icons.arrow_right, color: Colors.amber.shade600, size: 28),
-              onPressed: isAligned
-                  ? null
-                  : () {
-                      double newVal = (value + 5) % 360;
-                      onChanged(newVal);
-                    },
-            ),
-          ],
+        const SizedBox(height: 8),
+        _buildRingControlRow(
+          label: 'Vnitřní kruh (Inner)',
+          onLeft: () => _rotateRing('inner', -30),
+          onRight: () => _rotateRing('inner', 30),
+          isAligned: innerAligned,
         ),
       ],
     );
   }
+
+
+  Widget _buildRingControlRow({
+    required String label,
+    required VoidCallback onLeft,
+    required VoidCallback onRight,
+    required bool isAligned,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        SizedBox(
+          width: 140,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isAligned ? Colors.cyanAccent : Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.rotate_left, color: Colors.amber),
+          onPressed: _isSolved ? null : onLeft,
+        ),
+        IconButton(
+          icon: const Icon(Icons.rotate_right, color: Colors.amber),
+          onPressed: _isSolved ? null : onRight,
+        ),
+      ],
+    );
+  }
+
+  void _rotateRing(String ring, double amount) {
+    setState(() {
+      if (ring == 'outer') {
+        _outerAngle += amount;
+        _middleAngle -= amount;
+      } else if (ring == 'middle') {
+        _middleAngle += amount;
+        _innerAngle += amount * 2;
+      } else if (ring == 'inner') {
+        _innerAngle += amount;
+      }
+
+      final bool outerAligned = (_outerAngle.round() % 360) == 0;
+      final bool middleAligned = (_middleAngle.round() % 360) == 0;
+      final bool innerAligned = (_innerAngle.round() % 360) == 0;
+
+      if (outerAligned && middleAligned && innerAligned) {
+        _isSolved = true;
+        _speak('Magické runy se spojily a amulet se plně nabil!');
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) {
+            widget.onSolved();
+            Navigator.pop(context);
+          }
+        });
+      }
+    });
+  }
 }
 
-class _TelescopeStarfieldPainter extends CustomPainter {
-  final double angleMedved;
-  final double angleVlk;
-  final double angleJelen;
+class _RuneRitualPainter extends CustomPainter {
+  final ui.Image backgroundImage;
+  final double outerAngle;
+  final double middleAngle;
+  final double innerAngle;
+  final bool allAligned;
 
-  _TelescopeStarfieldPainter({
-    required this.angleMedved,
-    required this.angleVlk,
-    required this.angleJelen,
+  _RuneRitualPainter({
+    required this.backgroundImage,
+    required this.outerAngle,
+    required this.middleAngle,
+    required this.innerAngle,
+    required this.allAligned,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
+    final double radius = size.width / 2;
 
-    final gridPaint = Paint()
-      ..color = Colors.amber.shade900.withOpacity(0.2)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+    // We partition the image into 3 concentric zones:
+    final double innerR = radius * 0.35; // 35 if radius is 100
+    final double middleR = radius * 0.70; // 70 if radius is 100
+    final double outerR = radius;       // 100 if radius is 100
+
+    final srcRect = Rect.fromLTWH(0, 0, backgroundImage.width.toDouble(), backgroundImage.height.toDouble());
+    final dstRect = Rect.fromCircle(center: center, radius: radius);
+
+    final basePaint = Paint()..isAntiAlias = true;
+    if (!allAligned) {
+      basePaint.colorFilter = const ColorFilter.matrix(<double>[
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0,      0,      0,      1, 0,
+      ]);
+    }
+
+    // 1. Draw Inner Zone (rotated by innerAngle)
+    canvas.save();
+    final innerPath = Path()..addOval(Rect.fromCircle(center: center, radius: innerR));
+    canvas.clipPath(innerPath);
     
-    canvas.drawCircle(center, radius * 0.4, gridPaint);
-    canvas.drawCircle(center, radius * 0.7, gridPaint);
-    canvas.drawLine(Offset(center.dx - radius, center.dy), Offset(center.dx + radius, center.dy), gridPaint);
-    canvas.drawLine(Offset(center.dx, center.dy - radius), Offset(center.dx, center.dy + radius), gridPaint);
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(innerAngle * math.pi / 180);
+    canvas.translate(-center.dx, -center.dy);
+    
+    canvas.drawImageRect(backgroundImage, srcRect, dstRect, basePaint);
+    canvas.restore();
 
-    final starPaint = Paint()..color = Colors.white.withOpacity(0.3);
-    final randomStars = [
-      Offset(radius * 0.3, radius * 0.4),
-      Offset(radius * 1.5, radius * 0.5),
-      Offset(radius * 0.5, radius * 1.6),
-      Offset(radius * 1.6, radius * 1.4),
-      Offset(radius * 1.2, radius * 0.3),
-      Offset(radius * 0.4, radius * 1.2),
+    // 2. Draw Middle Zone (rotated by middleAngle)
+    canvas.save();
+    final middlePath = Path()..addOval(Rect.fromCircle(center: center, radius: middleR));
+    final innerPathForDiff = Path()..addOval(Rect.fromCircle(center: center, radius: innerR));
+    final middleClipPath = Path.combine(PathOperation.difference, middlePath, innerPathForDiff);
+    canvas.clipPath(middleClipPath);
+    
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(middleAngle * math.pi / 180);
+    canvas.translate(-center.dx, -center.dy);
+    
+    canvas.drawImageRect(backgroundImage, srcRect, dstRect, basePaint);
+    canvas.restore();
+
+    // 3. Draw Outer Zone (rotated by outerAngle)
+    canvas.save();
+    final outerPath = Path()..addOval(Rect.fromCircle(center: center, radius: outerR));
+    final middlePathForDiff = Path()..addOval(Rect.fromCircle(center: center, radius: middleR));
+    final outerClipPath = Path.combine(PathOperation.difference, outerPath, middlePathForDiff);
+    canvas.clipPath(outerClipPath);
+    
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(outerAngle * math.pi / 180);
+    canvas.translate(-center.dx, -center.dy);
+    
+    canvas.drawImageRect(backgroundImage, srcRect, dstRect, basePaint);
+    canvas.restore();
+
+    // 4. Draw concentric borders (ring separators) to highlight the concentric circles
+    final borderPaint = Paint()
+      ..color = allAligned ? Colors.cyanAccent.withOpacity(0.6) : Colors.white24
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+    
+    canvas.drawCircle(center, innerR, borderPaint);
+    canvas.drawCircle(center, middleR, borderPaint);
+
+    // 5. Draw element lines/spokes (overlayed glow and lines to help alignment)
+    final List<Map<String, dynamic>> elements = [
+      {'angle': 0.0, 'color': Colors.greenAccent, 'emoji': '🌱'},   // Země
+      {'angle': 90.0, 'color': Colors.orangeAccent, 'emoji': '🔥'},  // Oheň
+      {'angle': 180.0, 'color': Colors.cyanAccent, 'emoji': '💦'},  // Voda
+      {'angle': 270.0, 'color': Colors.white, 'emoji': '💨'},       // Vítr
     ];
-    for (var star in randomStars) {
-      canvas.drawCircle(star, 1.5, starPaint);
-    }
 
-    _drawConstellation(
-      canvas: canvas,
-      center: center,
-      currentAngle: angleMedved,
-      targetAngle: 45,
-      points: const [
-        Offset(-30, -5), Offset(-15, -12), Offset(0, -8), Offset(12, 4),
-        Offset(24, 20), Offset(8, 28), Offset(-12, 20)
-      ],
-      connections: const [
-        [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 3]
-      ],
-      glowColor: Colors.cyanAccent,
-    );
+    void drawSpokeSegment(double rotationAngle, double baseAngle, double iR, double oR, Color color) {
+      final double totalAngleRad = (rotationAngle + baseAngle) * math.pi / 180;
+      final p1 = Offset(center.dx + iR * math.cos(totalAngleRad), center.dy + iR * math.sin(totalAngleRad));
+      final p2 = Offset(center.dx + oR * math.cos(totalAngleRad), center.dy + oR * math.sin(totalAngleRad));
 
-    _drawConstellation(
-      canvas: canvas,
-      center: center,
-      currentAngle: angleVlk,
-      targetAngle: 120,
-      points: const [
-        Offset(-25, 25), Offset(-8, 12), Offset(8, 8), Offset(25, -4),
-        Offset(12, -20), Offset(-4, -16), Offset(-16, -4)
-      ],
-      connections: const [
-        [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 1], [5, 1]
-      ],
-      glowColor: Colors.tealAccent,
-    );
+      final Color drawColor = allAligned ? color : Colors.white38;
 
-    _drawConstellation(
-      canvas: canvas,
-      center: center,
-      currentAngle: angleJelen,
-      targetAngle: 275,
-      points: const [
-        Offset(-8, -30), Offset(8, -30), Offset(0, -16), Offset(0, 8),
-        Offset(-20, 20), Offset(20, 20), Offset(-12, -4), Offset(12, -4)
-      ],
-      connections: const [
-        [0, 2], [1, 2], [2, 3], [3, 4], [3, 5], [6, 3], [7, 3]
-      ],
-      glowColor: Colors.blueAccent,
-    );
-  }
+      final paint = Paint()
+        ..color = drawColor.withOpacity(0.85)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.5
+        ..strokeCap = StrokeCap.round;
 
-  void _drawConstellation({
-    required Canvas canvas,
-    required Offset center,
-    required double currentAngle,
-    required double targetAngle,
-    required List<Offset> points,
-    required List<List<int>> connections,
-    required Color glowColor,
-  }) {
-    final bool isAligned = (currentAngle - targetAngle).abs() < 1;
-
-    final silhouettePaint = Paint()
-      ..color = Colors.amber.shade900.withOpacity(0.25)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(targetAngle * math.pi / 180);
-    for (var conn in connections) {
-      canvas.drawLine(points[conn[0]], points[conn[1]], silhouettePaint);
-    }
-    for (var pt in points) {
-      canvas.drawCircle(pt, 2.5, silhouettePaint);
-    }
-    canvas.restore();
-
-    final linePaint = Paint()
-      ..color = isAligned ? glowColor : Colors.white60
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = isAligned ? 2.5 : 1.5;
-
-    final starPaint = Paint()
-      ..color = isAligned ? glowColor : Colors.white
-      ..style = PaintingStyle.fill;
-
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(currentAngle * math.pi / 180);
-
-    for (var conn in connections) {
-      canvas.drawLine(points[conn[0]], points[conn[1]], linePaint);
-    }
-
-    for (var pt in points) {
-      if (isAligned) {
-        final auraPaint = Paint()
-          ..color = glowColor.withOpacity(0.4)
-          ..style = PaintingStyle.fill;
-        canvas.drawCircle(pt, 7, auraPaint);
+      if (allAligned) {
+        final glow = Paint()
+          ..color = color.withOpacity(0.55)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 8.5
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(p1, p2, glow);
       }
-      canvas.drawCircle(pt, isAligned ? 4.5 : 3.0, starPaint);
+      canvas.drawLine(p1, p2, paint);
     }
-    canvas.restore();
+
+
+    for (var elem in elements) {
+      final double baseAngle = elem['angle'] as double;
+      final Color color = elem['color'] as Color;
+
+      drawSpokeSegment(innerAngle, baseAngle, 0, innerR, color);
+      drawSpokeSegment(middleAngle, baseAngle, innerR, middleR, color);
+      drawSpokeSegment(outerAngle, baseAngle, middleR, outerR - 8, color);
+    }
+
+    // 6. Draw static element emojis at the perimeter
+    for (var elem in elements) {
+      final double angleRad = (elem['angle'] as double) * math.pi / 180;
+      final textPos = Offset(
+        center.dx + (outerR - 10) * math.cos(angleRad) - 8,
+        center.dy + (outerR - 10) * math.sin(angleRad) - 8,
+      );
+      
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: elem['emoji'] as String,
+          style: const TextStyle(fontSize: 14),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, textPos);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _TelescopeStarfieldPainter oldDelegate) {
-    return oldDelegate.angleMedved != angleMedved ||
-        oldDelegate.angleVlk != angleVlk ||
-        oldDelegate.angleJelen != angleJelen;
+  bool shouldRepaint(covariant _RuneRitualPainter oldDelegate) {
+    return oldDelegate.backgroundImage != backgroundImage ||
+        oldDelegate.outerAngle != outerAngle ||
+        oldDelegate.middleAngle != middleAngle ||
+        oldDelegate.innerAngle != innerAngle ||
+        oldDelegate.allAligned != allAligned;
   }
 }
-
 

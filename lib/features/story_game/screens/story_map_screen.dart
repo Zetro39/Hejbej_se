@@ -426,28 +426,44 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
         MaterialPageRoute(
           builder: (context) => PointAndClickScreen(nodeId: node.id),
         ),
-      );
+      ).then((didSolve) {
+        if (didSolve == true) {
+          _autoAdvance(node);
+        }
+      });
     } else if (node.id == 'node4') {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => PointAndClickScreen(nodeId: node.id), // Point and click for swamp exterior/interior
         ),
-      );
+      ).then((didSolve) {
+        if (didSolve == true) {
+          _autoAdvance(node);
+        }
+      });
     } else if (node.id == 'node5') {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => PointAndClickScreen(nodeId: node.id), // Point and click for castle courtyard
         ),
-      );
+      ).then((didSolve) {
+        if (didSolve == true) {
+          _autoAdvance(node);
+        }
+      });
     } else if (node.id == 'node6') {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => PointAndClickScreen(nodeId: node.id), // Altar
         ),
-      );
+      ).then((didSolve) {
+        if (didSolve == true) {
+          _autoAdvance(node);
+        }
+      });
     }
   }
 
