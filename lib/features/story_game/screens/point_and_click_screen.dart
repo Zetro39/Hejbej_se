@@ -1518,6 +1518,59 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
     return list;
   }
 
+  Widget? _buildItemOverlay(String name) {
+    String? itemId;
+    double scale = 0.55;
+    Alignment alignment = Alignment.center;
+
+    if (name == "Klika v trávě") {
+      itemId = 'iron_handle';
+      scale = 0.45;
+      alignment = Alignment.bottomCenter;
+    } else if (name == "Uvolněný kámen") {
+      itemId = 'dirty_key';
+      scale = 0.35;
+      alignment = const Alignment(0.3, 0.4);
+    } else if (name == "Bedna u cesty") {
+      itemId = 'oil';
+      scale = 0.35;
+      alignment = const Alignment(-0.2, 0.3);
+    } else if (name == "Suchá větev") {
+      itemId = 'stick';
+      scale = 0.65;
+      alignment = Alignment.center;
+    } else if (name == "Hadr na plotě") {
+      itemId = 'cloth';
+      scale = 0.55;
+      alignment = Alignment.center;
+    } else if (name == "Lupa na okně") {
+      itemId = 'lens';
+      scale = 0.4;
+      alignment = Alignment.center;
+    } else if (name == "Suchý mech") {
+      itemId = 'tinder';
+      scale = 0.5;
+      alignment = Alignment.bottomCenter;
+    } else if (name == "Police se džbánem (Kotlík)") {
+      itemId = 'pot';
+      scale = 0.6;
+      alignment = Alignment.bottomCenter;
+    }
+
+    if (itemId == null) return null;
+
+    return Align(
+      alignment: alignment,
+      child: Transform.scale(
+        scale: scale,
+        child: Opacity(
+          opacity: 0.85,
+          child: InventoryItemIcon(itemId: itemId, size: 48),
+        ),
+      ),
+    );
+  }
+
   String _getRoomBackground(QuestState state) {
     if (widget.nodeId == 'node1') {
       final isGateOpen = state.roomStates['node1_gate_open'] == true;
@@ -1664,6 +1717,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
                           // Render Interactive Hotspots
                           ...hotspots.map((hs) {
+                            final overlay = _buildItemOverlay(hs.name);
                             return Positioned(
                               left: hs.x * width,
                               top: hs.y * height,
@@ -1680,6 +1734,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                                         ? Colors.yellowAccent.withOpacity(0.15)
                                         : Colors.transparent,
                                   ),
+                                  child: overlay,
                                 ),
                               ),
                             );
@@ -1923,39 +1978,6 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
                               final isSelected = _selectedItemId == itemId;
 
-                              // Emojis for item fallback representation
-                              final emojis = {
-                                'iron_handle': '🔧',
-                                'lens': '🔍',
-                                'tinder': '🌿',
-                                'smoldering_tinder': '🔥',
-                                'oil': '🧪',
-                                'dirty_key': '🗝️',
-                                'fixed_key': '🔑',
-                                'blue_mushrooms': '🍄',
-                                'copper_pipe': '⚙️',
-                                'pot': '🥣',
-                                'pure_water': '💧',
-                                'potion': '🍵',
-                                'well_handle': '🪓',
-                                'triangular_key': '📐',
-                                'amulet': '💎',
-                                'key_armory': '🗝️',
-                                'stone_sword': '🗡️',
-                                'acid': '🧪',
-                                'clean_lens': '🔍',
-                                'item_ash': '🌋',
-                                'item_salt': '🧂',
-                                'item_dust': '🌪️',
-                                'item_water': '💧',
-                                'stick': '🪵',
-                                'cloth': '🧹',
-                                'torch': '🔦',
-                                'burning_torch': '🔥',
-                              };
-
-                              final emoji = emojis[itemId] ?? '🎒';
-
                               return GestureDetector(
                                 onTap: () {
                                   setState(() {
@@ -1986,9 +2008,9 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text(
-                                        emoji,
-                                        style: const TextStyle(fontSize: 22),
+                                      InventoryItemIcon(
+                                        itemId: itemId,
+                                        size: 32,
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
@@ -2054,4 +2076,133 @@ class _DialogueLine {
     required this.speaker,
     required this.text,
   });
+}
+
+class InventoryItemIcon extends StatelessWidget {
+  final String itemId;
+  final double size;
+
+  const InventoryItemIcon({required this.itemId, this.size = 32, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // Grid 1: 4x4
+    final Map<String, List<int>> grid1 = {
+      'stick': [0, 0],
+      'cloth': [1, 0],
+      'torch': [2, 0],
+      'burning_torch': [3, 0],
+      
+      'tinder': [0, 1],
+      'lens': [1, 1],
+      'smoldering_tinder': [2, 1],
+      'oil': [3, 1],
+      
+      'dirty_key': [0, 2],
+      'fixed_key': [1, 2],
+      'pot': [2, 2],
+      'pure_water': [3, 2],
+      
+      'blue_mushrooms': [0, 3],
+      'potion': [1, 3],
+      'well_handle': [2, 3],
+      'triangular_key': [3, 3],
+    };
+
+    // Grid 2: 3x4
+    final Map<String, List<int>> grid2 = {
+      'amulet': [0, 0],
+      'key_armory': [1, 0],
+      'stone_sword': [2, 0],
+      
+      'acid': [0, 1],
+      'clean_lens': [1, 1],
+      'item_ash': [2, 1],
+      
+      'item_salt': [0, 2],
+      'item_dust': [1, 2],
+      'item_water': [2, 2],
+      
+      'copper_pipe': [0, 3],
+      'iron_handle': [1, 3],
+    };
+
+    String assetPath;
+    int cols, rows;
+    int col, row;
+
+    if (grid1.containsKey(itemId)) {
+      assetPath = 'assets/images/items_grid_one.png';
+      cols = 4;
+      rows = 4;
+      col = grid1[itemId]![0];
+      row = grid1[itemId]![1];
+    } else if (grid2.containsKey(itemId)) {
+      assetPath = 'assets/images/items_grid_two.png';
+      cols = 3;
+      rows = 4;
+      col = grid2[itemId]![0];
+      row = grid2[itemId]![1];
+    } else {
+      // Fallback
+      final emojis = {
+        'iron_handle': '🔧',
+        'lens': '🔍',
+        'tinder': '🌿',
+        'smoldering_tinder': '🔥',
+        'oil': '🧪',
+        'dirty_key': '🗝️',
+        'fixed_key': '🔑',
+        'blue_mushrooms': '🍄',
+        'copper_pipe': '⚙️',
+        'pot': '🥣',
+        'pure_water': '💧',
+        'potion': '🍵',
+        'well_handle': '🪓',
+        'triangular_key': '📐',
+        'amulet': '💎',
+        'key_armory': '🗝️',
+        'stone_sword': '🗡️',
+        'acid': '🧪',
+        'clean_lens': '🔍',
+        'item_ash': '🌋',
+        'item_salt': '🧂',
+        'item_dust': '🌪️',
+        'item_water': '💧',
+        'stick': '🪵',
+        'cloth': '🧹',
+        'torch': '🔦',
+        'burning_torch': '🔥',
+      };
+      return Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        child: Text(
+          emojis[itemId] ?? '🎒',
+          style: TextStyle(fontSize: size * 0.7),
+        ),
+      );
+    }
+
+    final alignX = cols > 1 ? -1.0 + 2.0 * col / (cols - 1) : 0.0;
+    final alignY = rows > 1 ? -1.0 + 2.0 * row / (rows - 1) : 0.0;
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: FractionallySizedBox(
+          widthFactor: cols.toDouble(),
+          heightFactor: rows.toDouble(),
+          alignment: Alignment(alignX, alignY),
+          child: Image.asset(
+            assetPath,
+            fit: BoxFit.fill,
+          ),
+        ),
+      ),
+    );
+  }
 }
