@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/story_quest_model.dart';
 import '../services/story_game_service.dart';
 import 'point_and_click_screen.dart';
@@ -14,11 +15,185 @@ class StoryMapScreen extends StatefulWidget {
 
 class _StoryMapScreenState extends State<StoryMapScreen> {
   final StoryGameService _service = StoryGameService();
+  bool _showIntro = false;
+  int _introSlideIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _service.initialize();
+    _checkIntro();
+  }
+
+  void _checkIntro() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool('story_intro_shown') ?? false;
+    if (!shown) {
+      setState(() {
+        _showIntro = true;
+      });
+    }
+  }
+
+  void _closeIntro() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('story_intro_shown', true);
+    setState(() {
+      _showIntro = false;
+    });
+  }
+
+  Widget _buildIntroSlide() {
+    final titles = [
+      'Prastará legenda',
+      'Pád rovnováhy',
+      'Tvá cesta',
+    ];
+
+    final texts = [
+      'Podle pověstí našich předků střežily české pohraniční lesy čtyři posvátné elementy: Oheň, Voda, Země a Vzduch. Tyto elementy udržovaly přírodu v harmonii a byly svázány v mocném Amuletu rovnováhy.',
+      'Před sto lety však byla starobylá pevnost, ve které byl amulet střežen, napadena a zničena. Amulet se vybil a ztratil se v divočině. Od té doby lesy chřadnou, studánky vysychají a zvěř ztrácí klid.',
+      'Ty, jakožto odhodlaný mladý cestovatel, jsi v archivech objevil starodávnou mapu stezky. Tvým posláním je ujít trasu o délce 6 kilometrů, najít vyhaslý amulet, sesbírat a očistit všechny 4 elementy a na Kamenném oltáři amulet znovu zažehnout. Osud lesů leží ve tvých rukou!',
+    ];
+
+    final bgAssets = [
+      'assets/images/story_room_altar.png',
+      'assets/images/story_room_fortress_exterior.png',
+      'assets/images/story_player_adventurer.png',
+    ];
+
+    final isAdventurerSlide = _introSlideIndex == 2;
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: ColorFiltered(
+              colorFilter: ColorFilter.mode(
+                Colors.black.withOpacity(isAdventurerSlide ? 0.85 : 0.65),
+                BlendMode.darken,
+              ),
+              child: Image.asset(
+                bgAssets[_introSlideIndex],
+                fit: isAdventurerSlide ? BoxFit.contain : BoxFit.cover,
+              ),
+            ),
+          ),
+        ),
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.all(28.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titles[_introSlideIndex],
+                  style: const TextStyle(
+                    color: Colors.cyanAccent,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  texts[_introSlideIndex],
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14.5,
+                    height: 1.5,
+                    fontWeight: FontWeight.w500,
+                    shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildIntroWidget() {
+    return Container(
+      color: Colors.black,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'PROLOG VÝPRAVY',
+                    style: TextStyle(
+                      color: Colors.cyanAccent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _closeIntro,
+                    child: const Text('Přeskočit', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _buildIntroSlide(),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (_introSlideIndex > 0)
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey.shade900,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _introSlideIndex--;
+                        });
+                      },
+                      child: const Text('Zpět'),
+                    )
+                  else
+                    const SizedBox.shrink(),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.cyan.shade700,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                    onPressed: () {
+                      if (_introSlideIndex < 2) {
+                        setState(() {
+                          _introSlideIndex++;
+                        });
+                      } else {
+                        _closeIntro();
+                      }
+                    },
+                    child: Text(_introSlideIndex == 2 ? 'Zahájit výpravu' : 'Pokračovat'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Offset _getAvatarPosition(int walkedMeters) {
@@ -118,6 +293,16 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
+            icon: const Icon(Icons.menu_book),
+            tooltip: 'Zobrazit prolog příběhu',
+            onPressed: () {
+              setState(() {
+                _showIntro = true;
+                _introSlideIndex = 0;
+              });
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Restartovat příběh',
             onPressed: () {
@@ -148,9 +333,11 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
           ),
         ],
       ),
-      body: ValueListenableBuilder<QuestState>(
-        valueListenable: _service.stateNotifier,
-        builder: (context, state, _) {
+      body: _showIntro
+          ? _buildIntroWidget()
+          : ValueListenableBuilder<QuestState>(
+              valueListenable: _service.stateNotifier,
+              builder: (context, state, _) {
           return LayoutBuilder(
             builder: (context, constraints) {
               final mapWidth = constraints.maxWidth;

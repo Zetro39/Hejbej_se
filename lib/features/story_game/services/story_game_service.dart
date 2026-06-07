@@ -199,6 +199,30 @@ class StoryGameService {
       description: 'Destilovaná voda bažiny.',
       assetPath: 'assets/images/story_item_water.png',
     ),
+    'stick': QuestItem(
+      id: 'stick',
+      name: 'Suchá větev',
+      description: 'Dlouhá suchá větev. Ideální základ pro pochodeň.',
+      assetPath: 'assets/images/story_item_stick.png',
+    ),
+    'cloth': QuestItem(
+      id: 'cloth',
+      name: 'Mastný hadr',
+      description: 'Mastný hadr nalezený v chýši. Skvěle hoří.',
+      assetPath: 'assets/images/story_item_cloth.png',
+    ),
+    'torch': QuestItem(
+      id: 'torch',
+      name: 'Nezapálená pochodeň',
+      description: 'Nezapálená pochodeň vyrobená z větve a hadru. Musíš ji něčím zapálit.',
+      assetPath: 'assets/images/story_item_torch.png',
+    ),
+    'burning_torch': QuestItem(
+      id: 'burning_torch',
+      name: 'Zapálená pochodeň',
+      description: 'Jasně planoucí pochodeň. Osvětlí temná místa a spálí překážky.',
+      assetPath: 'assets/images/story_item_burning_torch.png',
+    ),
   };
 
   Future<void> initialize() async {

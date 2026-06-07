@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/story_quest_model.dart';
 import '../services/story_game_service.dart';
@@ -125,6 +125,53 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       _dialogueChoices = [];
       _setInitialDialog();
     });
+  }
+
+  bool _tryCombineItems(String item1, String item2) {
+    final state = _service.stateNotifier.value;
+    final id1 = item1.compareTo(item2) < 0 ? item1 : item2;
+    final id2 = item1.compareTo(item2) < 0 ? item2 : item1;
+
+    // Recipes:
+    // 1. stick + cloth -> torch
+    if (id1 == 'cloth' && id2 == 'stick') {
+      _service.removeItem('cloth');
+      _service.removeItem('stick');
+      _service.collectItem('torch');
+      _showDialog("🔧 Spojil jsi suchou větev s mastným hadrem a vyrobil jsi Nezapálenou pochodeň! 🔦");
+      return true;
+    }
+    // 2. torch + smoldering_tinder -> burning_torch
+    if (id1 == 'smoldering_tinder' && id2 == 'torch') {
+      _service.removeItem('smoldering_tinder');
+      _service.removeItem('torch');
+      _service.collectItem('burning_torch');
+      _showDialog("🔥 Pomocí doutnajícího troudu jsi úspěšně zapálil pochodeň! Nyní jasně plane. Můžeš s ní osvětlit temná místa.");
+      return true;
+    }
+    // 3. dirty_key + oil -> fixed_key
+    if (id1 == 'dirty_key' && id2 == 'oil') {
+      _service.removeItem('dirty_key');
+      _service.removeItem('oil');
+      _service.collectItem('fixed_key');
+      _showDialog("🔧 Nanesl jsi olej na rezavý klíč a očistil ho. Získal jsi funkční Klíč od brány! 🔑");
+      return true;
+    }
+    // 4. blue_mushrooms + pure_water -> potion (requires pot in inventory)
+    if (id1 == 'blue_mushrooms' && id2 == 'pure_water') {
+      if (state.inventory.contains('pot')) {
+        _service.removeItem('blue_mushrooms');
+        _service.removeItem('pure_water');
+        _service.collectItem('potion');
+        _showDialog("🍵 Svařil jsi modré houby s čistou vodou v měděném kotlíku a vyrobil zářící Léčivý elixír!");
+        return true;
+      } else {
+        _showDialog("Máš sice houby i čistou vodu, ale nemáš v čem elixír svařit. Chce to nějakou nádobu/kotlík.");
+        return false;
+      }
+    }
+
+    return false;
   }
 
   void _startPoustevnikDialogue(QuestState state) {
@@ -708,6 +755,20 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           }
         },
       ));
+
+      // Dry stick on the ground
+      final hasStick = state.roomStates['node2_has_stick'] == true;
+      if (!hasStick) {
+        list.add(_Hotspot(
+          name: "Suchá větev",
+          x: 0.15, y: 0.8, w: 0.2, h: 0.12,
+          onTap: () {
+            _service.updateRoomState('node2_has_stick', true);
+            _service.collectItem('stick');
+            _showDialog("Sebral jsi ze země dlouhou suchou větev. Vypadá pevně, mohla by posloužit jako základ pochodně.");
+          },
+        ));
+      }
     } else if (widget.nodeId == 'node3') {
       // Zřícenina chýše
       if (_currentSubroom == "exterior") {
@@ -726,11 +787,13 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
               return;
             }
 
-            if (_selectedItemId == 'smoldering_tinder') {
+            if (_selectedItemId == 'burning_torch') {
               _service.updateRoomState('node3_vines_burned', true);
-              _service.removeItem('smoldering_tinder');
+              _service.removeItem('burning_torch');
               setState(() => _selectedItemId = null);
-              _showDialog("🔥 Přiložil jsi doutnající troud k suchému listí u paty křoví. Oheň se bleskově rozběhl po větvích a spálil trny na uhel! Vchod je volný.");
+              _showDialog("🔥 Přiložil jsi zapálenou pochodeň k ostnatému křoví. Suché větve okamžitě vzplály a spálily se na uhel! Vchod do chýše je volný.");
+            } else if (_selectedItemId == 'smoldering_tinder') {
+              _showDialog("Doutnající troud sám o sobě nestačí na zapálení zeleného ostnatého křoví. Potřebuješ pořádný otevřený plamen, např. hořící pochodeň.");
             } else if (_selectedItemId != null) {
               _showDialog("Tento předmět ti s odklizením křoví nepomůže.");
             } else {
@@ -798,6 +861,20 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             }
           },
         ));
+
+        // Cloth on crate
+        final hasCloth = state.roomStates['node3_has_cloth'] == true;
+        if (!hasCloth) {
+          list.add(_Hotspot(
+            name: "Mastný hadr",
+            x: 0.3, y: 0.72, w: 0.15, h: 0.12,
+            onTap: () {
+              _service.updateRoomState('node3_has_cloth', true);
+              _service.collectItem('cloth');
+              _showDialog("V rohu dílny jsi našel starý mastný hadr. Bude skvěle hořet, pokud ho připevníš na větev.");
+            },
+          ));
+        }
 
         // Diary
         list.add(_Hotspot(
@@ -967,40 +1044,59 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         ));
       } else if (_currentSubroom == "cave") {
         // Uvnitř jeskyně
-        final healed = state.roomStates['node4_hermit_healed'] == true;
+        final caveLit = state.roomStates['node4_cave_lit'] == true;
 
-        list.add(_Hotspot(
-          name: "Poustevník",
-          x: 0.38, y: 0.42, w: 0.25, h: 0.35,
-          onTap: () => _startPoustevnikDialogue(state),
-        ));
-
-        // Pot on ground
-        final hasPot = state.roomStates['node4_has_pot'] == true;
-        if (!hasPot) {
+        if (!caveLit) {
           list.add(_Hotspot(
-            name: "Měděný kotlík",
-            x: 0.72, y: 0.72, w: 0.15, h: 0.12,
+            name: "Černočerná tma",
+            x: 0.2, y: 0.2, w: 0.6, h: 0.6,
             onTap: () {
-              _service.updateRoomState('node4_has_pot', true);
-              _service.collectItem('pot');
-              _showDialog("Sebral jsi ze země prázdný měděný kotlík.");
+              if (_selectedItemId == 'burning_torch') {
+                _service.updateRoomState('node4_cave_lit', true);
+                _service.removeItem('burning_torch');
+                setState(() => _selectedItemId = null);
+                _showDialog("🔥 Pomocí zapálené pochodně jsi rozkřesal staré ohniště uprostřed jeskyně! Plameny ozářily kamenné stěny a v rohu jsi spatřil ležet nemocného poustevníka.");
+              } else {
+                _showDialog("V jeskyni je naprostá tma a chlad. Bez zdroje světla, jako je zapálená pochodeň (vyrobíš spojením větve a hadru a zapálením u troudu), se neodvážíš jít dál.");
+              }
             },
           ));
-        }
+        } else {
+          final healed = state.roomStates['node4_hermit_healed'] == true;
 
-        // Copper pipe
-        final hasPipe = state.roomStates['node4_has_pipe'] == true;
-        if (!hasPipe) {
           list.add(_Hotspot(
-            name: "Měděná trubka",
-            x: 0.15, y: 0.65, w: 0.15, h: 0.15,
-            onTap: () {
-              _service.updateRoomState('node4_has_pipe', true);
-              _service.collectItem('copper_pipe');
-              _showDialog("V rohu jeskyně leží stará měděná trubka. Mohla by se hodit na destilaci.");
-            },
+            name: "Poustevník",
+            x: 0.38, y: 0.42, w: 0.25, h: 0.35,
+            onTap: () => _startPoustevnikDialogue(state),
           ));
+
+          // Pot on ground
+          final hasPot = state.roomStates['node4_has_pot'] == true;
+          if (!hasPot) {
+            list.add(_Hotspot(
+              name: "Měděný kotlík",
+              x: 0.72, y: 0.72, w: 0.15, h: 0.12,
+              onTap: () {
+                _service.updateRoomState('node4_has_pot', true);
+                _service.collectItem('pot');
+                _showDialog("Sebral jsi ze země prázdný měděný kotlík.");
+              },
+            ));
+          }
+
+          // Copper pipe
+          final hasPipe = state.roomStates['node4_has_pipe'] == true;
+          if (!hasPipe) {
+            list.add(_Hotspot(
+              name: "Měděná trubka",
+              x: 0.15, y: 0.65, w: 0.15, h: 0.15,
+              onTap: () {
+                _service.updateRoomState('node4_has_pipe', true);
+                _service.collectItem('copper_pipe');
+                _showDialog("V rohu jeskyně leží stará měděná trubka. Mohla by se hodit na destilaci.");
+              },
+            ));
+          }
         }
 
         // Return button
@@ -1357,7 +1453,13 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
     return 'assets/images/story_room_gate_closed.png';
   }
 
-  Color _getRoomColorFilter() {
+  Color _getRoomColorFilter(QuestState state) {
+    if (widget.nodeId == 'node4' && _currentSubroom == "cave") {
+      final caveLit = state.roomStates['node4_cave_lit'] == true;
+      if (!caveLit) {
+        return Colors.black; // Solid dark cave overlay
+      }
+    }
     return Colors.transparent;
   }
 
@@ -1371,7 +1473,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           builder: (context, state, _) {
             final hotspots = _getHotspots(state);
             final bgAsset = _getRoomBackground(state);
-            final colorFilter = _getRoomColorFilter();
+            final colorFilter = _getRoomColorFilter(state);
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1470,167 +1572,170 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                           // Visual Novel Dialogue Overlay
                           if (_dialogueCharacterName != null)
                             Positioned.fill(
-                              child: GestureDetector(
-                                onTap: _onDialogueAreaTap,
-                                child: Container(
-                                  color: Colors.black.withOpacity(0.55),
-                                  child: Stack(
-                                    children: [
-                                      // 1. Left Character (NPC)
-                                      if (_dialogueCharacterAsset != null)
-                                        Positioned(
-                                          left: 16,
-                                          bottom: 0,
-                                          width: width * 0.45,
-                                          height: height * 0.7,
-                                          child: AnimatedOpacity(
-                                            duration: const Duration(milliseconds: 200),
-                                            opacity: _isNpcActive ? 1.0 : 0.45,
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 200),
-                                              transform: Matrix4.identity()
-                                                ..scale(_isNpcActive ? 1.05 : 0.95),
-                                              transformAlignment: Alignment.bottomCenter,
-                                              child: Transform(
-                                                alignment: Alignment.center,
-                                                transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0), // horizontal flip so NPC faces player on right
-                                                child: ColorFiltered(
-                                                  colorFilter: const ColorFilter.matrix(<double>[
-                                                    1, 0, 0, 0, 0,
-                                                    0, 1, 0, 0, 0,
-                                                    0, 0, 1, 0, 0,
-                                                    -1, -1, -1, 3, 0, // chromakey out pure white background
-                                                  ]),
-                                                  child: Image.asset(
-                                                    _dialogueCharacterAsset!,
-                                                    fit: BoxFit.contain,
-                                                    alignment: Alignment.bottomLeft,
+                              child: Container(
+                                color: Colors.black.withOpacity(0.6),
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: _onDialogueAreaTap,
+                                        child: const SizedBox.expand(),
+                                      ),
+                                    ),
+
+                                    // 1. Left Character (NPC) - Simple Bust in Corner
+                                     if (_dialogueCharacterAsset != null)
+                                       Positioned(
+                                         left: 8,
+                                         bottom: 40,
+                                         width: 160,
+                                         height: 320,
+                                         child: IgnorePointer(
+                                           child: AnimatedOpacity(
+                                             duration: const Duration(milliseconds: 200),
+                                             opacity: _isNpcActive ? 1.0 : 0.45,
+                                             child: AnimatedContainer(
+                                               duration: const Duration(milliseconds: 200),
+                                               transform: Matrix4.identity()
+                                                 ..scale(_isNpcActive ? 1.05 : 0.95),
+                                               transformAlignment: Alignment.bottomCenter,
+                                               child: Transform(
+                                                 alignment: Alignment.center,
+                                                 transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0),
+                                                 child: ColorFiltered(
+                                                   colorFilter: const ColorFilter.matrix(<double>[
+                                                     1, 0, 0, 0, 0,
+                                                     0, 1, 0, 0, 0,
+                                                     0, 0, 1, 0, 0,
+                                                     -1, -1, -1, 3, 0,
+                                                   ]),
+                                                   child: Image.asset(
+                                                     _dialogueCharacterAsset!,
+                                                     fit: BoxFit.contain,
+                                                     alignment: Alignment.bottomCenter,
+                                                   ),
+                                                 ),
+                                               ),
+                                             ),
+                                           ),
+                                         ),
+                                       ),
+ 
+                                     // 2. Right Character (Player) - Simple Bust in Corner
+                                     if (_playerCharacterAsset != null)
+                                       Positioned(
+                                         right: 8,
+                                         bottom: 40,
+                                         width: 160,
+                                         height: 320,
+                                         child: IgnorePointer(
+                                           child: AnimatedOpacity(
+                                             duration: const Duration(milliseconds: 200),
+                                             opacity: _isPlayerActive ? 1.0 : 0.45,
+                                             child: AnimatedContainer(
+                                               duration: const Duration(milliseconds: 200),
+                                               transform: Matrix4.identity()
+                                                 ..scale(_isPlayerActive ? 1.05 : 0.95),
+                                               transformAlignment: Alignment.bottomCenter,
+                                               child: ColorFiltered(
+                                                 colorFilter: const ColorFilter.matrix(<double>[
+                                                   1, 0, 0, 0, 0,
+                                                   0, 1, 0, 0, 0,
+                                                   0, 0, 1, 0, 0,
+                                                   -1, -1, -1, 3, 0,
+                                                 ]),
+                                                 child: Image.asset(
+                                                   _playerCharacterAsset!,
+                                                   fit: BoxFit.contain,
+                                                   alignment: Alignment.bottomCenter,
+                                                 ),
+                                               ),
+                                             ),
+                                           ),
+                                         ),
+                                       ),
+                                     
+                                     // 3. Dialogue Panel at the bottom
+                                    Positioned(
+                                      left: 16,
+                                      right: 16,
+                                      bottom: 16,
+                                      height: 150,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xF20F0F0F),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: Colors.grey.shade800, width: 1.5),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.6),
+                                              blurRadius: 16,
+                                              spreadRadius: 2,
+                                            ),
+                                          ],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              _isNpcActive
+                                                  ? (_dialogueCharacterName ?? "NPC")
+                                                  : "Ty",
+                                              style: TextStyle(
+                                                color: _isNpcActive ? Colors.limeAccent : Colors.cyanAccent,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Expanded(
+                                              child: SingleChildScrollView(
+                                                child: Text(
+                                                  _dialogText,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 13,
+                                                    height: 1.45,
                                                   ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ),
-
-                                      // 2. Right Character (Player)
-                                      if (_playerCharacterAsset != null)
-                                        Positioned(
-                                          right: 16,
-                                          bottom: 0,
-                                          width: width * 0.45,
-                                          height: height * 0.7,
-                                          child: AnimatedOpacity(
-                                            duration: const Duration(milliseconds: 200),
-                                            opacity: _isPlayerActive ? 1.0 : 0.45,
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 200),
-                                              transform: Matrix4.identity()
-                                                ..scale(_isPlayerActive ? 1.05 : 0.95),
-                                              transformAlignment: Alignment.bottomCenter,
-                                              child: ColorFiltered(
-                                                colorFilter: const ColorFilter.matrix(<double>[
-                                                  1, 0, 0, 0, 0,
-                                                  0, 1, 0, 0, 0,
-                                                  0, 0, 1, 0, 0,
-                                                  -1, -1, -1, 3, 0, // chromakey out white background
-                                                ]),
-                                                child: Image.asset(
-                                                  _playerCharacterAsset!,
-                                                  fit: BoxFit.contain,
-                                                  alignment: Alignment.bottomRight,
+                                            if (_dialogueScriptIndex < _dialogueScript.length - 1 || _dialogueChoices.isEmpty)
+                                              const Align(
+                                                alignment: Alignment.bottomRight,
+                                                child: Text(
+                                                  'Klepnutím pokračuj ▷',
+                                                  style: TextStyle(color: Colors.white38, fontSize: 9, fontStyle: FontStyle.italic),
                                                 ),
                                               ),
-                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+
+                                    // 4. Floating Choices Overlay
+                                    if (_dialogueScriptIndex == _dialogueScript.length - 1 && _dialogueChoices.isNotEmpty)
+                                      Center(
+                                        child: Container(
+                                          margin: const EdgeInsets.symmetric(horizontal: 32),
+                                          padding: const EdgeInsets.all(24),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black87,
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(color: Colors.lime.shade700, width: 1.5),
                                           ),
-                                        ),
-
-                                      // 3. Speech Bubble (Upper area)
-                                      if (_dialogueScript.isNotEmpty && _dialogueScriptIndex < _dialogueScript.length)
-                                        Positioned(
-                                          top: height * 0.08,
-                                          left: 16,
-                                          right: 16,
-                                          child: _isNpcActive
-                                              ? Align(
-                                                  alignment: Alignment.centerLeft,
-                                                  child: Container(
-                                                    constraints: BoxConstraints(maxWidth: width * 0.75),
-                                                    padding: const EdgeInsets.all(16),
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(0xFF0A0A0A).withOpacity(0.95),
-                                                      borderRadius: const BorderRadius.only(
-                                                        topLeft: Radius.circular(16),
-                                                        topRight: Radius.circular(16),
-                                                        bottomRight: Radius.circular(16),
-                                                      ),
-                                                      border: Border.all(color: Colors.lime.shade600, width: 2),
-                                                    ),
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Text(
-                                                          _dialogueCharacterName ?? "NPC",
-                                                          style: TextStyle(
-                                                            color: Colors.lime.shade400,
-                                                            fontWeight: FontWeight.bold,
-                                                            fontSize: 12,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(height: 6),
-                                                        Text(
-                                                          _dialogText,
-                                                          style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.45),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                )
-                                              : Align(
-                                                  alignment: Alignment.centerRight,
-                                                  child: Container(
-                                                    constraints: BoxConstraints(maxWidth: width * 0.75),
-                                                    padding: const EdgeInsets.all(16),
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(0xFF0A0A0A).withOpacity(0.95),
-                                                      borderRadius: const BorderRadius.only(
-                                                        topLeft: Radius.circular(16),
-                                                        topRight: Radius.circular(16),
-                                                        bottomLeft: Radius.circular(16),
-                                                      ),
-                                                      border: Border.all(color: Colors.cyan.shade400, width: 2),
-                                                    ),
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        const Text(
-                                                          "Ty",
-                                                          style: TextStyle(
-                                                            color: Colors.cyanAccent,
-                                                            fontWeight: FontWeight.bold,
-                                                            fontSize: 12,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(height: 6),
-                                                        Text(
-                                                          _dialogText,
-                                                          style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.45),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                        ),
-
-                                      // 4. Floating Choices (Center)
-                                      if (_dialogueScriptIndex == _dialogueScript.length - 1 && _dialogueChoices.isNotEmpty)
-                                        Center(
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: _dialogueChoices.map((opt) {
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Text(
+                                                'Vyber odpověď:',
+                                                style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              ..._dialogueChoices.map((opt) {
                                                 return Container(
                                                   margin: const EdgeInsets.only(bottom: 12),
                                                   width: double.infinity,
@@ -1644,21 +1749,17 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                                                         borderRadius: BorderRadius.circular(12),
                                                         side: const BorderSide(color: Colors.lime, width: 1.5),
                                                       ),
-                                                      elevation: 4,
                                                     ),
                                                     onPressed: opt.onTap,
-                                                    child: Text(
-                                                      opt.text,
-                                                      textAlign: TextAlign.center,
-                                                    ),
+                                                    child: Text(opt.text),
                                                   ),
                                                 );
                                               }).toList(),
-                                            ),
+                                            ],
                                           ),
                                         ),
-                                    ],
-                                  ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -1689,96 +1790,108 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                     height: 75,
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: state.inventory.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'Tvůj inventář je prázdný.',
-                            style: TextStyle(color: Colors.white54, fontSize: 12, fontStyle: FontStyle.italic),
-                          ),
-                        )
-                      : ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: state.inventory.length,
-                          itemBuilder: (context, index) {
-                            final itemId = state.inventory[index];
-                            final item = _service.allItems[itemId];
-                            if (item == null) return const SizedBox.shrink();
+                        ? const Center(
+                            child: Text(
+                              'Tvůj inventář je prázdný.',
+                              style: TextStyle(color: Colors.white54, fontSize: 12, fontStyle: FontStyle.italic),
+                            ),
+                          )
+                        : ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: state.inventory.length,
+                            itemBuilder: (context, index) {
+                              final itemId = state.inventory[index];
+                              final item = _service.allItems[itemId];
+                              if (item == null) return const SizedBox.shrink();
 
-                            final isSelected = _selectedItemId == itemId;
+                              final isSelected = _selectedItemId == itemId;
 
-                            // Emojis for item fallback representation
-                            final emojis = {
-                              'iron_handle': '🔧',
-                              'lens': '🔍',
-                              'tinder': '🌿',
-                              'smoldering_tinder': '🔥',
-                              'oil': '🧪',
-                              'dirty_key': '🗝️',
-                              'fixed_key': '🔑',
-                              'blue_mushrooms': '🍄',
-                              'copper_pipe': '⚙️',
-                              'pot': '🥣',
-                              'pure_water': '💧',
-                              'potion': '🍵',
-                              'well_handle': '🪓',
-                              'triangular_key': '📐',
-                              'amulet': '💎',
-                              'key_armory': '🗝️',
-                              'stone_sword': '🗡️',
-                              'acid': '🧪',
-                              'clean_lens': '🔍',
-                              'item_ash': '🌋',
-                              'item_salt': '🧂',
-                              'item_dust': '🌪️',
-                              'item_water': '💧',
-                            };
+                              // Emojis for item fallback representation
+                              final emojis = {
+                                'iron_handle': '🔧',
+                                'lens': '🔍',
+                                'tinder': '🌿',
+                                'smoldering_tinder': '🔥',
+                                'oil': '🧪',
+                                'dirty_key': '🗝️',
+                                'fixed_key': '🔑',
+                                'blue_mushrooms': '🍄',
+                                'copper_pipe': '⚙️',
+                                'pot': '🥣',
+                                'pure_water': '💧',
+                                'potion': '🍵',
+                                'well_handle': '🪓',
+                                'triangular_key': '📐',
+                                'amulet': '💎',
+                                'key_armory': '🗝️',
+                                'stone_sword': '🗡️',
+                                'acid': '🧪',
+                                'clean_lens': '🔍',
+                                'item_ash': '🌋',
+                                'item_salt': '🧂',
+                                'item_dust': '🌪️',
+                                'item_water': '💧',
+                                'stick': '🪵',
+                                'cloth': '🧹',
+                                'torch': '🔦',
+                                'burning_torch': '🔥',
+                              };
 
-                            final emoji = emojis[itemId] ?? '🎒';
+                              final emoji = emojis[itemId] ?? '🎒';
 
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  if (isSelected) {
-                                    _selectedItemId = null;
-                                  } else {
-                                    _selectedItemId = itemId;
-                                    _dialogText = "${item.name}: ${item.description}";
-                                  }
-                                });
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.only(right: 12),
-                                width: 60,
-                                decoration: BoxDecoration(
-                                  color: isSelected ? Colors.lime.shade700 : Colors.grey.shade800,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: isSelected ? Border.all(color: Colors.lime, width: 2) : null,
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      emoji,
-                                      style: const TextStyle(fontSize: 22),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      item.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: isSelected ? Colors.black : Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    if (isSelected) {
+                                      _selectedItemId = null;
+                                    } else if (_selectedItemId != null) {
+                                      final success = _tryCombineItems(_selectedItemId!, itemId);
+                                      if (success) {
+                                        _selectedItemId = null;
+                                      } else {
+                                        _selectedItemId = itemId;
+                                        _dialogText = "${item.name}: ${item.description}";
+                                      }
+                                    } else {
+                                      _selectedItemId = itemId;
+                                      _dialogText = "${item.name}: ${item.description}";
+                                    }
+                                  });
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 12),
+                                  width: 60,
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? Colors.lime.shade700 : Colors.grey.shade800,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: isSelected ? Border.all(color: Colors.lime, width: 2) : null,
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        emoji,
+                                        style: const TextStyle(fontSize: 22),
                                       ),
-                                    )
-                                  ],
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        item.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: isSelected ? Colors.black : Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      )
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
+                              );
+                            },
+                          ),
+                  ),
               ],
             );
           },
