@@ -267,7 +267,7 @@ class _CatchingGameScreenState extends State<CatchingGameScreen> with SingleTick
                                 decoration: BoxDecoration(
                                   gradient: RadialGradient(
                                     colors: [
-                                      Colors.grey.shade950,
+                                      const Color(0xFF0F0F0F),
                                       Colors.black,
                                     ],
                                     radius: 1.2,

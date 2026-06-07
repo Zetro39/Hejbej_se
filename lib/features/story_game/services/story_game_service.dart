@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../services/step_tracker_service.dart';
+import '../../../services/step_tracker_service.dart';
 import '../models/story_quest_model.dart';
 
 class StoryGameService {

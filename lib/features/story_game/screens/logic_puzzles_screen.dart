@@ -110,7 +110,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
               Expanded(
                 child: Center(
                   child: Card(
-                    color: Colors.grey.shade850,
+                    color: Colors.grey.shade800,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     elevation: 8,
                     child: Padding(
@@ -380,7 +380,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     height: 140,
                     decoration: BoxDecoration(
-                      color: index % 2 == 0 ? Colors.red.shade900 : Colors.blue.shade950,
+                      color: index % 2 == 0 ? Colors.red.shade900 : Colors.blue.shade900,
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: Colors.yellow.shade800, width: 2),
                     ),

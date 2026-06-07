@@ -73,7 +73,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
   void _showDialogueAnswer(String speakerText, List<_DialogueOption> backOptions) {
     setState(() {
       _dialogText = speakerText;
-      _dialogueOptions = backOptions;
+      _dialogueChoices = backOptions;
     });
   }
 
@@ -1537,7 +1537,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                                                     constraints: BoxConstraints(maxWidth: width * 0.75),
                                                     padding: const EdgeInsets.all(16),
                                                     decoration: BoxDecoration(
-                                                      color: Colors.grey.shade950.withOpacity(0.95),
+                                                      color: const Color(0xFF0A0A0A).withOpacity(0.95),
                                                       borderRadius: const BorderRadius.only(
                                                         topLeft: Radius.circular(16),
                                                         topRight: Radius.circular(16),
@@ -1572,7 +1572,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                                                     constraints: BoxConstraints(maxWidth: width * 0.75),
                                                     padding: const EdgeInsets.all(16),
                                                     decoration: BoxDecoration(
-                                                      color: Colors.grey.shade950.withOpacity(0.95),
+                                                      color: const Color(0xFF0A0A0A).withOpacity(0.95),
                                                       borderRadius: const BorderRadius.only(
                                                         topLeft: Radius.circular(16),
                                                         topRight: Radius.circular(16),
@@ -1786,23 +1786,6 @@ class _Hotspot {
   });
 }
 
-class _Hotspot {
-  final String name;
-  final double x; // x percentage (0-1)
-  final double y; // y percentage (0-1)
-  final double w; // width percentage (0-1)
-  final double h; // height percentage (0-1)
-  final VoidCallback onTap;
-
-  _Hotspot({
-    required this.name,
-    required this.x,
-    required this.y,
-    required this.w,
-    required this.h,
-    required this.onTap,
-  });
-}
 
 class _DialogueOption {
   final String text;
