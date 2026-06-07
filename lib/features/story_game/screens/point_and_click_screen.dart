@@ -941,7 +941,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
         // Hromada popela (New - Element Ohně)
         final ashCollected = state.roomStates['node6_ash_collected'] == true;
-        if (vinesBurned && !ashCollected && state.inventory.contains('amulet')) {
+        final hasAmuletOrPlaced = state.inventory.contains('amulet') || state.roomStates['node6_amulet_placed'] == true;
+        if (vinesBurned && !ashCollected && hasAmuletOrPlaced) {
           list.add(_Hotspot(
             name: "Hromada popela",
             x: 0.45, y: 0.65, w: 0.1, h: 0.1,
@@ -1435,9 +1436,10 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           },
         ));
 
-        // Gather dust element (requires amulet)
+        // Gather dust element (requires amulet or placed)
         final dustCollected = state.roomStates['node6_dust_collected'] == true;
-        if (!dustCollected && state.inventory.contains('amulet')) {
+        final hasAmuletOrPlaced = state.inventory.contains('amulet') || state.roomStates['node6_amulet_placed'] == true;
+        if (!dustCollected && hasAmuletOrPlaced) {
           list.add(_Hotspot(
             name: "Starý regál",
             x: 0.72, y: 0.25, w: 0.18, h: 0.32,
@@ -1581,9 +1583,10 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         },
       ));
 
-      // Salt hotspot (requires amulet)
+      // Salt hotspot (requires amulet or placed)
       final saltCollected = state.roomStates['node6_salt_collected'] == true;
-      if (!saltCollected && state.inventory.contains('amulet')) {
+      final hasAmuletOrPlaced = state.inventory.contains('amulet') || state.roomStates['node6_amulet_placed'] == true;
+      if (!saltCollected && hasAmuletOrPlaced) {
         list.add(_Hotspot(
           name: "Skalní trhlina (Sůl)",
           x: 0.08, y: 0.65, w: 0.18, h: 0.18,
