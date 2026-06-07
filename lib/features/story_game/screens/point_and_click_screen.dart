@@ -940,14 +940,15 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         ));
 
         // Hromada popela (New - Element Ohně)
-        final ashCollected = state.roomStates['node6_ash_collected'] == true;
+        final ashPlaced = state.roomStates['node6_ash_placed'] == true;
+        final hasAsh = state.inventory.contains('item_ash');
+        final canCollectAsh = !ashPlaced && !hasAsh;
         final hasAmuletOrPlaced = state.inventory.contains('amulet') || state.roomStates['node6_amulet_placed'] == true;
-        if (vinesBurned && !ashCollected && hasAmuletOrPlaced) {
+        if (vinesBurned && canCollectAsh && hasAmuletOrPlaced) {
           list.add(_Hotspot(
             name: "Hromada popela",
             x: 0.45, y: 0.65, w: 0.1, h: 0.1,
             onTap: () {
-              _service.updateRoomState('node6_ash_collected', true);
               _service.collectItem('item_ash');
               _showDialog("Z ohniště po spáleném křoví jsi nabral popel do amuletu jako Element Ohně.");
             },
@@ -1438,14 +1439,15 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         ));
 
         // Gather dust element (requires amulet or placed)
-        final dustCollected = state.roomStates['node6_dust_collected'] == true;
+        final dustPlaced = state.roomStates['node6_dust_placed'] == true;
+        final hasDust = state.inventory.contains('item_dust');
+        final canCollectDust = !dustPlaced && !hasDust;
         final hasAmuletOrPlaced = state.inventory.contains('amulet') || state.roomStates['node6_amulet_placed'] == true;
-        if (!dustCollected && hasAmuletOrPlaced) {
+        if (canCollectDust && hasAmuletOrPlaced) {
           list.add(_Hotspot(
             name: "Starý regál",
             x: 0.72, y: 0.25, w: 0.18, h: 0.32,
             onTap: () {
-              _service.updateRoomState('node6_dust_collected', true);
               _service.collectItem('item_dust');
               _showDialog("Prach na knihách je starý stovky let. Nabral jsi ho do amuletu jako Element Vzduchu.");
             },
@@ -1512,20 +1514,22 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           bool dustPlaced = state.roomStates['node6_dust_placed'] == true;
           bool saltPlaced = state.roomStates['node6_salt_placed'] == true;
 
-          List<String> placedNow = [];
+          final List<String> itemsToRemove = [];
+          final Map<String, dynamic> roomStatesToUpdate = {};
+          final List<String> placedNow = [];
 
           // Try placing amulet
           if (!amuletPlaced && state.inventory.contains('amulet')) {
-            _service.removeItem('amulet');
-            _service.updateRoomState('node6_amulet_placed', true);
+            itemsToRemove.add('amulet');
+            roomStatesToUpdate['node6_amulet_placed'] = true;
             amuletPlaced = true;
             placedNow.add("Vyhaslý amulet 🔮");
           }
 
           // Try placing ash
           if (!ashPlaced && state.inventory.contains('item_ash')) {
-            _service.removeItem('item_ash');
-            _service.updateRoomState('node6_ash_placed', true);
+            itemsToRemove.add('item_ash');
+            roomStatesToUpdate['node6_ash_placed'] = true;
             ashPlaced = true;
             placedNow.add("Popel (Oheň) 🔥");
           }
@@ -1534,34 +1538,46 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           final hasWater = state.inventory.contains('item_water') || state.inventory.contains('pure_water');
           if (!waterPlaced && hasWater) {
             if (state.inventory.contains('item_water')) {
-              _service.removeItem('item_water');
+              itemsToRemove.add('item_water');
             } else if (state.inventory.contains('pure_water')) {
-              _service.removeItem('pure_water');
+              itemsToRemove.add('pure_water');
             }
-            _service.updateRoomState('node6_water_placed', true);
+            roomStatesToUpdate['node6_water_placed'] = true;
             waterPlaced = true;
             placedNow.add("Čistou vodu (Voda) 💦");
           }
 
           // Try placing dust
           if (!dustPlaced && state.inventory.contains('item_dust')) {
-            _service.removeItem('item_dust');
-            _service.updateRoomState('node6_dust_placed', true);
+            itemsToRemove.add('item_dust');
+            roomStatesToUpdate['node6_dust_placed'] = true;
             dustPlaced = true;
             placedNow.add("Prach (Vzduch) 💨");
           }
 
           // Try placing salt
           if (!saltPlaced && state.inventory.contains('item_salt')) {
-            _service.removeItem('item_salt');
-            _service.updateRoomState('node6_salt_placed', true);
+            itemsToRemove.add('item_salt');
+            roomStatesToUpdate['node6_salt_placed'] = true;
             saltPlaced = true;
             placedNow.add("Horskou sůl (Země) 🌱");
           }
 
           // Check if all are now placed
-          if (amuletPlaced && ashPlaced && waterPlaced && dustPlaced && saltPlaced) {
-            _service.updateRoomState('node6_elements_placed', true);
+          final allPlaced = amuletPlaced && ashPlaced && waterPlaced && dustPlaced && saltPlaced;
+          if (allPlaced) {
+            roomStatesToUpdate['node6_elements_placed'] = true;
+          }
+
+          // Execute single batch update if any changes made
+          if (itemsToRemove.isNotEmpty || roomStatesToUpdate.isNotEmpty) {
+            _service.batchUpdate(
+              itemsToRemove: itemsToRemove,
+              roomStatesToUpdate: roomStatesToUpdate,
+            );
+          }
+
+          if (allPlaced) {
             _showDialog("🔮 Všechny elementy i amulet byly úspěšně rozmístěny na oltář! Oltář se rozsvítil zářivým tyrkysovým světlem. Klikni na něj znovu a zahaj aktivaci.");
             return;
           }
@@ -1585,14 +1601,15 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       ));
 
       // Salt hotspot (requires amulet or placed)
-      final saltCollected = state.roomStates['node6_salt_collected'] == true;
+      final saltPlaced = state.roomStates['node6_salt_placed'] == true;
+      final hasSalt = state.inventory.contains('item_salt');
+      final canCollectSalt = !saltPlaced && !hasSalt;
       final hasAmuletOrPlaced = state.inventory.contains('amulet') || state.roomStates['node6_amulet_placed'] == true;
-      if (!saltCollected && hasAmuletOrPlaced) {
+      if (canCollectSalt && hasAmuletOrPlaced) {
         list.add(_Hotspot(
           name: "Skalní trhlina (Sůl)",
           x: 0.08, y: 0.65, w: 0.18, h: 0.18,
           onTap: () {
-            _service.updateRoomState('node6_salt_collected', true);
             _service.collectItem('item_salt');
             _showDialog("V trhlině skály se vysrážela čistá horská sůl. Nabral jsi ji do amuletu jako Element Země.");
           },

@@ -364,6 +364,27 @@ class StoryGameService {
     saveState();
   }
 
+  void batchUpdate({List<String>? itemsToRemove, Map<String, dynamic>? roomStatesToUpdate}) {
+    var currentState = stateNotifier.value;
+    List<String> updatedInv = List<String>.from(currentState.inventory);
+    if (itemsToRemove != null) {
+      for (final item in itemsToRemove) {
+        updatedInv.remove(item);
+      }
+    }
+    Map<String, dynamic> updatedStates = Map<String, dynamic>.from(currentState.roomStates);
+    if (roomStatesToUpdate != null) {
+      roomStatesToUpdate.forEach((key, value) {
+        updatedStates[key] = value;
+      });
+    }
+    stateNotifier.value = currentState.copyWith(
+      inventory: updatedInv,
+      roomStates: updatedStates,
+    );
+    saveState();
+  }
+
   void completeNode(String nodeId) {
     if (stateNotifier.value.completedNodes.contains(nodeId)) return;
 
