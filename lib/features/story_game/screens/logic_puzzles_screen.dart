@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 class LogicPuzzlesScreen extends StatefulWidget {
@@ -25,6 +26,50 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
   String _winchFeedbackText = 'Kliknutím nalož předměty na plošinu. Kbelík studny váží 20 kg. Lano unese 21 až 28 kg.';
   String _winchState = 'idle'; // 'idle', 'lifting', 'snapped', 'too_light'
   bool _leverPulled = false;
+  Timer? _winchTimer;
+  int _iceWeight = 5;
+  int _squirrelWeight = 2;
+  int _iceMeltingCounter = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _startWinchTimer();
+  }
+
+  @override
+  void dispose() {
+    _winchTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startWinchTimer() {
+    _winchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() {
+        // 1. Ice melting logic (decreases weight by 1 kg every 5 seconds, down to 1 kg)
+        _iceMeltingCounter++;
+        if (_iceMeltingCounter >= 5) {
+          _iceMeltingCounter = 0;
+          if (_iceWeight > 1) {
+            _iceWeight--;
+            if (_selectedWinchItems.contains('ice')) {
+              _winchFeedbackText = 'Led před očima taje! Jeho váha klesla na $_iceWeight kg!';
+            }
+          }
+        }
+
+        // 2. Squirrel jumping logic (swaps weight between 2 and 6 kg every 3 seconds)
+        if (DateTime.now().second % 3 == 0) {
+          final oldWeight = _squirrelWeight;
+          _squirrelWeight = _squirrelWeight == 2 ? 6 : 2;
+          if (oldWeight != _squirrelWeight && _selectedWinchItems.contains('squirrel')) {
+            _winchFeedbackText = 'Veverka poskočila! Její váha na váze kolísá a teď váží $_squirrelWeight kg!';
+          }
+        }
+      });
+    });
+  }
 
   final List<Map<String, dynamic>> _winchItems = [
     {
@@ -44,6 +89,86 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
       'response': 'Páni, to je poctivé olovo! Na svou velikost váží neuvěřitelných 12 kg.',
     },
     {
+      'id': 'balloon',
+      'emoji': '🎈',
+      'name': 'Helium balónek',
+      'description': 'Zářivě červený balónek.',
+      'weight': -2,
+      'response': 'Balónek naplněný heliem! Lehčí než vzduch, takže váhu nadlehčuje o -2 kg!',
+    },
+    {
+      'id': 'ice',
+      'emoji': '❄️',
+      'name': 'Kus tajícího ledu',
+      'description': 'Velká ledová kra.',
+      'weight': 5, // This is dynamic
+      'response': 'Led z bažiny, který ale v teplém vzduchu studny rychle taje! Váží 5 kg a každých 5 vteřin o 1 kg roztaje.',
+    },
+    {
+      'id': 'squirrel',
+      'emoji': '🐿️',
+      'name': 'Jankovitá veverka',
+      'description': 'Veverka, co ráda skáče.',
+      'weight': 2, // This is dynamic
+      'response': 'Veverka neposedně pobíhá. Každou chvíli poskočí a její váha kolísá mezi 2 kg a 6 kg!',
+    },
+    {
+      'id': 'magnet',
+      'emoji': '🧲',
+      'name': 'Magnetická podkova',
+      'description': 'Stará zrezivělá podkova.',
+      'weight': 10,
+      'response': 'Magnetická podkova! Přichytila se na železnou konstrukci studny a magnetismus ji táhne dolů jako 10 kg!',
+    },
+    {
+      'id': 'paper_anvil',
+      'emoji': '🧱',
+      'name': 'Origami kovadlina',
+      'description': 'Vypadá jako 50 kg železa.',
+      'weight': 0,
+      'response': 'Dokonalé papírové origami ve tvaru kovadliny! Vypadá těžce, ale váží přesně 0 kg!',
+    },
+    {
+      'id': 'mercury',
+      'emoji': '🧪',
+      'name': 'Láhev se rtutí',
+      'description': 'Malá lahvička se stříbrem.',
+      'weight': 14,
+      'response': 'Ta stříbrná tekutina uvnitř není voda, ale rtuť! Extrémně těžký tekutý kov o váze 14 kg.',
+    },
+    {
+      'id': 'feather_bag',
+      'emoji': '🪶',
+      'name': 'Pytel peří',
+      'description': 'Velký nadýchaný pytel.',
+      'weight': 9,
+      'response': 'Čekal jsi lehké peří, ale někdo na dno pytle ukryl těžký ocelový klíč! Pytel tak váží nečekaných 9 kg.',
+    },
+    {
+      'id': 'gold_box',
+      'emoji': '🎁',
+      'name': 'Krabice od zlata',
+      'description': 'Krabice s nápisem ZLATO.',
+      'weight': 0,
+      'response': 'Krabice s nápisem ZLATO je úplně prázdná! Někdo tě napálil, váží 0 kg.',
+    },
+    {
+      'id': 'petrified_shroom',
+      'emoji': '🍄',
+      'name': 'Zkamenělá obří houba',
+      'description': 'Houba ze zkamenělého dřeva.',
+      'weight': 8,
+      'response': 'Tahle obří houba už dávno zkameněla, je to kus těžkého křemene o váze 8 kg.',
+    },
+    {
+      'id': 'log',
+      'emoji': '🪵',
+      'name': 'Dubové poleno',
+      'description': 'Kus tvrdého dřeva.',
+      'weight': 6,
+      'response': 'Pořádný kus tvrdého dubového dřeva o váze 6 kg.',
+    },
+    {
       'id': 'chalice',
       'emoji': '🏆',
       'name': 'Rituální pohár',
@@ -52,36 +177,12 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
       'response': 'Tento masivní pohár ze zlata váží pěkných 8 kg.',
     },
     {
-      'id': 'log',
-      'emoji': '🪵',
-      'name': 'Dubové poleno',
-      'description': 'Kus tvrdého dřeva.',
-      'weight': 6,
-      'response': 'Pořádný kus dubového dřeva o váze 6 kg.',
-    },
-    {
-      'id': 'anvil',
-      'emoji': '🧱',
-      'name': 'Stará kovadlina',
-      'description': 'Masivní železná kovadlina.',
-      'weight': 35,
-      'response': 'Varování: Tahle kovadlina váží 35 kg! Lano studny tolik nikdy neunese!',
-    },
-    {
-      'id': 'feathers',
-      'emoji': '🪶',
-      'name': 'Pytel peří',
-      'description': 'Velký pytel plný peří.',
-      'weight': 3,
-      'response': 'Velký pytel husího peří. Váží 3 kg kvůli tlusté jutové látce.',
-    },
-    {
-      'id': 'nails',
-      'emoji': '⚙️',
-      'name': 'Krabice hřebíků',
-      'description': 'Kovové hřebíky a vruty.',
-      'weight': 5,
-      'response': 'Krabice plná rezavého spojovacího materiálu o váze 5 kg.',
+      'id': 'spellbook',
+      'emoji': '📜',
+      'name': 'Kniha kouzel',
+      'description': 'Tlustá kniha s kováním.',
+      'weight': 4,
+      'response': 'Tlustá kniha s těžkým kováním vážící 4 kg.',
     },
     {
       'id': 'pan',
@@ -108,14 +209,6 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
       'response': 'Bronzová soška bůžka o váze 9 kg.',
     },
     {
-      'id': 'spellbook',
-      'emoji': '📜',
-      'name': 'Kniha kouzel',
-      'description': 'Tlustá kniha s kováním.',
-      'weight': 4,
-      'response': 'Tlustá kniha s těžkým kováním vážící 4 kg.',
-    },
-    {
       'id': 'boot',
       'emoji': '🥾',
       'name': 'Stará bota',
@@ -138,14 +231,6 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
       'description': 'Keramická nádoba.',
       'weight': 4,
       'response': 'Prázdný keramický džbán o váze 4 kg.',
-    },
-    {
-      'id': 'moss',
-      'emoji': '🌿',
-      'name': 'Lesní mech',
-      'description': 'Vlhký trs mechu.',
-      'weight': 2,
-      'response': 'Vlhký mech nasáklý vodou váží 2 kg.',
     },
   ];
 
@@ -332,7 +417,13 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
     int totalWeight = 0;
     for (var itemId in _selectedWinchItems) {
       final item = _winchItems.firstWhere((it) => it['id'] == itemId);
-      totalWeight += item['weight'] as int;
+      if (itemId == 'ice') {
+        totalWeight += _iceWeight;
+      } else if (itemId == 'squirrel') {
+        totalWeight += _squirrelWeight;
+      } else {
+        totalWeight += item['weight'] as int;
+      }
     }
 
     // Determine positions of bucket and platform based on state
@@ -364,7 +455,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
       children: [
         // 1. Title / Instruction
         Text(
-          'Vyvaž naviják studny. Kbelík váží 20 kg. Musíš na pravou plošinu naložit 21 až 28 kg, aby vyjel nahoru. Pozor, lano unese nejvýše 28 kg!',
+          'Vyvaž naviják studny. Kbelík váží 20 kg. Musíš označit předměty o váze 21 až 28 kg, aby vyjel nahoru. Pozor, lano unese nejvýše 28 kg!',
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.grey.shade300, fontSize: 13, height: 1.4),
         ),
@@ -699,7 +790,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         Container(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.grey.shade855,
+            color: Colors.grey.shade850,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.grey.shade700),
           ),
@@ -741,7 +832,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         ),
         const SizedBox(height: 8),
 
-        // 5. Scrollable Grid of 15 Available items
+        // 5. Scrollable Grid of 20 Available items
         Expanded(
           child: Container(
             padding: const EdgeInsets.all(8),
@@ -762,6 +853,10 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                 final item = _winchItems[index];
                 final String itemId = item['id'] as String;
                 final bool isSelected = _selectedWinchItems.contains(itemId);
+
+                int displayWeight = item['weight'] as int;
+                if (itemId == 'ice') displayWeight = _iceWeight;
+                if (itemId == 'squirrel') displayWeight = _squirrelWeight;
 
                 return GestureDetector(
                   onTap: _leverPulled || _winchState == 'lifting'
@@ -787,7 +882,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: isSelected
-                            ? [Colors.amber.shade900, Colors.amber.shade955]
+                            ? [Colors.amber.shade900, Colors.amber.shade950]
                             : [Colors.grey.shade850, Colors.grey.shade900],
                       ),
                       borderRadius: BorderRadius.circular(16),
@@ -819,7 +914,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${item['weight']} kg',
+                          '$displayWeight kg',
                           style: TextStyle(
                             color: isSelected ? Colors.amberAccent : Colors.grey.shade500,
                             fontSize: 10,
