@@ -835,7 +835,10 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
       // Dry stick on the ground
       final hasStick = state.roomStates['node2_has_stick'] == true;
-      if (!hasStick) {
+      final hasTorchInInventory = state.inventory.contains('torch') || state.inventory.contains('burning_torch');
+      final caveLit = state.roomStates['node4_cave_lit'] == true;
+      final canGatherStick = !hasStick || (!state.inventory.contains('stick') && !hasTorchInInventory && !caveLit);
+      if (canGatherStick) {
         list.add(_Hotspot(
           name: "Suchá větev",
           x: 0.15, y: 0.8, w: 0.2, h: 0.12,
@@ -920,7 +923,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
             if (_selectedItemId == 'burning_torch') {
               _service.updateRoomState('node3_vines_burned', true);
-              _service.removeItem('burning_torch');
+              // Torch is not removed when burning vines so the player doesn't lose it
               _speakHeroLine("Mám to! Trní hoří.");
               setState(() => _selectedItemId = null);
               _showDialog("🔥 Přiložil jsi zapálenou pochodeň k ostnatému křoví. Suché větve okamžitě vzplály a spálily se na uhel! Vchod do chýše je volný.");
@@ -938,7 +941,10 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
         // Hadr na plotě (New)
         final hasCloth = state.roomStates['node3_has_cloth'] == true;
-        if (!hasCloth) {
+        final hasTorchInInventory = state.inventory.contains('torch') || state.inventory.contains('burning_torch');
+        final caveLit = state.roomStates['node4_cave_lit'] == true;
+        final canGatherCloth = !hasCloth || (!state.inventory.contains('cloth') && !hasTorchInInventory && !caveLit);
+        if (canGatherCloth) {
           list.add(_Hotspot(
             name: "Hadr na plotě",
             x: 0.15, y: 0.65, w: 0.1, h: 0.1,
@@ -951,7 +957,9 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
         // Lupa na okně (New)
         final hasLens = state.roomStates['node3_has_lens'] == true;
-        if (!hasLens) {
+        final hasTinderProductInInventory = state.inventory.contains('smoldering_tinder') || state.inventory.contains('burning_torch');
+        final canGatherLens = !hasLens || (!state.inventory.contains('lens') && !hasTinderProductInInventory && !caveLit);
+        if (canGatherLens) {
           list.add(_Hotspot(
             name: "Lupa na okně",
             x: 0.68, y: 0.48, w: 0.08, h: 0.08,
@@ -964,7 +972,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
         // Mech u plotu (New)
         final hasTinder = state.roomStates['node3_has_tinder'] == true;
-        if (!hasTinder) {
+        final canGatherTinder = !hasTinder || (!state.inventory.contains('tinder') && !hasTinderProductInInventory && !caveLit);
+        if (canGatherTinder) {
           list.add(_Hotspot(
             name: "Suchý mech",
             x: 0.82, y: 0.78, w: 0.1, h: 0.1,
