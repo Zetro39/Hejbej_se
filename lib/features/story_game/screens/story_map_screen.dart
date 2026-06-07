@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/story_quest_model.dart';
 import '../services/story_game_service.dart';
 import 'point_and_click_screen.dart';
 import 'logic_puzzles_screen.dart';
-import 'catching_game_screen.dart';
+$import_tag
+import 'story_animations.dart';
 
 class StoryMapScreen extends StatefulWidget {
   const StoryMapScreen({super.key});
@@ -45,15 +46,15 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
 
   Widget _buildIntroSlide() {
     final titles = [
-      'Prastará legenda',
-      'Pád rovnováhy',
-      'Tvá cesta',
+      'PrastarĂˇ legenda',
+      'PĂˇd rovnovĂˇhy',
+      'TvĂˇ cesta',
     ];
 
     final texts = [
-      'Podle pověstí našich předků střežily české pohraniční lesy čtyři posvátné elementy: Oheň, Voda, Země a Vzduch. Tyto elementy udržovaly přírodu v harmonii a byly svázány v mocném Amuletu rovnováhy.',
-      'Před sto lety však byla starobylá pevnost, ve které byl amulet střežen, napadena a zničena. Amulet se vybil a ztratil se v divočině. Od té doby lesy chřadnou, studánky vysychají a zvěř ztrácí klid.',
-      'Ty, jakožto odhodlaný mladý cestovatel, jsi v archivech objevil starodávnou mapu stezky. Tvým posláním je ujít trasu o délce 6 kilometrů, najít vyhaslý amulet, sesbírat a očistit všechny 4 elementy a na Kamenném oltáři amulet znovu zažehnout. Osud lesů leží ve tvých rukou!',
+      'Podle povÄ›stĂ­ naĹˇich pĹ™edkĹŻ stĹ™eĹľily ÄŤeskĂ© pohraniÄŤnĂ­ lesy ÄŤtyĹ™i posvĂˇtnĂ© elementy: OheĹ, Voda, ZemÄ› a Vzduch. Tyto elementy udrĹľovaly pĹ™Ă­rodu v harmonii a byly svĂˇzĂˇny v mocnĂ©m Amuletu rovnovĂˇhy.',
+      'PĹ™ed sto lety vĹˇak byla starobylĂˇ pevnost, ve kterĂ© byl amulet stĹ™eĹľen, napadena a zniÄŤena. Amulet se vybil a ztratil se v divoÄŤinÄ›. Od tĂ© doby lesy chĹ™adnou, studĂˇnky vysychajĂ­ a zvÄ›Ĺ™ ztrĂˇcĂ­ klid.',
+      'Ty, jakoĹľto odhodlanĂ˝ mladĂ˝ cestovatel, jsi v archivech objevil starodĂˇvnou mapa stezky. TvĂ˝m poslĂˇnĂ­m je ujĂ­t trasu o dĂ©lce 6 kilometrĹŻ, najĂ­t vyhaslĂ˝ amulet, sesbĂ­rat a oÄŤistit vĹˇechny 4 elementy a na KamennĂ©m oltĂˇĹ™i amulet znovu zaĹľehnout. Osud lesĹŻ leĹľĂ­ ve tvĂ˝ch rukou!',
     ];
 
     final bgAssets = [
@@ -67,23 +68,20 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
     return Stack(
       children: [
         Positioned.fill(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: ColorFiltered(
-              colorFilter: ColorFilter.mode(
-                Colors.black.withOpacity(isAdventurerSlide ? 0.85 : 0.65),
-                BlendMode.darken,
-              ),
-              child: Image.asset(
-                bgAssets[_introSlideIndex],
-                fit: isAdventurerSlide ? BoxFit.contain : BoxFit.cover,
-              ),
+          child: ColorFiltered(
+            colorFilter: ColorFilter.mode(
+              Colors.black.withOpacity(isAdventurerSlide ? 0.75 : 0.45),
+              BlendMode.darken,
+            ),
+            child: Image.asset(
+              bgAssets[_introSlideIndex],
+              fit: isAdventurerSlide ? BoxFit.contain : BoxFit.cover,
             ),
           ),
         ),
         Positioned.fill(
           child: Padding(
-            padding: const EdgeInsets.all(28.0),
+            padding: const EdgeInsets.only(left: 28.0, right: 28.0, bottom: 140.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,23 +90,32 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                   titles[_introSlideIndex],
                   style: const TextStyle(
                     color: Colors.cyanAccent,
-                    fontSize: 24,
+                    fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                    letterSpacing: 1,
+                    shadows: [
+                      Shadow(color: Colors.black, blurRadius: 12, offset: Offset(0, 2)),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  texts[_introSlideIndex],
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14.5,
-                    height: 1.5,
-                    fontWeight: FontWeight.w500,
-                    shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white12, width: 1),
+                  ),
+                  child: Text(
+                    texts[_introSlideIndex],
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      height: 1.55,
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -120,83 +127,165 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
   Widget _buildIntroWidget() {
     return Container(
       color: Colors.black,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'PROLOG VÝPRAVY',
-                    style: TextStyle(
-                      color: Colors.cyanAccent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _closeIntro,
-                    child: const Text('Přeskočit', style: TextStyle(color: Colors.white54, fontSize: 13)),
-                  ),
-                ],
+      child: Stack(
+        children: [
+          // Background Slide Content
+          Positioned.fill(
+            child: _buildIntroSlide(),
+          ),
+          
+          // Cinematic Vignette Overlay
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.65),
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.85),
+                  ],
+                  stops: const [0.0, 0.25, 0.65, 1.0],
+                ),
               ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: _buildIntroSlide(),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (_introSlideIndex > 0)
+            ),
+          ),
+
+          // Weather particles for cinematic effect
+          const Positioned.fill(
+            child: ImmersiveWeatherParticles(particleType: 'leaves'),
+          ),
+
+          // Header Skip Action
+          Positioned(
+            top: 40,
+            left: 24,
+            right: 24,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'PROLOG VĂťPRAVY',
+                  style: TextStyle(
+                    color: Colors.cyanAccent,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2.5,
+                    shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                  ),
+                ),
+                TextButton(
+                  onPressed: _closeIntro,
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.black45,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  child: const Text('PĹ™eskoÄŤit â–·', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                ),
+              ],
+            ),
+          ),
+
+          // Navigation and Dots
+          Positioned(
+            bottom: 40,
+            left: 24,
+            right: 24,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(3, (index) {
+                    final isActive = index == _introSlideIndex;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: isActive ? 24 : 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: isActive ? Colors.cyanAccent : Colors.white24,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (_introSlideIndex > 0)
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black54,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: const BorderSide(color: Colors.white24, width: 1),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _introSlideIndex--;
+                          });
+                        },
+                        child: const Row(
+                          children: [
+                            Icon(Icons.arrow_back_ios, size: 14),
+                            SizedBox(width: 4),
+                            Text('ZpÄ›t', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      )
+                    else
+                      const SizedBox.shrink(),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey.shade900,
+                        backgroundColor: Colors.cyanAccent.shade700,
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          side: const BorderSide(color: Colors.cyanAccent, width: 1),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                       ),
                       onPressed: () {
-                        setState(() {
-                          _introSlideIndex--;
-                        });
+                        if (_introSlideIndex < 2) {
+                          setState(() {
+                            _introSlideIndex++;
+                          });
+                        } else {
+                          _closeIntro();
+                        }
                       },
-                      child: const Text('Zpět'),
-                    )
-                  else
-                    const SizedBox.shrink(),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.cyan.shade700,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      child: Row(
+                        children: [
+                          Text(
+                            _introSlideIndex == 2 ? 'ZahĂˇjit vĂ˝pravu' : 'PokraÄŤovat',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.arrow_forward_ios, size: 14),
+                        ],
+                      ),
                     ),
-                    onPressed: () {
-                      if (_introSlideIndex < 2) {
-                        setState(() {
-                          _introSlideIndex++;
-                        });
-                      } else {
-                        _closeIntro();
-                      }
-                    },
-                    child: Text(_introSlideIndex == 2 ? 'Zahájit výpravu' : 'Pokračovat'),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Offset _getAvatarPosition(int walkedMeters) {
+    Offset _getAvatarPosition(int walkedMeters) {
     if (_service.nodes.isEmpty) return const Offset(0.5, 0.5);
     
     if (walkedMeters <= 0) return _service.nodes.first.mapPosition;
@@ -228,6 +317,26 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
     return Offset(x, y);
   }
 
+  void _showLockedProgressAlert(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('đź”’ Cesta blokovĂˇna', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('RozumĂ­m'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _onNodeTap(QuestNode node, QuestState state) {
     final isUnlocked = state.unlockedNodes.contains(node.id);
     if (!isUnlocked) {
@@ -236,15 +345,15 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
         context: context,
         builder: (context) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('🔒 Lokace uzamčena', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text('đź”’ Lokace uzamÄŤena', style: TextStyle(fontWeight: FontWeight.bold)),
           content: Text(
-            'Tato část stezky je zahalená hustou mlhou. Abys sem mohl vstoupit, musíš ujít ještě ${needed.toInt()} metrů.',
+            'Tato ÄŤĂˇst stezky je zahalenĂˇ hustou mlhou. Abys sem mohl vstoupit, musĂ­Ĺˇ ujĂ­t jeĹˇtÄ›  metrĹŻ.',
             style: const TextStyle(fontSize: 15),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Rozumím'),
+              child: const Text('RozumĂ­m'),
             ),
           ],
         ),
@@ -252,6 +361,27 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
       return;
     }
 
+    // StriktnĂ­ sekvenÄŤnĂ­ prĹŻchod hrou
+    if (node.id == 'node2' && !state.completedNodes.contains('node1')) {
+      _showLockedProgressAlert("MusĂ­Ĺˇ nejprve otevĹ™Ă­t LesnĂ­ brĂˇnu (Lokace 1) a projĂ­t skrz ni.");
+      return;
+    }
+    if (node.id == 'node3' && !state.completedNodes.contains('node2')) {
+      _showLockedProgressAlert("MusĂ­Ĺˇ nejprve vyĹ™eĹˇit hĂˇdanku u StarĂ©ho dubu (Lokace 2).");
+      return;
+    }
+    if (node.id == 'node4' && !state.completedNodes.contains('node3')) {
+      _showLockedProgressAlert("MusĂ­Ĺˇ nejprve kompletnÄ› prozkoumat ZĹ™Ă­ceninu chĂ˝Ĺˇe (Lokace 3).");
+      return;
+    }
+    if (node.id == 'node5' && !state.completedNodes.contains('node4')) {
+      _showLockedProgressAlert("MusĂ­Ĺˇ nejprve pomoci PoustevnĂ­kovi v baĹľinÄ› a uzdravit ho (Lokace 4).");
+      return;
+    }
+    if (node.id == 'node6' && !state.completedNodes.contains('node5')) {
+      _showLockedProgressAlert("MusĂ­Ĺˇ nejprve seĹ™Ă­dit dalekohled v pevnosti (Lokace 5).");
+      return;
+    }
     // Navigate to location screen
     if (node.id == 'node1' || node.id == 'node2' || node.id == 'node3') {
       Navigator.push(
@@ -287,7 +417,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: _showIntro ? null : AppBar(
         title: const Text('PŘÍBĚHOVÁ VÝPRAVA'),
         backgroundColor: Colors.lightBlue,
         foregroundColor: Colors.white,
@@ -395,7 +525,9 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                     left: (avatarPos.dx * mapWidth) - 20,
                     top: (avatarPos.dy * mapHeight) - 35,
                     child: IgnorePointer(
-                      child: _buildAvatarMarker(),
+                      child: AnimatedBobbingWidget(
+                        child: _buildAvatarMarker(),
+                      ),
                     ),
                   ),
 
