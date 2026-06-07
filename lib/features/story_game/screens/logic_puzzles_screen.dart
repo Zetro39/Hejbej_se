@@ -478,10 +478,10 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                   width: 280,
                   height: 190,
                   decoration: BoxDecoration(
-                    gradient: RadialGradient(
+                    gradient: const RadialGradient(
                       center: Alignment.center,
                       radius: 1.2,
-                      colors: [Colors.grey.shade800, Colors.grey.shade950],
+                      colors: [Colors.grey, Color(0xFF0F0F0F)],
                     ),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
@@ -552,10 +552,10 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                                   width: 65,
                                   height: 80,
                                   decoration: BoxDecoration(
-                                    gradient: LinearGradient(
+                                    gradient: const LinearGradient(
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
-                                      colors: [Colors.amber.shade800, Colors.amber.shade950],
+                                      colors: [Colors.amber, Color(0xFF2A1B0A)],
                                     ),
                                     shape: BoxShape.rectangle,
                                     borderRadius: BorderRadius.circular(12),
@@ -1038,7 +1038,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         Container(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.grey.shade850,
+            color: const Color(0xFF262626),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.grey.shade700),
           ),
@@ -1138,8 +1138,8 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: isSelected
-                              ? [Colors.amber.shade900, Colors.amber.shade950]
-                              : [Colors.grey.shade855, Colors.grey.shade900],
+                              ? [Colors.amber.shade900, const Color(0xFF2A1B0A)]
+                              : [const Color(0xFF232323), Colors.grey.shade900],
                         ),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
@@ -1279,7 +1279,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
               colors: [Colors.brown.shade700, Colors.brown.shade900],
             ),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.brown.shade950, width: 6),
+            border: Border.all(color: const Color(0xFF1B0F05), width: 6),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.5),
@@ -1739,12 +1739,12 @@ class _AstroDial extends StatelessWidget {
                   height: 70,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: SweepGradient(
+                    gradient: const SweepGradient(
                       colors: [
-                        Colors.amber.shade800,
-                        Colors.amber.shade600,
-                        Colors.amber.shade950,
-                        Colors.amber.shade800,
+                        Colors.amber,
+                        Colors.orange,
+                        Color(0xFF2A1B0A),
+                        Colors.amber,
                       ],
                     ),
                     border: Border.all(

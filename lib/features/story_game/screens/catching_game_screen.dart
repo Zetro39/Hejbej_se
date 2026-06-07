@@ -324,7 +324,7 @@ class _CatchingGameScreenState extends State<CatchingGameScreen> with SingleTick
             // Linear Progress Indicator with Neon Glow
             LinearProgressIndicator(
               value: _score / _targetScore,
-              backgroundColor: Colors.grey.shade850,
+              backgroundColor: const Color(0xFF262626),
               valueColor: const AlwaysStoppedAnimation<Color>(Colors.cyanAccent),
               minHeight: 8,
             ),
@@ -339,8 +339,8 @@ class _CatchingGameScreenState extends State<CatchingGameScreen> with SingleTick
                           width: 300,
                           padding: const EdgeInsets.all(32),
                           decoration: BoxDecoration(
-                            gradient: RadialGradient(
-                              colors: [Colors.grey.shade850, Colors.grey.shade900],
+                            gradient: const RadialGradient(
+                              colors: [Color(0xFF262626), Color(0xFF0F0F0F)],
                               radius: 1.2,
                             ),
                             borderRadius: BorderRadius.circular(24),
