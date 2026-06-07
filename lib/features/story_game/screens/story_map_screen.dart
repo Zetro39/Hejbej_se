@@ -1,10 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/story_quest_model.dart';
 import '../services/story_game_service.dart';
 import 'point_and_click_screen.dart';
 import 'logic_puzzles_screen.dart';
-$import_tag
+import 'catching_game_screen.dart';
 import 'story_animations.dart';
 
 class StoryMapScreen extends StatefulWidget {
@@ -46,15 +46,15 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
 
   Widget _buildIntroSlide() {
     final titles = [
-      'PrastarĂˇ legenda',
-      'PĂˇd rovnovĂˇhy',
-      'TvĂˇ cesta',
+      'Prastará legenda',
+      'Pád rovnováhy',
+      'Tvá cesta',
     ];
 
     final texts = [
-      'Podle povÄ›stĂ­ naĹˇich pĹ™edkĹŻ stĹ™eĹľily ÄŤeskĂ© pohraniÄŤnĂ­ lesy ÄŤtyĹ™i posvĂˇtnĂ© elementy: OheĹ, Voda, ZemÄ› a Vzduch. Tyto elementy udrĹľovaly pĹ™Ă­rodu v harmonii a byly svĂˇzĂˇny v mocnĂ©m Amuletu rovnovĂˇhy.',
-      'PĹ™ed sto lety vĹˇak byla starobylĂˇ pevnost, ve kterĂ© byl amulet stĹ™eĹľen, napadena a zniÄŤena. Amulet se vybil a ztratil se v divoÄŤinÄ›. Od tĂ© doby lesy chĹ™adnou, studĂˇnky vysychajĂ­ a zvÄ›Ĺ™ ztrĂˇcĂ­ klid.',
-      'Ty, jakoĹľto odhodlanĂ˝ mladĂ˝ cestovatel, jsi v archivech objevil starodĂˇvnou mapa stezky. TvĂ˝m poslĂˇnĂ­m je ujĂ­t trasu o dĂ©lce 6 kilometrĹŻ, najĂ­t vyhaslĂ˝ amulet, sesbĂ­rat a oÄŤistit vĹˇechny 4 elementy a na KamennĂ©m oltĂˇĹ™i amulet znovu zaĹľehnout. Osud lesĹŻ leĹľĂ­ ve tvĂ˝ch rukou!',
+      'Podle pověstí našich předků střežily české pohraniční lesy čtyři posvátné elementy: Oheň, Voda, Země a Vzduch. Tyto elementy udržovaly přírodu v harmonii a byly svázány v mocném Amuletu rovnováhy.',
+      'Před sto lety však byla starobylá pevnost, ve které byl amulet střežen, napadena a zničena. Amulet se vybil a ztratil se v divočině. Od té doby lesy chřadnou, studánky vysychají a zvěř ztrácí klid.',
+      'Ty, jakožto odhodlaný mladý cestovatel, jsi v archivech objevil starodávnou mapu stezky. Tvým posláním je ujít trasu o délce 6 kilometrů, najít vyhaslý amulet, sesbírat a očistit všechny 4 elementy a na Kamenném oltáři amulet znovu zažehnout. Osud lesů leží ve tvých rukou!',
     ];
 
     final bgAssets = [
@@ -167,7 +167,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'PROLOG VĂťPRAVY',
+                  'PROLOG VÝPRAVY',
                   style: TextStyle(
                     color: Colors.cyanAccent,
                     fontSize: 14,
@@ -183,7 +183,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
-                  child: const Text('PĹ™eskoÄŤit â–·', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  child: const Text('Přeskočit ▷', style: TextStyle(color: Colors.white70, fontSize: 13)),
                 ),
               ],
             ),
@@ -235,11 +235,11 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                           });
                         },
                         child: const Row(
-                          children: [
-                            Icon(Icons.arrow_back_ios, size: 14),
-                            SizedBox(width: 4),
-                            Text('ZpÄ›t', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ],
+                           children: [
+                             Icon(Icons.arrow_back_ios, size: 14),
+                             SizedBox(width: 4),
+                             Text('Zpět', style: TextStyle(fontWeight: FontWeight.bold)),
+                           ],
                         ),
                       )
                     else
@@ -267,7 +267,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                       child: Row(
                         children: [
                           Text(
-                            _introSlideIndex == 2 ? 'ZahĂˇjit vĂ˝pravu' : 'PokraÄŤovat',
+                            _introSlideIndex == 2 ? 'Zahájit výpravu' : 'Pokračovat',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(width: 6),
@@ -285,7 +285,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
     );
   }
 
-    Offset _getAvatarPosition(int walkedMeters) {
+  Offset _getAvatarPosition(int walkedMeters) {
     if (_service.nodes.isEmpty) return const Offset(0.5, 0.5);
     
     if (walkedMeters <= 0) return _service.nodes.first.mapPosition;
@@ -322,7 +322,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('đź”’ Cesta blokovĂˇna', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('🔒 Cesta blokována', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text(
           message,
           style: const TextStyle(fontSize: 15),
@@ -330,7 +330,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('RozumĂ­m'),
+            child: const Text('Rozumím'),
           ),
         ],
       ),
@@ -345,15 +345,15 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
         context: context,
         builder: (context) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('đź”’ Lokace uzamÄŤena', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text('🔒 Lokace uzamčena', style: TextStyle(fontWeight: FontWeight.bold)),
           content: Text(
-            'Tato ÄŤĂˇst stezky je zahalenĂˇ hustou mlhou. Abys sem mohl vstoupit, musĂ­Ĺˇ ujĂ­t jeĹˇtÄ›  metrĹŻ.',
+            'Tato část stezky je zahalená hustou mlhou. Abys sem mohl vstoupit, musíš ujít ještě ${needed.toInt()} metrů.',
             style: const TextStyle(fontSize: 15),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('RozumĂ­m'),
+              child: const Text('Rozumím'),
             ),
           ],
         ),
@@ -361,25 +361,25 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
       return;
     }
 
-    // StriktnĂ­ sekvenÄŤnĂ­ prĹŻchod hrou
+    // Striktní sekvenční průchod hrou
     if (node.id == 'node2' && !state.completedNodes.contains('node1')) {
-      _showLockedProgressAlert("MusĂ­Ĺˇ nejprve otevĹ™Ă­t LesnĂ­ brĂˇnu (Lokace 1) a projĂ­t skrz ni.");
+      _showLockedProgressAlert("Musíš nejprve otevřít Lesní bránu (Lokace 1) a projít skrz ni.");
       return;
     }
     if (node.id == 'node3' && !state.completedNodes.contains('node2')) {
-      _showLockedProgressAlert("MusĂ­Ĺˇ nejprve vyĹ™eĹˇit hĂˇdanku u StarĂ©ho dubu (Lokace 2).");
+      _showLockedProgressAlert("Musíš nejprve vyřešit hádanku u Starého dubu (Lokace 2).");
       return;
     }
     if (node.id == 'node4' && !state.completedNodes.contains('node3')) {
-      _showLockedProgressAlert("MusĂ­Ĺˇ nejprve kompletnÄ› prozkoumat ZĹ™Ă­ceninu chĂ˝Ĺˇe (Lokace 3).");
+      _showLockedProgressAlert("Musíš nejprve kompletně prozkoumat Zříceninu chýše (Lokace 3).");
       return;
     }
     if (node.id == 'node5' && !state.completedNodes.contains('node4')) {
-      _showLockedProgressAlert("MusĂ­Ĺˇ nejprve pomoci PoustevnĂ­kovi v baĹľinÄ› a uzdravit ho (Lokace 4).");
+      _showLockedProgressAlert("Musíš nejprve pomoci Poustevníkovi v bažině a uzdravit ho (Lokace 4).");
       return;
     }
     if (node.id == 'node6' && !state.completedNodes.contains('node5')) {
-      _showLockedProgressAlert("MusĂ­Ĺˇ nejprve seĹ™Ă­dit dalekohled v pevnosti (Lokace 5).");
+      _showLockedProgressAlert("Musíš nejprve seřídit dalekohled v pevnosti (Lokace 5).");
       return;
     }
     // Navigate to location screen

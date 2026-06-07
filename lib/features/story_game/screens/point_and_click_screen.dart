@@ -77,15 +77,15 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
   void _setInitialDialog() {
     if (widget.nodeId == 'node1') {
-      // LesnĂ­ brĂˇna
+      // Lesní brána
       // Gate hotspot
       list.add(_Hotspot(
-        name: "LesnĂ­ brĂˇna",
+        name: "Lesní brána",
         x: 0.35, y: 0.25, w: 0.3, h: 0.45,
         onTap: () {
           final isGateOpen = state.roomStates['node1_gate_open'] == true;
           if (isGateOpen) {
-            _showDialog("BrĂˇna je dokoĹ™Ăˇn. Cesta do nitra lesa je volnĂˇ!");
+            _showDialog("Brána je dokořán. Cesta do nitra lesa je volná!");
             return;
           }
 
@@ -93,17 +93,17 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             _service.updateRoomState('node1_gate_open', true);
             _service.removeItem('fixed_key');
             _service.completeNode('node1');
-            _speakHeroLine("MĂˇm to! PodaĹ™ilo se odemknout.");
+            _speakHeroLine("Mám to! Podařilo se odemknout.");
             setState(() => _selectedItemId = null);
-            _showDialog("đź’Ą PouĹľil jsi upravenĂ˝ klĂ­ÄŤ! ZĂˇmek s hlasitĂ˝m cvaknutĂ­m povolil, brĂˇna se otevĹ™ela a cesta dĂˇl je volnĂˇ.");
+            _showDialog("💥 Použil jsi upravený klíč! Zámek s hlasitým cvaknutím povolil, brána se otevřela a cesta dál je volná.");
           } else if (_selectedItemId == 'dirty_key') {
-            _speakHeroLine("Tenhle klĂ­ÄŤ je moc rezavĂ˝.");
-            _showDialog("KlĂ­ÄŤ pasuje do dĂ­rky, ale je pĹ™Ă­liĹˇ rezavĂ˝ a drhne. NemĹŻĹľeĹˇ s nĂ­m otoÄŤit, chtÄ›lo by to nÄ›jak promazat olejem.");
+            _speakHeroLine("Tenhle klíč je moc rezavý.");
+            _showDialog("Klíč pasuje do dírky, ale je příliš rezavý a drhne. Nemůžeš s ním otočit, chtělo by to nějak promazat olejem.");
           } else if (_selectedItemId != null) {
-            _speakHeroLine("Tohle sem nepatĹ™Ă­.");
-            _showDialog("Tento pĹ™edmÄ›t na brĂˇnu nepasuje.");
+            _speakHeroLine("Tohle sem nepatří.");
+            _showDialog("Tento předmět na bránu nepasuje.");
           } else {
-            _showDialog("MasivnĂ­ brĂˇna z dubovĂ©ho dĹ™eva. ZĂˇmek je zrezivÄ›lĂ˝ a chybĂ­ klika.");
+            _showDialog("Masivní brána z dubového dřeva. Zámek je zrezivělý a chybí klika.");
           }
         },
       ));
@@ -112,11 +112,11 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       final hasHandle = state.roomStates['node1_has_handle'] == true;
       if (!hasHandle) {
         list.add(_Hotspot(
-          name: "Klika v trĂˇvÄ›",
+          name: "Klika v trávě",
           x: 0.15, y: 0.75, w: 0.15, h: 0.12,
           onTap: () {
             _service.updateRoomState('node1_has_handle', true);
-            _collectItem('iron_handle', "V trĂˇvÄ› pod kamennĂ˝m pilĂ­Ĺ™em jsi naĹˇel tÄ›Ĺľkou kovanou kliku. Beru ji.");
+            _collectItem('iron_handle', "V trávě pod kamenným pilířem jsi našel těžkou kovanou kliku. Beru ji.");
           },
         ));
       }
@@ -125,11 +125,11 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       final hasKey = state.roomStates['node1_has_key'] == true;
       if (!hasKey) {
         list.add(_Hotspot(
-          name: "UvolnÄ›nĂ˝ kĂˇmen",
+          name: "Uvolněný kámen",
           x: 0.76, y: 0.62, w: 0.1, h: 0.08,
           onTap: () {
             _service.updateRoomState('node1_has_key', true);
-            _collectItem('dirty_key', "Odhrnul jsi uvolnÄ›nĂ˝ kĂˇmen v pilĂ­Ĺ™i brĂˇny a naĹˇel starĂ˝ zrezivÄ›lĂ˝ klĂ­ÄŤ!");
+            _collectItem('dirty_key', "Odhrnul jsi uvolněný kámen v pilíři brány a našel starý zrezivělý klíč!");
           },
         ));
       }
@@ -142,35 +142,35 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           x: 0.16, y: 0.72, w: 0.12, h: 0.1,
           onTap: () {
             _service.updateRoomState('node1_has_oil', true);
-            _collectItem('oil', "Prozkoumal jsi starou dĹ™evÄ›nou bednu lesnĂ­kĹŻ u cesty a naĹˇel v nĂ­ lahviÄŤku s olejem na rez!");
+            _collectItem('oil', "Prozkoumal jsi starou dřevěnou bednu lesníků u cesty a našel v ní lahvičku s olejem na rez!");
           },
         ));
       }
 
       // Signpost (New - Flavor)
       list.add(_Hotspot(
-        name: "RozcestnĂ­k",
+        name: "Rozcestník",
         x: 0.02, y: 0.35, w: 0.1, h: 0.25,
         onTap: () {
-          _showDialog("StarĂ˝ zvÄ›tralĂ˝ ukazatel hlĂˇsĂˇ:\n'Vstup na vlastnĂ­ nebezpeÄŤĂ­! Stezka stĹ™eĹľenĂˇ ÄŤtyĹ™mi elementy.'");
+          _showDialog("Starý zvětralý ukazatel hlásá:\n'Vstup na vlastní nebezpečí! Stezka střežená čtyřmi elementy.'");
         },
       ));
     } else if (widget.nodeId == 'node2') {
-      // StarĂ˝ dub
+      // Starý dub
       // Hollow/Chest (Rune dial lock 472)
       final chestOpen = state.roomStates['node2_chest_open'] == true;
       list.add(_Hotspot(
-        name: "Dutina u koĹ™enĹŻ",
+        name: "Dutina u kořenů",
         x: 0.42, y: 0.68, w: 0.18, h: 0.15,
         onTap: () {
           if (chestOpen) {
             final hasAmulet = state.roomStates['node2_has_amulet'] == true;
             if (!hasAmulet) {
               _service.updateRoomState('node2_has_amulet', true);
-              _collectItem('amulet', "Vzal jsi ze schrĂˇnky vyhaslĂ˝ kovovĂ˝ amulet.");
+              _collectItem('amulet', "Vzal jsi ze schránky vyhaslý kovový amulet.");
               _service.completeNode('node2');
             } else {
-              _showDialog("SchrĂˇnka je prĂˇzdnĂˇ.");
+              _showDialog("Schránka je prázdná.");
             }
             return;
           }
@@ -184,8 +184,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                 correctCode: "472",
                 onSolved: () {
                   _service.updateRoomState('node2_chest_open', true);
-                  _speakHeroLine("MĂˇm to! OtevĹ™elo se to.");
-                  _showDialog("đźŽ‰ Truhla v dutinÄ› cvakla a otevĹ™ela se! UvnitĹ™ leĹľĂ­ vyhaslĂ˝ kovovĂ˝ amulet.");
+                  _speakHeroLine("Mám to! Otevřelo se to.");
+                  _showDialog("🎉 Truhla v dutině cvakla a otevřela se! Uvnitř leží vyhaslý kovový amulet.");
                 },
               ),
             ),
@@ -197,11 +197,11 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       final hasStick = state.roomStates['node2_has_stick'] == true;
       if (!hasStick) {
         list.add(_Hotspot(
-          name: "SuchĂˇ vÄ›tev",
+          name: "Suchá větev",
           x: 0.15, y: 0.8, w: 0.2, h: 0.12,
           onTap: () {
             _service.updateRoomState('node2_has_stick', true);
-            _collectItem('stick', "Sebral jsi ze zemÄ› dlouhou suchou vÄ›tev. VypadĂˇ pevnÄ›, mohla by poslouĹľit jako zĂˇklad pochodnÄ›.");
+            _collectItem('stick', "Sebral jsi ze země dlouhou suchou větev. Vypadá pevně, mohla by posloužit jako základ pochodně.");
           },
         ));
       }
@@ -211,7 +211,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         name: "Kresba na kmeni",
         x: 0.42, y: 0.42, w: 0.15, h: 0.18,
         onTap: () {
-          _showDialog("Na kĹŻĹ™e stromu jsou vyrytĂ© magickĂ© symboly a pod nimi kresba dubu s vyznaÄŤenĂ˝mi tĹ™emi silnĂ˝mi vÄ›tvemi smÄ›Ĺ™ujĂ­cĂ­mi k nebi. Vedle je nĂˇpis: 'PoÄŤet vÄ›tvĂ­ na kresbÄ› ti napovĂ­ kĂłd k schrĂˇnce (kĂłd mĂˇ 3 ÄŤĂ­slice).'");
+          _showDialog("Na kůře stromu jsou vyryté magické symboly a pod nimi kresba dubu s vyznačenými třemi silnými větvemi směřujícími k nebi. Vedle je nápis: 'Počet větví na kresbě ti napoví kód k schránce (kód má 3 číslice).'");
         },
       ));
 
@@ -220,24 +220,24 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         name: "Veverka",
         x: 0.72, y: 0.32, w: 0.08, h: 0.08,
         onTap: () {
-          _speakHeroLine("JĂ©, ahoj veverko.");
-          _showDialog("Na vÄ›tvi sedĂ­ rezavĂˇ veverka, zvÄ›davÄ› se na tebe podĂ­vĂˇ, zacvrlikĂˇ a schovĂˇ se do listĂ­.");
+          _speakHeroLine("Jé, ahoj veverko.");
+          _showDialog("Na větvi sedí rezavá veverka, zvědavě se na tebe podívá, zacvrliká a schová se do listí.");
         },
       ));
     } else if (widget.nodeId == 'node3') {
-      // ZĹ™Ă­cenina chĂ˝Ĺˇe
+      // Zřícenina chýše
       if (_currentSubroom == "exterior") {
         final vinesBurned = state.roomStates['node3_vines_burned'] == true;
 
         // Vines / Door
         list.add(_Hotspot(
-          name: vinesBurned ? "Vchod do chĂ˝Ĺˇe" : "TrnitĂ© kĹ™ovĂ­",
+          name: vinesBurned ? "Vchod do chýše" : "Trnité křoví",
           x: 0.38, y: 0.32, w: 0.22, h: 0.42,
           onTap: () {
             if (vinesBurned) {
               setState(() {
                 _currentSubroom = "interior";
-                _dialogText = "Vstoupil jsi do chĂ˝Ĺˇe hajnĂ©ho. Vzduch je zatuchlĂ˝ a na zemi se povalujĂ­ starĂ© vÄ›ci.";
+                _dialogText = "Vstoupil jsi do chýše hajného. Vzduch je zatuchlý a na zemi se povalují staré věci.";
               });
               return;
             }
@@ -245,43 +245,43 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             if (_selectedItemId == 'burning_torch') {
               _service.updateRoomState('node3_vines_burned', true);
               _service.removeItem('burning_torch');
-              _speakHeroLine("MĂˇm to! TrnĂ­ hoĹ™Ă­.");
+              _speakHeroLine("Mám to! Trní hoří.");
               setState(() => _selectedItemId = null);
-              _showDialog("đź”Ą PĹ™iloĹľil jsi zapĂˇlenou pochodeĹ k ostnatĂ©mu kĹ™ovĂ­. SuchĂ© vÄ›tve okamĹľitÄ› vzplĂˇly a spĂˇlily se na uhel! Vchod do chĂ˝Ĺˇe je volnĂ˝.");
+              _showDialog("🔥 Přiložil jsi zapálenou pochodeň k ostnatému křoví. Suché větve okamžitě vzplály a spálily se na uhel! Vchod do chýše je volný.");
             } else if (_selectedItemId == 'smoldering_tinder') {
-              _speakHeroLine("Tohle zelenĂ© trnĂ­ nezapĂˇlĂ­.");
-              _showDialog("DoutnajĂ­cĂ­ troud sĂˇm o sobÄ› nestaÄŤĂ­ na zapĂˇlenĂ­ zelenĂ©ho ostnatĂ©ho kĹ™ovĂ­. PotĹ™ebujeĹˇ poĹ™ĂˇdnĂ˝ otevĹ™enĂ˝ plamen, napĹ™. hoĹ™Ă­cĂ­ pochodeĹ.");
+              _speakHeroLine("Tohle zelené trní nezapálí.");
+              _showDialog("Doutnající troud sám o sobě nestačí na zapálení zeleného ostnatého křoví. Potřebuješ pořádný otevřený plamen, např. hořící pochodeň.");
             } else if (_selectedItemId != null) {
-              _speakHeroLine("Tohle sem nepatĹ™Ă­.");
-              _showDialog("Tento pĹ™edmÄ›t ti s odklizenĂ­m kĹ™ovĂ­ nepomĹŻĹľe.");
+              _speakHeroLine("Tohle sem nepatří.");
+              _showDialog("Tento předmět ti s odklizením křoví nepomůže.");
             } else {
-              _showDialog("DveĹ™e chĂ˝Ĺˇe jsou kompletnÄ› zarostlĂ© tlustĂ˝mi ostnatĂ˝mi Ĺˇlahouny. HolĂ˝ma rukama neprojdou.");
+              _showDialog("Dveře chýše jsou kompletně zarostlé tlustými ostnatými šlahouny. Holýma rukama neprojdou.");
             }
           },
         ));
 
-        // Hadr na plotÄ› (New)
+        // Hadr na plotě (New)
         final hasCloth = state.roomStates['node3_has_cloth'] == true;
         if (!hasCloth) {
           list.add(_Hotspot(
-            name: "Hadr na plotÄ›",
+            name: "Hadr na plotě",
             x: 0.15, y: 0.65, w: 0.1, h: 0.1,
             onTap: () {
               _service.updateRoomState('node3_has_cloth', true);
-              _collectItem('cloth', "Z dĹ™evÄ›nĂ©ho plotu jsi sundal starĂ˝, olejem nasĂˇklĂ˝ hadr. Bude skvÄ›le hoĹ™et, pokud ho pĹ™ipevnĂ­Ĺˇ na vÄ›tev.");
+              _collectItem('cloth', "Z dřevěného plotu jsi sundal starý, olejem nasáklý hadr. Bude skvěle hořet, pokud ho připevníš na větev.");
             },
           ));
         }
 
-        // Lupa na oknÄ› (New)
+        // Lupa na okně (New)
         final hasLens = state.roomStates['node3_has_lens'] == true;
         if (!hasLens) {
           list.add(_Hotspot(
-            name: "Lupa na oknÄ›",
+            name: "Lupa na okně",
             x: 0.68, y: 0.48, w: 0.08, h: 0.08,
             onTap: () {
               _service.updateRoomState('node3_has_lens', true);
-              _collectItem('lens', "Na parapetu zarostlĂ©ho okna leĹľĂ­ starĂˇ prasklĂˇ lupa. Lze ji pouĹľĂ­t jako ÄŤoÄŤku ke koncentraci sluneÄŤnĂ­ch paprskĹŻ.");
+              _collectItem('lens', "Na parapetu zarostlého okna leží stará prasklá lupa. Lze ji použít jako čočku ke koncentraci slunečních paprsků.");
             },
           ));
         }
@@ -290,11 +290,11 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         final hasTinder = state.roomStates['node3_has_tinder'] == true;
         if (!hasTinder) {
           list.add(_Hotspot(
-            name: "SuchĂ˝ mech",
+            name: "Suchý mech",
             x: 0.82, y: 0.78, w: 0.1, h: 0.1,
             onTap: () {
               _service.updateRoomState('node3_has_tinder', true);
-              _collectItem('tinder', "U paty plotovĂ©ho sloupku jsi nasbĂ­ral chuchvalec suchĂ©ho troudu (mechu). VĂ˝bornĂ˝ na rozdÄ›lĂˇnĂ­ ohnÄ›.");
+              _collectItem('tinder', "U paty plotového sloupku jsi nasbíral chuchvalec suchého troudu (mechu). Výborný na rozdělání ohně.");
             },
           ));
         }
@@ -303,15 +303,15 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         // Grinding pot (shelf)
         final hasPot = state.roomStates['node3_has_pot'] == true;
         list.add(_Hotspot(
-          name: "Police se dĹľbĂˇnem (KotlĂ­k)",
+          name: "Police se džbánem (Kotlík)",
           x: 0.12, y: 0.35, w: 0.15, h: 0.2,
           onTap: () {
             if (!hasPot) {
               _service.updateRoomState('node3_has_pot', true);
-              _collectItem('pot', "Pod pĹ™evrĂˇcenĂ˝m hlinÄ›nĂ˝m dĹľbĂˇnem na polici leĹľel starĂ˝ mÄ›dÄ›nĂ˝ kotlĂ­k. HodĂ­ se na vaĹ™enĂ­ lektvarĹŻ.");
+              _collectItem('pot', "Pod převráceným hliněným džbánem na polici ležel starý měděný kotlík. Hodí se na vaření lektvarů.");
               _checkNode3Completion(state);
             } else {
-              _showDialog("Police je prĂˇzdnĂˇ.");
+              _showDialog("Police je prázdná.");
             }
           },
         ));
@@ -319,34 +319,34 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         // Well handle in drawer (New)
         final hasWellHandle = state.roomStates['node3_has_well_handle'] == true;
         list.add(_Hotspot(
-          name: "ZĂˇsuvka stolu",
+          name: "Zásuvka stolu",
           x: 0.28, y: 0.6, w: 0.22, h: 0.22,
           onTap: () {
             if (!hasWellHandle) {
               _service.updateRoomState('node3_has_well_handle', true);
-              _collectItem('well_handle', "OtevĹ™el jsi zĂˇsuvku dĂ­lenskĂ©ho stolu a naĹˇel v nĂ­ masivnĂ­ Ĺľeleznou kliku od studniÄŤnĂ­ho navijĂˇku!");
+              _collectItem('well_handle', "Otevřel jsi zásuvku dílenského stolu a našel v ní masivní železnou kliku od studničního navijáku!");
               _checkNode3Completion(state);
             } else {
-              _showDialog("ZĂˇsuvka je prĂˇzdnĂˇ.");
+              _showDialog("Zásuvka je prázdná.");
             }
           },
         ));
 
         // Diary
         list.add(_Hotspot(
-          name: "StarĂ˝ seĹˇit",
+          name: "Starý sešit",
           x: 0.42, y: 0.58, w: 0.15, h: 0.12,
           onTap: () {
-            _showDialog("ÄŚteĹˇ z DenĂ­ku hajnĂ©ho:\n'NaĹˇel jsem v baĹľinĂˇch studnu a vedle nĂ­ svatyni. Kliku od navijĂˇku studny si schovĂˇvĂˇm k sobÄ› do chĂ˝Ĺˇe do zĂˇsuvky, aby z nĂ­ nikdo cizĂ­ nepil. Studna je tÄ›ĹľkĂˇ a k vytaĹľenĂ­ vÄ›dra vyĹľaduje pĹ™esnĂ© vyvĂˇĹľenĂ­ (25 kg)...'");
+            _showDialog("Čteš z Deníku hajného:\n'Našel jsem v bažinách studnu a vedle ní svatyni. Kliku od navijáku studny si schovávám k sobě do chýše do zásuvky, aby z ní nikdo cizí nepil. Studna je těžká a k vytažení vědra vyžaduje přesné vyvážení (25 kg)...'");
           },
         ));
 
         // Chest
         list.add(_Hotspot(
-          name: "Ĺ˝eleznĂˇ truhla",
+          name: "Železná truhla",
           x: 0.72, y: 0.62, w: 0.18, h: 0.18,
           onTap: () {
-            _showDialog("StarĂˇ ĹľeleznĂˇ truhla. ZĂˇmek je rozbitĂ˝ a je zcela prĂˇzdnĂˇ.");
+            _showDialog("Stará železná truhla. Zámek je rozbitý a je zcela prázdná.");
           },
         ));
 
@@ -357,7 +357,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           onTap: () {
             setState(() {
               _currentSubroom = "exterior";
-              _dialogText = "StojĂ­Ĺˇ venku pĹ™ed chĂ˝ĹˇĂ­.";
+              _dialogText = "Stojíš venku před chýší.";
             });
           },
         ));
@@ -443,7 +443,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
     if (id1 == 'cloth' && id2 == 'stick') {
       _service.removeItem('cloth');
       _service.removeItem('stick');
-      _service.collectItem('torch'); _speakHeroLine("MĂˇm to!");
+      _service.collectItem('torch'); _speakHeroLine("Mám to!");
       _showDialog("🔧 Spojil jsi suchou větev s mastným hadrem a vyrobil jsi Nezapálenou pochodeň! 🔦");
       return true;
     }
@@ -451,7 +451,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
     if (id1 == 'smoldering_tinder' && id2 == 'torch') {
       _service.removeItem('smoldering_tinder');
       _service.removeItem('torch');
-      _service.collectItem('burning_torch'); _speakHeroLine("PodaĹ™ilo se!");
+      _service.collectItem('burning_torch'); _speakHeroLine("Podařilo se!");
       _showDialog("🔥 Pomocí doutnajícího troudu jsi úspěšně zapálil pochodeň! Nyní jasně plane. Můžeš s ní osvětlit temná místa.");
       return true;
     }
@@ -459,7 +459,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
     if (id1 == 'dirty_key' && id2 == 'oil') {
       _service.removeItem('dirty_key');
       _service.removeItem('oil');
-      _service.collectItem('fixed_key'); _speakHeroLine("MĂˇm to!");
+      _service.collectItem('fixed_key'); _speakHeroLine("Mám to!");
       _showDialog("🔧 Nanesl jsi olej na rezavý klíč a očistil ho. Získal jsi funkční Klíč od brány! 🔑");
       return true;
     }
@@ -468,7 +468,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       if (state.inventory.contains('pot')) {
         _service.removeItem('blue_mushrooms');
         _service.removeItem('pure_water');
-        _service.collectItem('potion'); _speakHeroLine("PodaĹ™ilo se!");
+        _service.collectItem('potion'); _speakHeroLine("Podařilo se!");
         _showDialog("🍵 Svařil jsi modré houby s čistou vodou v měděném kotlíku a vyrobil zářící Léčivý elixír!");
         return true;
       } else {
@@ -477,6 +477,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       }
     }
 
+    _speakHeroLine("Tohle nefunguje.");
     return false;
   }
 
@@ -517,7 +518,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             _DialogueLine(speaker: 'player', text: "Tady, vypijte tohle! Svařil jsem modré houby v destilované vodě."),
             _DialogueLine(speaker: 'npc', text: "🍵 (Lok... lok...) Oh! Ta léčivá síla... chlad stoupá do mých spánků..."),
             _DialogueLine(speaker: 'npc', text: "Horečka ustupuje! Zachránil jsi mi život, poutníku."),
-            _DialogueLine(speaker: 'npc', text: "Vezmi si tuto kliku k navijáku studny venku. Pomůže ti vytáhnout staré tajemství ze dna."),
+            _DialogueLine(speaker: 'npc', text: "Vezmi si tento Trojúhelníkový klíč, který chrání rituální oltář na konci cesty (K6)."),
             _DialogueLine(speaker: 'npc', text: "A pamatuj si úhly pro dalekohled v pevnosti (K5): Medvěd 45°, Vlk 120° a Jelen 275°. Nastav je tam."),
           ];
 
@@ -567,9 +568,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       onTap: () {
         final waterScript = [
           _DialogueLine(speaker: 'player', text: "Voda v bažině je otrávená a špinavá. Jak mám získat čistou vodu pro lektvar?"),
-          _DialogueLine(speaker: 'npc', text: "Musíš ji destilovat. V rohu mé jeskyně najdeš prázdný kotlík a měděnou trubku."),
-          _DialogueLine(speaker: 'npc', text: "Naber špinavou vodu z bažiny do kotlíku a odveď páru trubkou nad ohněm u chýše lesníka (K3)."),
-          _DialogueLine(speaker: 'player', text: "Ah, destilační přístroj! V lese u chýše je staré ohniště, tam to půjde."),
+          _DialogueLine(speaker: 'npc', text: "Venku v bažinách je stará kamenná studna. Voda v ní je čistá, ale naviják studny je zablokovaný těžkým kbelíkem a chybí mu klika."),
+          _DialogueLine(speaker: 'player', text: "Aha! Kliku ze staré chýše (K3) už mám u sebe. Použiji ji na studnu a zkusím ji vyvážit."),
         ];
         _startDialogueScript(
           "Poustevník",
@@ -1229,7 +1229,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             onTap: () {
               _service.removeItem('dirty_key');
               _service.removeItem('oil');
-              _service.collectItem('fixed_key'); _speakHeroLine("MĂˇm to!");
+              _service.collectItem('fixed_key'); _speakHeroLine("Mám to!");
               _showDialog("🔧 Nanesl jsi olej na rezavý klíč a pomocí starého pilníku na stole jsi ho pečlivě obrousil. Získal jsi čistý, funkční klíč od brány!");
             },
           ));
@@ -1309,8 +1309,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
               final wellBalanced = state.roomStates['node4_well_balanced'] == true;
               if (wellBalanced) {
                 _service.updateRoomState('node4_triangular_key_taken', true);
-                _service.collectItem('triangular_key');
-                _showDialog("⚙️ Otočil jsi klikou a bez námahy vytáhl kbelík nahoru. Na jeho dně leží těžký trojúhelníkový klíč!");
+                _collectItem('pure_water', "⚙️ Otočil jsi klikou a bez námahy vytáhl kbelík nahoru. Našel jsi v něm čistou, pramenitou vodu! Nablízku v inventáři máš i kotlík, nabral jsi ji do něj.");
               } else {
                 Navigator.push(
                   context,
@@ -1320,8 +1319,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                       onSolved: () {
                         _service.updateRoomState('node4_well_balanced', true);
                         _service.updateRoomState('node4_triangular_key_taken', true);
-                        _service.collectItem('triangular_key');
-                        _showDialog("⚙️ Vyvážil jsi protizávaží studny! Lano jde otočit lehoučce a vytáhl jsi kbelík nahoru, na jehož dně leží trojúhelníkový klíč!");
+                        _collectItem('pure_water', "⚙️ Vyvážil jsi protizávaží studny! Lano jde otočit lehoučce a vytáhl jsi kbelík nahoru s čistou pramenitou vodou! Nablízku v inventáři máš i kotlík, nabral jsi ji do něj.");
                       },
                     ),
                   ),
@@ -1454,7 +1452,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             onTap: () {
               _service.removeItem('pure_water');
               _service.removeItem('blue_mushrooms');
-              _service.collectItem('potion'); _speakHeroLine("PodaĹ™ilo se!");
+              _service.collectItem('potion'); _speakHeroLine("Podařilo se!");
               _showDialog("🍯 Svařil jsi modré houby v čisté destilované vodě v kotlíku. Získal jsi zářící modrý léčivý elixír!");
             },
           ));
@@ -1853,7 +1851,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                             ),
                           ),
 
-                          // ÄŚĂˇsticovĂ© poÄŤasĂ­ a animace na scĂ©nĂˇch
+                          // Částicové počasí a animace na scénách
                           if (widget.nodeId == 'node2')
                             const Positioned.fill(
                               child: ImmersiveWeatherParticles(particleType: 'leaves'),
@@ -1912,78 +1910,78 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                                     ),
 
                                     // 1. Left Character (NPC) - Simple Bust in Corner
-                                     if (_dialogueCharacterAsset != null)
-                                       Positioned(
-                                         left: 8,
-                                         bottom: 40,
-                                         width: 160,
-                                         height: 320,
-                                         child: IgnorePointer(
-                                           child: AnimatedOpacity(
-                                             duration: const Duration(milliseconds: 200),
-                                             opacity: _isNpcActive ? 1.0 : 0.45,
-                                             child: AnimatedContainer(
-                                               duration: const Duration(milliseconds: 200),
-                                               transform: Matrix4.identity()
-                                                 ..scale(_isNpcActive ? 1.05 : 0.95),
-                                               transformAlignment: Alignment.bottomCenter,
-                                               child: Transform(
-                                                 alignment: Alignment.center,
-                                                 transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0),
-                                                 child: ColorFiltered(
-                                                   colorFilter: const ColorFilter.matrix(<double>[
-                                                     1, 0, 0, 0, 0,
-                                                     0, 1, 0, 0, 0,
-                                                     0, 0, 1, 0, 0,
-                                                     -1, -1, -1, 3, 0,
-                                                   ]),
-                                                   child: Image.asset(
-                                                     _dialogueCharacterAsset!,
-                                                     fit: BoxFit.contain,
-                                                     alignment: Alignment.bottomCenter,
-                                                   ),
-                                                 ),
-                                               ),
-                                             ),
-                                           ),
-                                         ),
-                                       ),
- 
-                                     // 2. Right Character (Player) - Simple Bust in Corner
-                                     if (_playerCharacterAsset != null)
-                                       Positioned(
-                                         right: 8,
-                                         bottom: 40,
-                                         width: 160,
-                                         height: 320,
-                                         child: IgnorePointer(
-                                           child: AnimatedOpacity(
-                                             duration: const Duration(milliseconds: 200),
-                                             opacity: _isPlayerActive ? 1.0 : 0.45,
-                                             child: AnimatedContainer(
-                                               duration: const Duration(milliseconds: 200),
-                                               transform: Matrix4.identity()
-                                                 ..scale(_isPlayerActive ? 1.05 : 0.95),
-                                               transformAlignment: Alignment.bottomCenter,
-                                               child: ColorFiltered(
-                                                 colorFilter: const ColorFilter.matrix(<double>[
-                                                   1, 0, 0, 0, 0,
-                                                   0, 1, 0, 0, 0,
-                                                   0, 0, 1, 0, 0,
-                                                   -1, -1, -1, 3, 0,
-                                                 ]),
-                                                 child: Image.asset(
-                                                   _playerCharacterAsset!,
-                                                   fit: BoxFit.contain,
-                                                   alignment: Alignment.bottomCenter,
-                                                 ),
-                                               ),
-                                             ),
-                                           ),
-                                         ),
-                                       ),
-                                     
-                                     // 3. Dialogue Panel at the bottom
+                                    if (_dialogueCharacterAsset != null)
+                                      Positioned(
+                                        left: 8,
+                                        bottom: 40,
+                                        width: 160,
+                                        height: 320,
+                                        child: IgnorePointer(
+                                          child: AnimatedOpacity(
+                                            duration: const Duration(milliseconds: 200),
+                                            opacity: _isNpcActive ? 1.0 : 0.45,
+                                            child: AnimatedContainer(
+                                              duration: const Duration(milliseconds: 200),
+                                              transform: Matrix4.identity()
+                                                ..scale(_isNpcActive ? 1.05 : 0.95),
+                                              transformAlignment: Alignment.bottomCenter,
+                                              child: Transform(
+                                                alignment: Alignment.center,
+                                                transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0),
+                                                child: ColorFiltered(
+                                                  colorFilter: const ColorFilter.matrix(<double>[
+                                                    1, 0, 0, 0, 0,
+                                                    0, 1, 0, 0, 0,
+                                                    0, 0, 1, 0, 0,
+                                                    -1, -1, -1, 3, 0,
+                                                  ]),
+                                                  child: Image.asset(
+                                                    _dialogueCharacterAsset!,
+                                                    fit: BoxFit.contain,
+                                                    alignment: Alignment.bottomCenter,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+
+                                    // 2. Right Character (Player) - Simple Bust in Corner
+                                    if (_playerCharacterAsset != null)
+                                      Positioned(
+                                        right: 8,
+                                        bottom: 40,
+                                        width: 160,
+                                        height: 320,
+                                        child: IgnorePointer(
+                                          child: AnimatedOpacity(
+                                            duration: const Duration(milliseconds: 200),
+                                            opacity: _isPlayerActive ? 1.0 : 0.45,
+                                            child: AnimatedContainer(
+                                              duration: const Duration(milliseconds: 200),
+                                              transform: Matrix4.identity()
+                                                ..scale(_isPlayerActive ? 1.05 : 0.95),
+                                              transformAlignment: Alignment.bottomCenter,
+                                              child: ColorFiltered(
+                                                colorFilter: const ColorFilter.matrix(<double>[
+                                                  1, 0, 0, 0, 0,
+                                                  0, 1, 0, 0, 0,
+                                                  0, 0, 1, 0, 0,
+                                                  -1, -1, -1, 3, 0,
+                                                ]),
+                                                child: Image.asset(
+                                                  _playerCharacterAsset!,
+                                                  fit: BoxFit.contain,
+                                                  alignment: Alignment.bottomCenter,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    
+                                    // 3. Dialogue Panel at the bottom
                                     Positioned(
                                       left: 16,
                                       right: 16,
