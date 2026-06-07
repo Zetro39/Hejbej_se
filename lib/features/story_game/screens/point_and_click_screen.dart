@@ -1502,23 +1502,81 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             return;
           }
 
-          // Check if user has all 4 elements
-          final hasAsh = state.inventory.contains('item_ash');
-          final hasWater = state.inventory.contains('item_water') || state.inventory.contains('pure_water');
-          final hasDust = state.inventory.contains('item_dust');
-          final hasSalt = state.roomStates['node6_salt_collected'] == true || state.inventory.contains('item_salt');
+          // Get current placement status from roomStates
+          bool amuletPlaced = state.roomStates['node6_amulet_placed'] == true;
+          bool ashPlaced = state.roomStates['node6_ash_placed'] == true;
+          bool waterPlaced = state.roomStates['node6_water_placed'] == true;
+          bool dustPlaced = state.roomStates['node6_dust_placed'] == true;
+          bool saltPlaced = state.roomStates['node6_salt_placed'] == true;
 
-          if (hasAsh && hasWater && hasDust && hasSalt && state.inventory.contains('amulet')) {
-            _service.removeItem('item_ash');
-            _service.removeItem('item_dust');
-            if (state.inventory.contains('item_water')) _service.removeItem('item_water');
-            if (state.inventory.contains('pure_water')) _service.removeItem('pure_water');
-            if (state.inventory.contains('item_salt')) _service.removeItem('item_salt');
+          List<String> placedNow = [];
+
+          // Try placing amulet
+          if (!amuletPlaced && state.inventory.contains('amulet')) {
             _service.removeItem('amulet');
+            _service.updateRoomState('node6_amulet_placed', true);
+            amuletPlaced = true;
+            placedNow.add("Vyhaslý amulet 🔮");
+          }
+
+          // Try placing ash
+          if (!ashPlaced && state.inventory.contains('item_ash')) {
+            _service.removeItem('item_ash');
+            _service.updateRoomState('node6_ash_placed', true);
+            ashPlaced = true;
+            placedNow.add("Popel (Oheň) 🔥");
+          }
+
+          // Try placing water
+          final hasWater = state.inventory.contains('item_water') || state.inventory.contains('pure_water');
+          if (!waterPlaced && hasWater) {
+            if (state.inventory.contains('item_water')) {
+              _service.removeItem('item_water');
+            } else if (state.inventory.contains('pure_water')) {
+              _service.removeItem('pure_water');
+            }
+            _service.updateRoomState('node6_water_placed', true);
+            waterPlaced = true;
+            placedNow.add("Čistou vodu (Voda) 💦");
+          }
+
+          // Try placing dust
+          if (!dustPlaced && state.inventory.contains('item_dust')) {
+            _service.removeItem('item_dust');
+            _service.updateRoomState('node6_dust_placed', true);
+            dustPlaced = true;
+            placedNow.add("Prach (Vzduch) 💨");
+          }
+
+          // Try placing salt
+          if (!saltPlaced && state.inventory.contains('item_salt')) {
+            _service.removeItem('item_salt');
+            _service.updateRoomState('node6_salt_placed', true);
+            saltPlaced = true;
+            placedNow.add("Horskou sůl (Země) 🌱");
+          }
+
+          // Check if all are now placed
+          if (amuletPlaced && ashPlaced && waterPlaced && dustPlaced && saltPlaced) {
             _service.updateRoomState('node6_elements_placed', true);
-            _showDialog("🔮 Vložil jsi amulet do středu oltáře a rozmístil 4 elementy: Popel (Oheň), Vodu (Voda), Prach (Vzduch) a Horskou sůl (Země). Oltář se rozsvítil! Klikni na něj znovu a zahaj aktivaci.");
+            _showDialog("🔮 Všechny elementy i amulet byly úspěšně rozmístěny na oltář! Oltář se rozsvítil zářivým tyrkysovým světlem. Klikni na něj znovu a zahaj aktivaci.");
+            return;
+          }
+
+          if (placedNow.isNotEmpty) {
+            _showDialog("Vložil jsi do oltáře: ${placedNow.join(', ')}.\n\nStav oltáře:\n"
+                "${amuletPlaced ? '✅ Amulet' : '❌ Chybí Amulet'}\n"
+                "${ashPlaced ? '✅ Popel (Oheň)' : '❌ Chybí Popel (Oheň)'}\n"
+                "${waterPlaced ? '✅ Čistá voda (Voda)' : '❌ Chybí Čistá voda (Voda)'}\n"
+                "${dustPlaced ? '✅ Prach (Vzduch)' : '❌ Chybí Prach (Vzduch)'}\n"
+                "${saltPlaced ? '✅ Horská sůl (Země)' : '❌ Chybí Horská sůl (Země)'}");
           } else {
-            _showDialog("Oltář vyžaduje vložení vyhaslého amuletu a 4 elementů: Oheň (Popel K1), Vodu (Čistou vodu K2), Vzduch (Prach K3) a Zemi (Horskou sůl). Vrať se na mapě a najdi je!");
+            _showDialog("K oltáři jsi neměl co nového přiložit.\n\nStav oltáře:\n"
+                "${amuletPlaced ? '✅ Amulet' : '❌ Chybí Amulet'}\n"
+                "${ashPlaced ? '✅ Popel (Oheň)' : '❌ Chybí Popel (Oheň)'}\n"
+                "${waterPlaced ? '✅ Čistá voda (Voda)' : '❌ Chybí Čistá voda (Voda)'}\n"
+                "${dustPlaced ? '✅ Prach (Vzduch)' : '❌ Chybí Prach (Vzduch)'}\n"
+                "${saltPlaced ? '✅ Horská sůl (Země)' : '❌ Chybí Horská sůl (Země)'}");
           }
         },
       ));
