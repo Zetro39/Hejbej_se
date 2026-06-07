@@ -267,6 +267,23 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                     child: Column(
                       children: [
                         FloatingActionButton.small(
+                          heroTag: 'skip_walk',
+                          backgroundColor: Colors.red.shade800,
+                          foregroundColor: Colors.white,
+                          onPressed: () => _service.addMeters(6000),
+                          tooltip: 'Přeskočit veškerou chůzi (K1 - K6)',
+                          child: const Icon(Icons.fast_forward),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Přeskočit\nchůzi',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
+                            Shadow(color: Colors.black, blurRadius: 4),
+                          ]),
+                        ),
+                        const SizedBox(height: 12),
+                        FloatingActionButton.small(
                           heroTag: 'walk_100',
                           backgroundColor: Colors.lime.shade800,
                           foregroundColor: Colors.white,
@@ -274,11 +291,11 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                           tooltip: 'Simulovat +200 metrů chůze',
                           child: const Icon(Icons.add_road),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 4),
                         const Text(
                           'Simulovat\n+200 m',
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
                             Shadow(color: Colors.black, blurRadius: 4),
                           ]),
                         )

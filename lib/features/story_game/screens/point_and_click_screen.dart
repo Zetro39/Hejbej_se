@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/story_quest_model.dart';
 import '../services/story_game_service.dart';
 import 'logic_puzzles_screen.dart';
@@ -21,13 +22,30 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
   // NPC Dialogue States
   String? _dialogueCharacterName;
-  String? _dialogueCharacterAvatar;
-  List<_DialogueOption> _dialogueOptions = [];
+  String? _dialogueCharacterAsset; // Left character image (NPC)
+  String? _playerCharacterAsset;   // Right character image (Player)
+  List<_DialogueLine> _dialogueScript = [];
+  int _dialogueScriptIndex = 0;
+  List<_DialogueOption> _dialogueChoices = [];
+  String _activeCompanion = 'boy';
 
   @override
   void initState() {
     super.initState();
     _setInitialDialog();
+    _loadPlayerAvatar();
+  }
+
+  Future<void> _loadPlayerAvatar() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final companion = prefs.getString('selected_companion') ?? 'boy';
+      if (mounted) {
+        setState(() {
+          _activeCompanion = companion;
+        });
+      }
+    } catch (_) {}
   }
 
   void _setInitialDialog() {
@@ -59,21 +77,57 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
     });
   }
 
+  void _startDialogueScript(String charName, String charAsset, List<_DialogueLine> script, List<_DialogueOption> choices) {
+    setState(() {
+      _dialogueCharacterName = charName;
+      _dialogueCharacterAsset = charAsset;
+      _playerCharacterAsset = 'assets/images/$_activeCompanion.png';
+      _dialogueScript = script;
+      _dialogueScriptIndex = 0;
+      _dialogueChoices = choices;
+      if (script.isNotEmpty) {
+        _dialogText = script[0].text;
+      } else {
+        _dialogText = "";
+      }
+    });
+  }
+
+  void _onDialogueAreaTap() {
+    if (_dialogueScriptIndex < _dialogueScript.length - 1) {
+      setState(() {
+        _dialogueScriptIndex++;
+        _dialogText = _dialogueScript[_dialogueScriptIndex].text;
+      });
+    } else if (_dialogueChoices.isEmpty) {
+      _endDialogue();
+    }
+  }
+
+  bool get _isNpcActive {
+    if (_dialogueScript.isEmpty || _dialogueScriptIndex >= _dialogueScript.length) return false;
+    return _dialogueScript[_dialogueScriptIndex].speaker == 'npc';
+  }
+
+  bool get _isPlayerActive {
+    if (_dialogueScript.isEmpty || _dialogueScriptIndex >= _dialogueScript.length) return false;
+    return _dialogueScript[_dialogueScriptIndex].speaker == 'player';
+  }
+
   void _endDialogue() {
     setState(() {
       _dialogueCharacterName = null;
-      _dialogueCharacterAvatar = null;
-      _dialogueOptions = [];
+      _dialogueCharacterAsset = null;
+      _playerCharacterAsset = null;
+      _dialogueScript = [];
+      _dialogueScriptIndex = 0;
+      _dialogueChoices = [];
       _setInitialDialog();
     });
   }
 
   void _startPoustevnikDialogue(QuestState state) {
     final healed = state.roomStates['node4_hermit_healed'] == true;
-    setState(() {
-      _dialogueCharacterName = "Poustevník";
-      _dialogueCharacterAvatar = "🧙‍♂️";
-    });
     if (healed) {
       _showHealedPoustevnikDialogue(state);
     } else {
@@ -81,145 +135,258 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
     }
   }
 
-  void _showHealedPoustevnikDialogue(QuestState state) {
-    setState(() {
-      _dialogText = "Poustevník: 'Děkuji ti ještě jednou, příteli. Cítím se skvěle. Hledáš něco v těchto končinách?'";
-      _dialogueOptions = [
-        _DialogueOption(
-          text: "Co mám udělat s amuletem?",
-          onTap: () {
-            _showDialogueAnswer(
-              "Poustevník: 'Amulet leží ve starém dubu (K2). Musíš ho odemknout trojúhelníkovým klíčem ze studny. Až ho získáš, přines ho k oltáři věčnosti (K6) a vlož tam i 4 elementy.'",
-              [
-                _DialogueOption(
-                  text: "Díky, chci se zeptat na další věci.",
-                  onTap: () => _showHealedPoustevnikDialogue(state),
-                ),
-                _DialogueOption(
-                  text: "Rozumím (Odejít)",
-                  onTap: _endDialogue,
-                )
-              ]
-            );
-          },
-        ),
-        _DialogueOption(
-          text: "Jaké byly ty úhly pro dalekohled?",
-          onTap: () {
-            _showDialogueAnswer(
-              "Poustevník: 'Pamatuj si dobře úhly souhvězdí: Medvěd má úhel 45°, Vlk má 120° a Jelen 275°. Nastav je na dalekohledu v pevnosti (K5).'",
-              [
-                _DialogueOption(
-                  text: "Díky, chci se zeptat na další věci.",
-                  onTap: () => _showHealedPoustevnikDialogue(state),
-                ),
-                _DialogueOption(
-                  text: "Rozumím (Odejít)",
-                  onTap: _endDialogue,
-                )
-              ]
-            );
-          },
-        ),
-        _DialogueOption(
-          text: "Kde najdu 4 elementy?",
-          onTap: () {
-            _showDialogueAnswer(
-              "Poustevník: 'Popel (Oheň) vezmi z ohniště u chýše lesníka (K3). Destilovanou vodu (Voda) získáš uvařením vody z bažin (K4). Prach (Vzduch) setři z regálu v knihovně pevnosti (K5). A sůl (Země) najdeš přímo ve skále u oltáře (K6).'",
-              [
-                _DialogueOption(
-                  text: "Díky, chci se zeptat na další věci.",
-                  onTap: () => _showHealedPoustevnikDialogue(state),
-                ),
-                _DialogueOption(
-                  text: "Rozumím (Odejít)",
-                  onTap: _endDialogue,
-                )
-              ]
-            );
-          },
-        ),
-        _DialogueOption(
-          text: "Rozumím, jdu na to.",
-          onTap: _endDialogue,
-        ),
-      ];
-    });
-  }
-
   void _showSickPoustevnikDialogue(QuestState state) {
-    setState(() {
-      _dialogText = "Poustevník silně blouzní na lůžku. Jeho kůže pálí a tichým hlasem šeptá nesrozumitelná slova.";
-      _dialogueOptions = [];
+    final script = [
+      _DialogueLine(speaker: 'npc', text: "Uch... ten oheň v mých žilách... pálí mě celá hruď..."),
+      _DialogueLine(speaker: 'player', text: "Haló? Slyšíte mě? Jste v pořádku? Co vás trápí?"),
+      _DialogueLine(speaker: 'npc', text: "Och... poutník... Jsem poustevník z této mlžné bažiny. Horečka mě trápí... pálí mě tělo..."),
+      _DialogueLine(speaker: 'player', text: "Jak vám mohu pomoci? Existuje nějaký lék?"),
+      _DialogueLine(speaker: 'npc', text: "Lektvar... modré bažinné houby... a čistá destilovaná voda. Bez nich horečka neustoupí..."),
+    ];
 
-      if (state.inventory.contains('potion')) {
-        _dialogueOptions.add(_DialogueOption(
-          text: "Podat léčivý elixír 🍵",
-          onTap: () {
-            _service.removeItem('potion');
-            _service.updateRoomState('node4_hermit_healed', true);
-            _service.collectItem('well_handle');
-            setState(() {
-              _selectedItemId = null;
-            });
-            final updatedState = _service.stateNotifier.value;
-            _showDialogueAnswer(
-              "Poustevník: 'Ahhh... ten chladivý elixír! Moje horečka ustupuje... zachránil jsi mě, poutníku! Vezmi si tuto kliku k navijáku studny venku, pomůže ti vytáhnout starý klíč ze dna. A pamatuj si úhly dalekohledu: Medvěd 45°, Vlk 120°, Jelen 275°.'",
-              [
-                _DialogueOption(
-                  text: "Děkuji. Chci se zeptat na další věci.",
-                  onTap: () => _showHealedPoustevnikDialogue(updatedState),
-                ),
-                _DialogueOption(
-                  text: "Díky, jdu dál.",
-                  onTap: _endDialogue,
-                )
-              ]
-            );
-          },
-        ));
-      }
+    final choices = <_DialogueOption>[];
 
-      _dialogueOptions.add(_DialogueOption(
-        text: "Jak tě mohu vyléčit?",
+    if (state.inventory.contains('potion')) {
+      choices.add(_DialogueOption(
+        text: "Podat léčivý elixír 🍵",
         onTap: () {
-          _showDialogueAnswer(
-            "Poustevník: 'Potřebuji léčivý elixír... Modré bažinné houby... a čistou destilovanou vodu. Bez nich ta horečka neustoupí...'",
+          _service.removeItem('potion');
+          _service.updateRoomState('node4_hermit_healed', true);
+          _service.collectItem('well_handle');
+          setState(() {
+            _selectedItemId = null;
+          });
+          final updatedState = _service.stateNotifier.value;
+
+          final healScript = [
+            _DialogueLine(speaker: 'player', text: "Tady, vypijte tohle! Svařil jsem modré houby v destilované vodě."),
+            _DialogueLine(speaker: 'npc', text: "🍵 (Lok... lok...) Oh! Ta léčivá síla... chlad stoupá do mých spánků..."),
+            _DialogueLine(speaker: 'npc', text: "Horečka ustupuje! Zachránil jsi mi život, poutníku."),
+            _DialogueLine(speaker: 'npc', text: "Vezmi si tuto kliku k navijáku studny venku. Pomůže ti vytáhnout staré tajemství ze dna."),
+            _DialogueLine(speaker: 'npc', text: "A pamatuj si úhly pro dalekohled v pevnosti (K5): Medvěd 45°, Vlk 120° a Jelen 275°. Nastav je tam."),
+          ];
+
+          _startDialogueScript(
+            "Poustevník",
+            "assets/images/story_npc_hermit.png",
+            healScript,
             [
               _DialogueOption(
-                text: "Kde najdu ingredience?",
-                onTap: () {
-                  _showDialogueAnswer(
-                    "Poustevník: 'Houby rostou ve svatyni v bažinách (tam vpravo). Svatyně je chráněna posvátnými vahami. Čistou vodu získáš destilací otrávené vody z bažin nad ohništěm u chýše lesníka. Kotlík a trubku najdeš tady u mě v jeskyni.'",
-                    [
-                      _DialogueOption(
-                        text: "Rozumím (Zpět)",
-                        onTap: () => _showSickPoustevnikDialogue(state),
-                      )
-                    ]
-                  );
-                }
+                text: "Chci se zeptat na další věci.",
+                onTap: () => _showHealedPoustevnikDialogue(updatedState),
               ),
               _DialogueOption(
-                text: "Pokusím se (Zpět)",
-                onTap: () => _showSickPoustevnikDialogue(state),
+                text: "Děkuji, jdu dál.",
+                onTap: _endDialogue,
               )
             ]
           );
         },
       ));
+    }
 
-      _dialogueOptions.add(_DialogueOption(
-        text: "Odejít",
+    choices.add(_DialogueOption(
+      text: "Kde najdu ty modré houby?",
+      onTap: () {
+        final mushroomScript = [
+          _DialogueLine(speaker: 'player', text: "Kde přesně rostou ty modré houby? Prohledal jsem okolí a nic jsem neviděl."),
+          _DialogueLine(speaker: 'npc', text: "Rostou ve svatyni v bažinách (cesta vpravo). Ale svatyně je chráněna starobylými vahami."),
+          _DialogueLine(speaker: 'npc', text: "Musíš na váhách vyrovnat váhu soch lesních zvířat. Teprve pak se ti houby odhalí."),
+        ];
+        _startDialogueScript(
+          "Poustevník",
+          "assets/images/story_npc_hermit.png",
+          mushroomScript,
+          [
+            _DialogueOption(
+              text: "Rozumím (Zpět)",
+              onTap: () => _showSickPoustevnikDialogue(state),
+            )
+          ]
+        );
+      },
+    ));
+
+    choices.add(_DialogueOption(
+      text: "Kde získám čistou vodu?",
+      onTap: () {
+        final waterScript = [
+          _DialogueLine(speaker: 'player', text: "Voda v bažině je otrávená a špinavá. Jak mám získat čistou vodu pro lektvar?"),
+          _DialogueLine(speaker: 'npc', text: "Musíš ji destilovat. V rohu mé jeskyně najdeš prázdný kotlík a měděnou trubku."),
+          _DialogueLine(speaker: 'npc', text: "Naber špinavou vodu z bažiny do kotlíku a odveď páru trubkou nad ohněm u chýše lesníka (K3)."),
+          _DialogueLine(speaker: 'player', text: "Ah, destilační přístroj! V lese u chýše je staré ohniště, tam to půjde."),
+        ];
+        _startDialogueScript(
+          "Poustevník",
+          "assets/images/story_npc_hermit.png",
+          waterScript,
+          [
+            _DialogueOption(
+              text: "Rozumím (Zpět)",
+              onTap: () => _showSickPoustevnikDialogue(state),
+            )
+          ]
+        );
+      },
+    ));
+
+    choices.add(_DialogueOption(
+      text: "Proč žijete v této bažině? (Flavor 💬)",
+      onTap: () {
+        final flavorScript = [
+          _DialogueLine(speaker: 'player', text: "Proč vlastně žijete sám v této nehostinné bažině? Není to tu nebezpečné?"),
+          _DialogueLine(speaker: 'npc', text: "Nehostinné? Možná. Ale má to své výhody. Žádní lidé, žádný hluk... a hlavně žádné daně!"),
+          _DialogueLine(speaker: 'npc', text: "Svatyně v bažinách ukrývá prastaré síly. Jsem jejím strážcem, i když teď spíše pacientem..."),
+          _DialogueLine(speaker: 'npc', text: "A navíc, komáři jsou tu sice velcí jako vrabci, ale když se s nimi spřátelíš, dají ti pokoj."),
+          _DialogueLine(speaker: 'player', text: "Spřátelit se s komáry? To zní docela šíleně."),
+          _DialogueLine(speaker: 'npc', text: "Věř mi, stačí jim obětovat trochu cukru a budou tě doprovázet jako malá bzučící armáda!"),
+        ];
+        _startDialogueScript(
+          "Poustevník",
+          "assets/images/story_npc_hermit.png",
+          flavorScript,
+          [
+            _DialogueOption(
+              text: "Zajímavé (Zpět)",
+              onTap: () => _showSickPoustevnikDialogue(state),
+            )
+          ]
+        );
+      },
+    ));
+
+    choices.add(_DialogueOption(
+      text: "Pokusím se ty věci sehnat.",
+      onTap: _endDialogue,
+    ));
+
+    _startDialogueScript(
+      "Poustevník",
+      "assets/images/story_npc_hermit.png",
+      script,
+      choices,
+    );
+  }
+
+  void _showHealedPoustevnikDialogue(QuestState state) {
+    final script = [
+      _DialogueLine(speaker: 'npc', text: "Děkuji ti ještě jednou, příteli. Cítím se skvěle. Jak ti mohu na tvé cestě pomoci?"),
+      _DialogueLine(speaker: 'player', text: "Rád vás vidím na nohou. Potřeboval bych nějaké rady ohledně své výpravy."),
+    ];
+
+    final choices = [
+      _DialogueOption(
+        text: "Co mám udělat s amuletem?",
+        onTap: () {
+          final amuletScript = [
+            _DialogueLine(speaker: 'player', text: "Co mám udělat s amuletem strážců? Mám ho, ale je úplně vyhaslý."),
+            _DialogueLine(speaker: 'npc', text: "Amulet leží zamčený v dutině starého dubu (K2). Musíš ho odemknout trojúhelníkovým klíčem ze studny."),
+            _DialogueLine(speaker: 'npc', text: "Jakmile ho budeš mít, přines ho k oltáři věčnosti na vrcholku skály (K6)."),
+            _DialogueLine(speaker: 'npc', text: "Budeš k tomu potřebovat shromáždit 4 elementy a umístit je do slotů oltáře pro rituál."),
+          ];
+          _startDialogueScript(
+            "Poustevník",
+            "assets/images/story_npc_hermit.png",
+            amuletScript,
+            [
+              _DialogueOption(
+                text: "Rozumím (Zpět)",
+                onTap: () => _showHealedPoustevnikDialogue(state),
+              )
+            ]
+          );
+        },
+      ),
+      _DialogueOption(
+        text: "Jaké byly ty úhly pro dalekohled?",
+        onTap: () {
+          final angleScript = [
+            _DialogueLine(speaker: 'player', text: "Mohl byste mi zopakovat úhly souhvězdí pro dalekohled v pevnosti?"),
+            _DialogueLine(speaker: 'npc', text: "Jistě. Musíš dalekohled otočit na tři souhvězdí v tomto přesném pořadí:"),
+            _DialogueLine(speaker: 'npc', text: "První je Medvěd (úhel 45°), druhý je Vlk (úhel 120°) a třetí Jelen (úhel 275°)."),
+            _DialogueLine(speaker: 'player', text: "Medvěd 45, Vlk 120, Jelen 275. Pamatuji si."),
+            _DialogueLine(speaker: 'npc', text: "Správně. Jakmile tyto úhly nastavíš, paprsek světla odemkne průsmyk k oltáři."),
+          ];
+          _startDialogueScript(
+            "Poustevník",
+            "assets/images/story_npc_hermit.png",
+            angleScript,
+            [
+              _DialogueOption(
+                text: "Rozumím (Zpět)",
+                onTap: () => _showHealedPoustevnikDialogue(state),
+              )
+            ]
+          );
+        },
+      ),
+      _DialogueOption(
+        text: "Kde najdu ty 4 elementy?",
+        onTap: () {
+          final elementScript = [
+            _DialogueLine(speaker: 'player', text: "Kde najdu ty 4 elementy, které oltář vyžaduje?"),
+            _DialogueLine(speaker: 'npc', text: "Všechny leží na místech, která jsi již navštívil nebo navštívíš:"),
+            _DialogueLine(speaker: 'npc', text: "Popel (Oheň) vezmi z ohniště u chýše lesníka (K3)."),
+            _DialogueLine(speaker: 'npc', text: "Destilovanou vodu (Voda) získáš uvařením vody z bažin (K4)."),
+            _DialogueLine(speaker: 'npc', text: "Prach (Vzduch) setři ze starého regálu v knihovně pevnosti (K5)."),
+            _DialogueLine(speaker: 'npc', text: "A horskou sůl (Země) najdeš přímo ve skalní trhlině u oltáře (K6)."),
+            _DialogueLine(speaker: 'player', text: "Takže se musím vracet a posbírat je do amuletu. Dobře."),
+          ];
+          _startDialogueScript(
+            "Poustevník",
+            "assets/images/story_npc_hermit.png",
+            elementScript,
+            [
+              _DialogueOption(
+                text: "Rozumím (Zpět)",
+                onTap: () => _showHealedPoustevnikDialogue(state),
+              )
+            ]
+          );
+        },
+      ),
+      _DialogueOption(
+        text: "Máte nějakou historku o tomto lese? (Flavor 💬)",
+        onTap: () {
+          final storyScript = [
+            _DialogueLine(speaker: 'player', text: "Žijete tu dlouho. Máte nějakou zajímavou historku o tomto lese?"),
+            _DialogueLine(speaker: 'npc', text: "Kdysi tu prý žil lesník, který se pokusil ochočit divočáka. Dal mu jméno 'Kvík' a krmil ho jen borůvkami."),
+            _DialogueLine(speaker: 'npc', text: "Kvík nakonec vyrostl do velikosti medvěda a začal se chovat jako přerostlé štěně."),
+            _DialogueLine(speaker: 'npc', text: "Chudák lesník musel z chýše utéct, protože ho Kvík neustále olizoval a shazoval na zem radostí, kdykoliv se vrátil z lesa."),
+            _DialogueLine(speaker: 'player', text: "To zní docela legračně."),
+            _DialogueLine(speaker: 'npc', text: "Možná ano, ale když tě olízne 300kilový kanec s borůvkovým dechem, smích tě rychle přejde!"),
+          ];
+          _startDialogueScript(
+            "Poustevník",
+            "assets/images/story_npc_hermit.png",
+            storyScript,
+            [
+              _DialogueOption(
+                text: "Pobavilo mě to (Zpět)",
+                onTap: () => _showHealedPoustevnikDialogue(state),
+              )
+            ]
+          );
+        },
+      ),
+      _DialogueOption(
+        text: "Rozumím, jdu na to.",
         onTap: _endDialogue,
-      ));
-    });
+      ),
+    ];
+
+    _startDialogueScript(
+      "Poustevník",
+      "assets/images/story_npc_hermit.png",
+      script,
+      choices,
+    );
   }
 
   void _startHvezdopravecDialogue(QuestState state) {
     setState(() {
       _dialogueCharacterName = "Hvězdopravec";
-      _dialogueCharacterAvatar = "👴";
+      _dialogueCharacterAsset = "assets/images/story_npc_astronomer.png";
     });
 
     final solved = state.roomStates['node5_puzzle_solved'] == true;
@@ -231,139 +398,235 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
   }
 
   void _showSolvedHvezdopravecDialogue(QuestState state) {
-    setState(() {
-      _dialogText = "Hvězdopravec: 'Díky tvému seřízení dalekohledu se cesta otevřela! Hvězdné světlo ukázalo na horský průsmyk.'";
-      _dialogueOptions = [
-        _DialogueOption(
-          text: "Jak najdu ty elementy pro oltář?",
-          onTap: () {
-            _showDialogueAnswer(
-              "Hvězdopravec: 'Musíš shromáždit čtyři elementy: Popel (Oheň) z ohniště v lese, vodu (Voda) z bažin, prach (Vzduch) z knihovny za mnou a sůl (Země) přímo ve skalách u oltáře. Vlož je do amuletu a pak na oltář.'",
-              [
-                _DialogueOption(
-                  text: "Díky (Zpět)",
-                  onTap: () => _showSolvedHvezdopravecDialogue(state),
-                )
-              ]
-            );
-          },
-        ),
-        _DialogueOption(
-          text: "Hodně štěstí při pozorování.",
-          onTap: _endDialogue,
-        ),
-      ];
-    });
+    final script = [
+      _DialogueLine(speaker: 'npc', text: "Úžasné! Dalekohled je seřízen a hvězdný paprsek ukazuje na horský průsmyk."),
+      _DialogueLine(speaker: 'player', text: "Díky tomu se cesta k oltáři otevřela. Jdu tam dokončit rituál."),
+    ];
+
+    final choices = [
+      _DialogueOption(
+        text: "Jak najdu ty elementy pro oltář?",
+        onTap: () {
+          final elementsScript = [
+            _DialogueLine(speaker: 'player', text: "Kde najdu ty elementy, které musím umístit na oltář?"),
+            _DialogueLine(speaker: 'npc', text: "Hledej popel v ohništi u chýše lesníka (K3), vodu z bažiny (K4), prach ze starého regálu za mnou (K5) a sůl přímo ve skalách u oltáře (K6)."),
+          ];
+          _startDialogueScript(
+            "Hvězdopravec",
+            "assets/images/story_npc_astronomer.png",
+            elementsScript,
+            [
+              _DialogueOption(
+                text: "Díky (Zpět)",
+                onTap: () => _showSolvedHvezdopravecDialogue(state),
+              )
+            ]
+          );
+        },
+      ),
+      _DialogueOption(
+        text: "Hodně štěstí při pozorování.",
+        onTap: _endDialogue,
+      )
+    ];
+
+    _startDialogueScript(
+      "Hvězdopravec",
+      "assets/images/story_npc_astronomer.png",
+      script,
+      choices,
+    );
   }
 
   void _showUnsolvedHvezdopravecDialogue(QuestState state) {
-    setState(() {
-      _dialogText = "Hvězdopravec: 'Ach, mé staré oči už neslouží a navíc mi chybí čočka dalekohledu! Dával jsem ji někam k rytířské soše venku na nádvoří, ale ta se otočila a schovala ji. Pomůžeš mi ji najít a dalekohled seřídit?'";
-      _dialogueOptions = [];
+    final script = [
+      _DialogueLine(speaker: 'npc', text: "Hvězdy se pohybují... ale já nevidím vůbec nic! Moje staré oči už neslouží..."),
+      _DialogueLine(speaker: 'player', text: "Dobrý den. Co se stalo? Mohu vám nějak pomoci?"),
+      _DialogueLine(speaker: 'npc', text: "Ztratil jsem čočku ze svého astronomického dalekohledu! Dával jsem ji ven na nádvoří k soše rytíře..."),
+      _DialogueLine(speaker: 'npc', text: "Ale rytíř se otočil a schovala ji pod tvrdou pryskyřici. Bez ní dalekohled neseřídím."),
+    ];
 
-      final lensPlaced = state.roomStates['node5_lens_placed'] == true;
-      if (!lensPlaced && state.inventory.contains('clean_lens')) {
-        _dialogueOptions.add(_DialogueOption(
-          text: "Předat vyčištěnou čočku 🔍",
-          onTap: () {
-            _service.removeItem('clean_lens');
-            _service.updateRoomState('node5_lens_placed', true);
-            setState(() {
-              _selectedItemId = null;
-            });
-            final updatedState = _service.stateNotifier.value;
-            _showDialogueAnswer(
-              "Hvězdopravec: 'Úžasné! Čočka pasuje dokonale. Nyní musíme dalekohled otočit na souhvězdí Medvěda, Vlka a Jelena. Znáš jejich úhly? Poustevník z bažin by ti je mohl prozradit.'",
-              [
-                _DialogueOption(
-                  text: "Jaké úhly mám nastavit?",
-                  onTap: () {
-                    _showDialogueAnswer(
-                      "Hvězdopravec: 'Pokud ti je poustevník neřekl, budeš se muset vrátit do jeho jeskyně v bažinách (K4). Jakmile je budeš vědět, klikni na dalekohled a zadej je.'",
-                      [
-                        _DialogueOption(
-                          text: "Rozumím (Zpět)",
-                          onTap: () => _showUnsolvedHvezdopravecDialogue(updatedState),
-                        )
-                      ]
-                    );
-                  },
-                ),
-                _DialogueOption(
-                  text: "Půjdu se podívat (Ukončit)",
-                  onTap: _endDialogue,
-                )
-              ]
-            );
-          },
-        ));
-      }
+    final choices = <_DialogueOption>[];
 
-      if (!lensPlaced) {
-        _dialogueOptions.add(_DialogueOption(
-          text: "Jak otočím tu rytířskou sochu?",
-          onTap: () {
-            _showDialogueAnswer(
-              "Hvězdopravec: 'Socha rytíře na nádvoří reaguje na vložení kamenného meče. Ten je zamčený ve staré zbrojnici venku na nádvoří.'",
-              [
-                _DialogueOption(
-                  text: "Kde je klíč od zbrojnice?",
-                  onTap: () {
-                    _showDialogueAnswer(
-                      "Hvězdopravec: 'Klíč od zbrojnice jsem schoval v této knihovně za knihy na polici. Abys ho získal, musíš ty knihy na polici seřadit abecedně od A do Z.'",
-                      [
-                        _DialogueOption(
-                          text: "Rozumím (Zpět)",
-                          onTap: () => _showUnsolvedHvezdopravecDialogue(state),
-                        )
-                      ]
-                    );
-                  },
-                ),
-                _DialogueOption(
-                  text: "A co kyselina na pryskyřici?",
-                  onTap: () {
-                    _showDialogueAnswer(
-                      "Hvězdopravec: 'Až otevřeš zbrojnici, najdeš tam kamenný meč i lahvičku s kyselinou. Ta kyselina rozpustí pryskyřici, ve které je čočka uvízlá.'",
-                      [
-                        _DialogueOption(
-                          text: "Rozumím (Zpět)",
-                          onTap: () => _showUnsolvedHvezdopravecDialogue(state),
-                        )
-                      ]
-                    );
-                  },
-                ),
-                _DialogueOption(
-                  text: "Děkuji (Zpět)",
-                  onTap: () => _showUnsolvedHvezdopravecDialogue(state),
-                ),
-              ]
-            );
-          },
-        ));
-      } else {
-        _dialogueOptions.add(_DialogueOption(
-          text: "Jaké úhly mám nastavit?",
-          onTap: () {
-            _showDialogueAnswer(
-              "Hvězdopravec: 'Musíme dalekohled natočit na tři souhvězdí: Medvěda, Vlka a Jelena. Pokud neznáš úhly, zajdi za poustevníkem v jeskyni (K4).'",
-              [
-                _DialogueOption(
-                  text: "Rozumím (Zpět)",
-                  onTap: () => _showUnsolvedHvezdopravecDialogue(state),
-                )
-              ]
-            );
-          },
-        ));
-      }
+    final lensPlaced = state.roomStates['node5_lens_placed'] == true;
+    if (!lensPlaced && state.inventory.contains('clean_lens')) {
+      choices.add(_DialogueOption(
+        text: "Předat vyčištěnou čočku 🔍",
+        onTap: () {
+          _service.removeItem('clean_lens');
+          _service.updateRoomState('node5_lens_placed', true);
+          setState(() {
+            _selectedItemId = null;
+          });
+          final updatedState = _service.stateNotifier.value;
 
-      _dialogueOptions.add(_DialogueOption(
-        text: "Odejít",
-        onTap: _endDialogue,
+          final placeScript = [
+            _DialogueLine(speaker: 'player', text: "Tady je ta čočka, vyčistil jsem ji kyselinou od té pryskyřice."),
+            _DialogueLine(speaker: 'npc', text: "Úžasné! Pasuje dokonale. Moje staré oči opět uvidí hvězdy."),
+            _DialogueLine(speaker: 'npc', text: "Nyní musíme dalekohled otočit na souhvězdí: Medvěda, Vlka a Jelena. Znáš jejich úhly?"),
+            _DialogueLine(speaker: 'npc', text: "Poustevník z bažin by ti je mohl prozradit, pokud jsi ho zachránil."),
+          ];
+
+          _startDialogueScript(
+            "Hvězdopravec",
+            "assets/images/story_npc_astronomer.png",
+            placeScript,
+            [
+              _DialogueOption(
+                text: "Jaké úhly mám nastavit?",
+                onTap: () {
+                  final anglesScript = [
+                    _DialogueLine(speaker: 'player', text: "Jaké úhly dalekohledu se mají nastavit? Poustevník mi je řekl."),
+                    _DialogueLine(speaker: 'npc', text: "Pokud je víš, klikni na dalekohled a zadej je. Měly by to být úhly pro Medvěda, Vlka a Jelena."),
+                    _DialogueLine(speaker: 'npc', text: "Pokud ne, budeš se muset vrátit do jeskyně v bažinách (K4) a zeptat se ho."),
+                  ];
+                  _startDialogueScript(
+                    "Hvězdopravec",
+                    "assets/images/story_npc_astronomer.png",
+                    anglesScript,
+                    [
+                      _DialogueOption(
+                        text: "Rozumím (Zpět)",
+                        onTap: () => _showUnsolvedHvezdopravecDialogue(updatedState),
+                      )
+                    ]
+                  );
+                },
+              ),
+              _DialogueOption(
+                text: "Rozumím, jdu na to.",
+                onTap: _endDialogue,
+              )
+            ]
+          );
+        },
       ));
-    });
+    }
+
+    if (!lensPlaced) {
+      choices.add(_DialogueOption(
+        text: "Jak otočím tu rytířskou sochu?",
+        onTap: () {
+          final statueScript = [
+            _DialogueLine(speaker: 'player', text: "Jak mohu otočit tu sochu rytíře na nádvoří, aby odhalila čočku?"),
+            _DialogueLine(speaker: 'npc', text: "Socha rytíře chránící pevnost reaguje na vložení Kamenného meče do rukou."),
+            _DialogueLine(speaker: 'npc', text: "Ten je zamčený ve zbrojnici venku na nádvoří. Ale klíč od zbrojnice jsem někam schoval..."),
+          ];
+          _startDialogueScript(
+            "Hvězdopravec",
+            "assets/images/story_npc_astronomer.png",
+            statueScript,
+            [
+              _DialogueOption(
+                text: "Kde je klíč od zbrojnice?",
+                onTap: () {
+                  final keyScript = [
+                    _DialogueLine(speaker: 'player', text: "Kam jste ten klíč od zbrojnice schoval? Bez něj se dovnitř nedostanu."),
+                    _DialogueLine(speaker: 'npc', text: "Schoval jsem ho tady v knihovně za knihy na polici. Je tam šifra."),
+                    _DialogueLine(speaker: 'npc', text: "Musíš seřadit knihy na polici abecedně od A do Z, teprve pak klíč vypadne."),
+                  ];
+                  _startDialogueScript(
+                    "Hvězdopravec",
+                    "assets/images/story_npc_astronomer.png",
+                    keyScript,
+                    [
+                      _DialogueOption(
+                        text: "Rozumím (Zpět)",
+                        onTap: () => _showUnsolvedHvezdopravecDialogue(state),
+                      )
+                    ]
+                  );
+                },
+              ),
+              _DialogueOption(
+                text: "Jak vyčistím tu čočku?",
+                onTap: () {
+                  final cleanScript = [
+                    _DialogueLine(speaker: 'player', text: "Čočka na soše je zalitá tvrdou stromovou pryskyřicí. Jak ji dostanu dolů?"),
+                    _DialogueLine(speaker: 'npc', text: "Pryskyřice je strašně tvrdá, ale rozpustí ji silná kyselina."),
+                    _DialogueLine(speaker: 'npc', text: "Lahvička s kyselinou leží ve zbrojnici, hned vedle kamenného meče. Až ji odemkneš, vezmi obojí."),
+                  ];
+                  _startDialogueScript(
+                    "Hvězdopravec",
+                    "assets/images/story_npc_astronomer.png",
+                    cleanScript,
+                    [
+                      _DialogueOption(
+                        text: "Rozumím (Zpět)",
+                        onTap: () => _showUnsolvedHvezdopravecDialogue(state),
+                      )
+                    ]
+                  );
+                },
+              ),
+              _DialogueOption(
+                text: "Zpět",
+                onTap: () => _showUnsolvedHvezdopravecDialogue(state),
+              )
+            ]
+          );
+        },
+      ));
+    } else {
+      choices.add(_DialogueOption(
+        text: "Jaké úhly mám nastavit?",
+        onTap: () {
+          final anglesScript = [
+            _DialogueLine(speaker: 'player', text: "Jaké úhly dalekohledu se mají nastavit? Zapomněl jsem je."),
+            _DialogueLine(speaker: 'npc', text: "Musíme dalekohled natočit na tři souhvězdí: Medvěda, Vlka a Jelena. Pokud neznáš úhly, zajdi za poustevníkem (K4)."),
+          ];
+          _startDialogueScript(
+            "Hvězdopravec",
+            "assets/images/story_npc_astronomer.png",
+            anglesScript,
+            [
+              _DialogueOption(
+                text: "Rozumím (Zpět)",
+                onTap: () => _showUnsolvedHvezdopravecDialogue(state),
+              )
+            ]
+          );
+        },
+      ));
+    }
+
+    choices.add(_DialogueOption(
+      text: "Proč studujete hvězdy v pevnosti? (Flavor 💬)",
+      onTap: () {
+        final flavorScript = [
+          _DialogueLine(speaker: 'player', text: "Proč vlastně studujete hvězdy v této staré opuštěné pevnosti? Není to nepohodlné?"),
+          _DialogueLine(speaker: 'npc', text: "Nepohodlné? Trochu. Pevnost byla postavena přímo na silném magickém uzlu."),
+          _DialogueLine(speaker: 'npc', text: "Hvězdná obloha je odtud nejjasnější. Hvězdy mi včera v noci pošeptaly úžasné tajemství."),
+          _DialogueLine(speaker: 'player', text: "Opravdu? Jaké tajemství? Souvisí to s amuletem?"),
+          _DialogueLine(speaker: 'npc', text: "Ne, pošeptaly mi, že zítra bude pršet. Jen mi zapomněly říct na kterém místě na zemi."),
+          _DialogueLine(speaker: 'player', text: "Takže ta předpověď je vlastně úplně k ničemu."),
+          _DialogueLine(speaker: 'npc', text: "Kdepak! Aspoň vím, že někdo na tomto světě by si měl vzít deštník!"),
+        ];
+        _startDialogueScript(
+          "Hvězdopravec",
+          "assets/images/story_npc_astronomer.png",
+          flavorScript,
+          [
+            _DialogueOption(
+              text: "Dobrá úvaha (Zpět)",
+              onTap: () => _showUnsolvedHvezdopravecDialogue(state),
+            )
+          ]
+        );
+      },
+    ));
+
+    choices.add(_DialogueOption(
+      text: "Pokusím se to vyřešit.",
+      onTap: _endDialogue,
+    ));
+
+    _startDialogueScript(
+      "Hvězdopravec",
+      "assets/images/story_npc_astronomer.png",
+      script,
+      choices,
+    );
   }
 
   // Get active hotspots for current room
@@ -1191,84 +1454,221 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                               ),
                             );
                           }),
+
+                          // Visual Novel Dialogue Overlay
+                          if (_dialogueCharacterName != null)
+                            Positioned.fill(
+                              child: GestureDetector(
+                                onTap: _onDialogueAreaTap,
+                                child: Container(
+                                  color: Colors.black.withOpacity(0.55),
+                                  child: Stack(
+                                    children: [
+                                      // 1. Left Character (NPC)
+                                      if (_dialogueCharacterAsset != null)
+                                        Positioned(
+                                          left: 16,
+                                          bottom: 0,
+                                          width: width * 0.45,
+                                          height: height * 0.7,
+                                          child: AnimatedOpacity(
+                                            duration: const Duration(milliseconds: 200),
+                                            opacity: _isNpcActive ? 1.0 : 0.45,
+                                            child: AnimatedContainer(
+                                              duration: const Duration(milliseconds: 200),
+                                              transform: Matrix4.identity()
+                                                ..scale(_isNpcActive ? 1.05 : 0.95),
+                                              transformAlignment: Alignment.bottomCenter,
+                                              child: Transform(
+                                                alignment: Alignment.center,
+                                                transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0), // horizontal flip so NPC faces player on right
+                                                child: ColorFiltered(
+                                                  colorFilter: const ColorFilter.matrix(<double>[
+                                                    1, 0, 0, 0, 0,
+                                                    0, 1, 0, 0, 0,
+                                                    0, 0, 1, 0, 0,
+                                                    -1, -1, -1, 3, 0, // chromakey out pure white background
+                                                  ]),
+                                                  child: Image.asset(
+                                                    _dialogueCharacterAsset!,
+                                                    fit: BoxFit.contain,
+                                                    alignment: Alignment.bottomLeft,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+
+                                      // 2. Right Character (Player)
+                                      if (_playerCharacterAsset != null)
+                                        Positioned(
+                                          right: 16,
+                                          bottom: 0,
+                                          width: width * 0.45,
+                                          height: height * 0.7,
+                                          child: AnimatedOpacity(
+                                            duration: const Duration(milliseconds: 200),
+                                            opacity: _isPlayerActive ? 1.0 : 0.45,
+                                            child: AnimatedContainer(
+                                              duration: const Duration(milliseconds: 200),
+                                              transform: Matrix4.identity()
+                                                ..scale(_isPlayerActive ? 1.05 : 0.95),
+                                              transformAlignment: Alignment.bottomCenter,
+                                              child: Image.asset(
+                                                _playerCharacterAsset!,
+                                                fit: BoxFit.contain,
+                                                alignment: Alignment.bottomRight,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+
+                                      // 3. Speech Bubble (Upper area)
+                                      if (_dialogueScript.isNotEmpty && _dialogueScriptIndex < _dialogueScript.length)
+                                        Positioned(
+                                          top: height * 0.08,
+                                          left: 16,
+                                          right: 16,
+                                          child: _isNpcActive
+                                              ? Align(
+                                                  alignment: Alignment.centerLeft,
+                                                  child: Container(
+                                                    constraints: BoxConstraints(maxWidth: width * 0.75),
+                                                    padding: const EdgeInsets.all(16),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.grey.shade950.withOpacity(0.95),
+                                                      borderRadius: const BorderRadius.only(
+                                                        topLeft: Radius.circular(16),
+                                                        topRight: Radius.circular(16),
+                                                        bottomRight: Radius.circular(16),
+                                                      ),
+                                                      border: Border.all(color: Colors.lime.shade600, width: 2),
+                                                    ),
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          _dialogueCharacterName ?? "NPC",
+                                                          style: TextStyle(
+                                                            color: Colors.lime.shade400,
+                                                            fontWeight: FontWeight.bold,
+                                                            fontSize: 12,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 6),
+                                                        Text(
+                                                          _dialogText,
+                                                          style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.45),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                )
+                                              : Align(
+                                                  alignment: Alignment.centerRight,
+                                                  child: Container(
+                                                    constraints: BoxConstraints(maxWidth: width * 0.75),
+                                                    padding: const EdgeInsets.all(16),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.grey.shade950.withOpacity(0.95),
+                                                      borderRadius: const BorderRadius.only(
+                                                        topLeft: Radius.circular(16),
+                                                        topRight: Radius.circular(16),
+                                                        bottomLeft: Radius.circular(16),
+                                                      ),
+                                                      border: Border.all(color: Colors.cyan.shade400, width: 2),
+                                                    ),
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        const Text(
+                                                          "Ty",
+                                                          style: TextStyle(
+                                                            color: Colors.cyanAccent,
+                                                            fontWeight: FontWeight.bold,
+                                                            fontSize: 12,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 6),
+                                                        Text(
+                                                          _dialogText,
+                                                          style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.45),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                        ),
+
+                                      // 4. Floating Choices (Center)
+                                      if (_dialogueScriptIndex == _dialogueScript.length - 1 && _dialogueChoices.isNotEmpty)
+                                        Center(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: _dialogueChoices.map((opt) {
+                                                return Container(
+                                                  margin: const EdgeInsets.only(bottom: 12),
+                                                  width: double.infinity,
+                                                  child: ElevatedButton(
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: Colors.lime.shade800,
+                                                      foregroundColor: Colors.black,
+                                                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                                                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        side: const BorderSide(color: Colors.lime, width: 1.5),
+                                                      ),
+                                                      elevation: 4,
+                                                    ),
+                                                    onPressed: opt.onTap,
+                                                    child: Text(
+                                                      opt.text,
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       );
                     },
                   ),
                 ),
 
-                // 3. Dialog Box / Dialogue UI
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  color: Colors.grey.shade900,
-                  constraints: const BoxConstraints(minHeight: 120),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_dialogueCharacterName != null) ...[
-                        Row(
-                          children: [
-                            Text(
-                              _dialogueCharacterAvatar ?? '💬',
-                              style: const TextStyle(fontSize: 20),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _dialogueCharacterName!,
-                              style: TextStyle(
-                                color: Colors.lime.shade400,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const Spacer(),
-                            IconButton(
-                              icon: const Icon(Icons.close, color: Colors.white54, size: 18),
-                              onPressed: _endDialogue,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                      ],
-                      Text(
+                // 3. Dialog Box
+                if (_dialogueCharacterName == null)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    color: Colors.grey.shade900,
+                    height: 110,
+                    child: SingleChildScrollView(
+                      child: Text(
                         _dialogText,
-                        style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.4),
+                        style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.45),
                       ),
-                      if (_dialogueOptions.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _dialogueOptions.map((opt) {
-                            return ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.lime.shade800,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              onPressed: opt.onTap,
-                              child: Text(opt.text),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
-                ),
 
                 // 4. Inventory Bar
-                Container(
-                  color: Colors.black,
-                  height: 75,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: state.inventory.isEmpty
+                if (_dialogueCharacterName == null)
+                  Container(
+                    color: Colors.black,
+                    height: 75,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: state.inventory.isEmpty
                       ? const Center(
                           child: Text(
                             'Tvůj inventář je prázdný.',
@@ -1386,6 +1786,24 @@ class _Hotspot {
   });
 }
 
+class _Hotspot {
+  final String name;
+  final double x; // x percentage (0-1)
+  final double y; // y percentage (0-1)
+  final double w; // width percentage (0-1)
+  final double h; // height percentage (0-1)
+  final VoidCallback onTap;
+
+  _Hotspot({
+    required this.name,
+    required this.x,
+    required this.y,
+    required this.w,
+    required this.h,
+    required this.onTap,
+  });
+}
+
 class _DialogueOption {
   final String text;
   final VoidCallback onTap;
@@ -1393,5 +1811,15 @@ class _DialogueOption {
   _DialogueOption({
     required this.text,
     required this.onTap,
+  });
+}
+
+class _DialogueLine {
+  final String speaker; // 'npc' or 'player'
+  final String text;
+
+  _DialogueLine({
+    required this.speaker,
+    required this.text,
   });
 }
