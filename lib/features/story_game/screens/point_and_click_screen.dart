@@ -196,6 +196,14 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         return false;
       }
     }
+    // 5. lens + tinder -> smoldering_tinder
+    if (id1 == 'lens' && id2 == 'tinder') {
+      _service.removeItem('lens');
+      _service.removeItem('tinder');
+      _service.collectItem('smoldering_tinder'); _speakHeroLine("Podařilo se!");
+      _showDialog("☀️ Soustředil jsi paprsky přes čočku lupy na suchý mech. Po chvíli se z něj začal linout dým a mech začal doutnat. Máš doutnající troud!");
+      return true;
+    }
 
     _speakHeroLine("Tohle nefunguje.");
     return false;
@@ -843,7 +851,43 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         name: "Kresba na kmeni",
         x: 0.42, y: 0.42, w: 0.15, h: 0.18,
         onTap: () {
-          _showDialog("Na kůře stromu jsou vyryté magické symboly a pod nimi kresba dubu s vyznačenými třemi silnými větvemi směřujícími k nebi. Vedle je nápis: 'Počet větví na kresbě ti napoví kód k schránce (kód má 3 číslice).'");
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: const Color(0xFF1E1E24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text(
+                '🔍 Vyryté znamení',
+                style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      'assets/images/clue_oak_tree.png',
+                      height: 200,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Na kůře stromu je vyrytá kresba dubu. Všimni si rozdělení a počtu hlavních větví směřujících k nebi zleva doprava. Tento počet větví (3 číslice) ti napoví kód k schránce.",
+                    style: TextStyle(color: Colors.white75, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Zavřít', style: TextStyle(color: Colors.cyanAccent)),
+                ),
+              ],
+            ),
+          );
         },
       ));
 
