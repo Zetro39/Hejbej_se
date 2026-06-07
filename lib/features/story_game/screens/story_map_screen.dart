@@ -505,162 +505,161 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
           : ValueListenableBuilder<QuestState>(
               valueListenable: _service.stateNotifier,
               builder: (context, state, _) {
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final mapWidth = constraints.maxWidth;
-              final mapHeight = constraints.maxHeight;
-
-              final avatarPos = _getAvatarPosition(state.currentDistanceWalked);
-
-              return Stack(
-                children: [
-                  // Map Background Image
-                  Positioned.fill(
-                    child: Image.asset(
-                      'assets/images/story_map.png',
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-
-                  // Overlay fog for locked chapters
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.black.withOpacity(0.05), // subtle dark overlay
-                    ),
-                  ),
-
-                  // Custom Painter to draw paths
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _MapPathPainter(
-                        nodes: _service.nodes,
-                        walkedDistance: state.currentDistanceWalked,
-                        unlockedNodes: state.unlockedNodes,
-                      ),
-                    ),
-                  ),
-
-                  // Render nodes (Locations)
-                  ..._service.nodes.map((node) {
-                    final isUnlocked = state.unlockedNodes.contains(node.id);
-                    final isCompleted = state.completedNodes.contains(node.id);
-                    final posX = node.mapPosition.dx * mapWidth;
-                    final posY = node.mapPosition.dy * mapHeight;
-
-                    return Positioned(
-                      left: posX - 28,
-                      top: posY - 28,
-                      child: GestureDetector(
-                        onTap: () => _onNodeTap(node, state),
-                        child: _buildNodeMarker(node, isUnlocked, isCompleted),
-                      ),
-                    );
-                  }),
-
-                  // User Avatar marker
-                  Positioned(
-                    left: (avatarPos.dx * mapWidth) - 20,
-                    top: (avatarPos.dy * mapHeight) - 35,
-                    child: IgnorePointer(
-                      child: AnimatedBobbingWidget(
-                        child: _buildAvatarMarker(),
-                      ),
-                    ),
-                  ),
-
-                  // Progress Header HUD Card
-                  Positioned(
-                    top: 16,
-                    left: 16,
-                    right: 16,
-                    child: Card(
-                      color: Colors.white.withOpacity(0.92),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 4,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                        child: Row(
+          return Column(
+            children: [
+              Card(
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                color: Colors.white.withOpacity(0.92),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.directions_walk, color: Colors.lightBlue, size: 28),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.directions_walk, color: Colors.lightBlue, size: 28),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Pokrok ve výpravě',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black54),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Uchozeno: ${(state.currentDistanceWalked / 1000).toStringAsFixed(2)} km / 6.00 km',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
-                                  ),
-                                ],
-                              ),
+                            const Text(
+                              'Pokrok ve výpravě',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black54),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.lime.shade100,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '🎒 ${state.inventory.length} věcí',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.lime.shade900),
-                              ),
-                            )
+                            const SizedBox(height: 4),
+                            Text(
+                              'Uchozeno: ${(state.currentDistanceWalked / 1000).toStringAsFixed(2)} km / 6.00 km',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+                            ),
                           ],
                         ),
                       ),
-                    ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.lime.shade100,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '🎒 ${state.inventory.length} věcí',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.lime.shade900),
+                        ),
+                      )
+                    ],
                   ),
+                ),
+              ),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final mapWidth = constraints.maxWidth;
+                    final mapHeight = constraints.maxHeight;
+                    final avatarPos = _getAvatarPosition(state.currentDistanceWalked);
 
-                  // Helper test button to simulate walking (ONLY FOR CONVENIENCE FOR USER TESTING)
-                  Positioned(
-                    bottom: 24,
-                    right: 16,
-                    child: Column(
+                    return Stack(
                       children: [
-                        FloatingActionButton.small(
-                          heroTag: 'skip_walk',
-                          backgroundColor: Colors.red.shade800,
-                          foregroundColor: Colors.white,
-                          onPressed: () => _service.addMeters(6000),
-                          tooltip: 'Přeskočit veškerou chůzi (K1 - K6)',
-                          child: const Icon(Icons.fast_forward),
+                        // Map Background Image
+                        Positioned.fill(
+                          child: Image.asset(
+                            'assets/images/story_map.png',
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Přeskočit\nchůzi',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
-                            Shadow(color: Colors.black, blurRadius: 4),
-                          ]),
+
+                        // Overlay fog for locked chapters
+                        Positioned.fill(
+                          child: Container(
+                            color: Colors.black.withOpacity(0.05), // subtle dark overlay
+                          ),
                         ),
-                        const SizedBox(height: 12),
-                        FloatingActionButton.small(
-                          heroTag: 'walk_100',
-                          backgroundColor: Colors.lime.shade800,
-                          foregroundColor: Colors.white,
-                          onPressed: () => _service.addMeters(200),
-                          tooltip: 'Simulovat +200 metrů chůze',
-                          child: const Icon(Icons.add_road),
+
+                        // Custom Painter to draw paths
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _MapPathPainter(
+                              nodes: _service.nodes,
+                              walkedDistance: state.currentDistanceWalked,
+                              unlockedNodes: state.unlockedNodes,
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Simulovat\n+200 m',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
-                            Shadow(color: Colors.black, blurRadius: 4),
-                          ]),
-                        )
+
+                        // Render nodes (Locations)
+                        ..._service.nodes.map((node) {
+                          final isUnlocked = state.unlockedNodes.contains(node.id);
+                          final isCompleted = state.completedNodes.contains(node.id);
+                          final posX = node.mapPosition.dx * mapWidth;
+                          final posY = node.mapPosition.dy * mapHeight;
+
+                          return Positioned(
+                            left: posX - 28,
+                            top: posY - 28,
+                            child: GestureDetector(
+                              onTap: () => _onNodeTap(node, state),
+                              child: _buildNodeMarker(node, isUnlocked, isCompleted),
+                            ),
+                          );
+                        }),
+
+                        // User Avatar marker
+                        Positioned(
+                          left: (avatarPos.dx * mapWidth) - 20,
+                          top: (avatarPos.dy * mapHeight) - 35,
+                          child: IgnorePointer(
+                            child: AnimatedBobbingWidget(
+                              child: _buildAvatarMarker(),
+                            ),
+                          ),
+                        ),
+
+                        // Helper test button to simulate walking (ONLY FOR CONVENIENCE FOR USER TESTING)
+                        Positioned(
+                          bottom: 24,
+                          right: 16,
+                          child: Column(
+                            children: [
+                              FloatingActionButton.small(
+                                heroTag: 'skip_walk',
+                                backgroundColor: Colors.red.shade800,
+                                foregroundColor: Colors.white,
+                                onPressed: () => _service.addMeters(6000),
+                                tooltip: 'Přeskočit veškerou chůzi (K1 - K6)',
+                                child: const Icon(Icons.fast_forward),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Přeskočit\nchůzi',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
+                                  Shadow(color: Colors.black, blurRadius: 4),
+                                ]),
+                              ),
+                              const SizedBox(height: 12),
+                              FloatingActionButton.small(
+                                heroTag: 'walk_100',
+                                backgroundColor: Colors.lime.shade800,
+                                foregroundColor: Colors.white,
+                                onPressed: () => _service.addMeters(200),
+                                tooltip: 'Simulovat +200 metrů chůze',
+                                child: const Icon(Icons.add_road),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Simulovat\n+200 m',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
+                                  Shadow(color: Colors.black, blurRadius: 4),
+                                ]),
+                              )
+                            ],
+                          ),
+                        ),
                       ],
-                    ),
-                  ),
-                ],
-              );
-            },
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),
