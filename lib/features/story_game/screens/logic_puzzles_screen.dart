@@ -1188,23 +1188,6 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         ),
       ],
     );
-  }                        '$displayWeight kg',
-                          style: TextStyle(
-                            color: isSelected ? Colors.amberAccent : Colors.grey.shade500,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ],
-    );
   }
 
   // 3. Bookshelf Widget
