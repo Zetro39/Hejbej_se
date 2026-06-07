@@ -939,6 +939,20 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           },
         ));
 
+        // Hromada popela (New - Element Ohně)
+        final ashCollected = state.roomStates['node6_ash_collected'] == true;
+        if (vinesBurned && !ashCollected && state.inventory.contains('amulet')) {
+          list.add(_Hotspot(
+            name: "Hromada popela",
+            x: 0.45, y: 0.65, w: 0.1, h: 0.1,
+            onTap: () {
+              _service.updateRoomState('node6_ash_collected', true);
+              _service.collectItem('item_ash');
+              _showDialog("Z ohniště po spáleném křoví jsi nabral popel do amuletu jako Element Ohně.");
+            },
+          ));
+        }
+
         // Hadr na plotě (New)
         final hasCloth = state.roomStates['node3_has_cloth'] == true;
         final hasTorchInInventory = state.inventory.contains('torch') || state.inventory.contains('burning_torch');
