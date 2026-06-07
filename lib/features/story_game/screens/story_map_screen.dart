@@ -77,7 +77,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
     final bgAssets = [
       'assets/images/story_room_altar.png',
       'assets/images/story_room_fortress_exterior.png',
-      'assets/images/story_player_adventurer.png',
+      'assets/images/story_room_gate_closed.png',
     ];
 
     final isAdventurerSlide = _introSlideIndex == 2;
@@ -87,15 +87,35 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
         Positioned.fill(
           child: ColorFiltered(
             colorFilter: ColorFilter.mode(
-              Colors.black.withOpacity(isAdventurerSlide ? 0.75 : 0.45),
+              Colors.black.withOpacity(0.55),
               BlendMode.darken,
             ),
             child: Image.asset(
               bgAssets[_introSlideIndex],
-              fit: isAdventurerSlide ? BoxFit.contain : BoxFit.cover,
+              fit: BoxFit.cover,
             ),
           ),
         ),
+        if (isAdventurerSlide)
+          Positioned(
+            right: 8,
+            bottom: 40,
+            width: 170,
+            height: 340,
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.matrix(<double>[
+                1, 0, 0, 0, 0,
+                0, 1, 0, 0, 0,
+                0, 0, 1, 0, 0,
+                -1, -1, -1, 3, 0,
+              ]),
+              child: Image.asset(
+                'assets/images/story_player_adventurer.png',
+                fit: BoxFit.contain,
+                alignment: Alignment.bottomRight,
+              ),
+            ),
+          ),
         Positioned.fill(
           child: Padding(
             padding: const EdgeInsets.only(left: 28.0, right: 28.0, bottom: 140.0),
