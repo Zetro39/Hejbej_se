@@ -1115,7 +1115,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           name: "Kamenná studna",
           x: 0.4, y: 0.4, w: 0.24, h: 0.38,
           onTap: () {
-            if (waterTaken) {
+            final hasWaterOrPlaced = state.inventory.contains('pure_water') || state.roomStates['node6_water_placed'] == true;
+            if (waterTaken && hasWaterOrPlaced) {
               _showDialog("Ve studni zbývá už jen zablácené dno, čistou pramenitou vodu jsi již nabral do kotlíku.");
               return;
             }
