@@ -745,7 +745,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                       ? Colors.green.withOpacity(0.25)
                       : _winchState == 'snapped'
                           ? Colors.red.withOpacity(0.25)
-                          : Colors.black80,
+                          : const Color(0xCC000000),
                   blurRadius: 12,
                   spreadRadius: 2,
                 )
@@ -787,7 +787,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Colors.grey.shade900, Colors.grey.shade600, Colors.grey.shade950],
+                        colors: [Colors.grey.shade900, Colors.grey.shade600, const Color(0xFF0C0C0C)],
                       ),
                       borderRadius: BorderRadius.circular(4),
                     ),
@@ -913,7 +913,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                             color: const Color(0xFF2E2E2E), // Cast iron base
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: const Color(0xFF4A4A4A), width: 1.5),
-                            boxShadow: const [BoxShadow(color: Colors.black80, blurRadius: 4)],
+                            boxShadow: const [BoxShadow(color: Color(0xCC000000), blurRadius: 4)],
                           ),
                           child: Stack(
                             alignment: Alignment.bottomCenter,
