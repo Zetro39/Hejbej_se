@@ -725,45 +725,51 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
           child: Container(
             height: 200,
             decoration: BoxDecoration(
-              gradient: RadialGradient(
+              gradient: const RadialGradient(
                 center: Alignment.center,
-                radius: 1.2,
-                colors: [Colors.grey.shade900, Colors.black],
+                radius: 1.3,
+                colors: [Color(0xFF1B2A24), Color(0xFF0C1210)],
               ),
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: _winchState == 'lifting'
-                    ? Colors.green.withOpacity(0.5)
+                    ? Colors.greenAccent.withOpacity(0.6)
                     : _winchState == 'snapped'
-                        ? Colors.red.withOpacity(0.5)
-                        : Colors.amber.withOpacity(0.2),
-                width: 2,
+                        ? Colors.redAccent.withOpacity(0.6)
+                        : const Color(0xFFC5A059).withOpacity(0.35),
+                width: 2.5,
               ),
               boxShadow: [
                 BoxShadow(
                   color: _winchState == 'lifting'
-                      ? Colors.green.withOpacity(0.15)
+                      ? Colors.green.withOpacity(0.25)
                       : _winchState == 'snapped'
-                          ? Colors.red.withOpacity(0.15)
-                          : Colors.black54,
-                  blurRadius: 10,
+                          ? Colors.red.withOpacity(0.25)
+                          : Colors.black80,
+                  blurRadius: 12,
                   spreadRadius: 2,
                 )
               ],
             ),
             child: Stack(
               children: [
-                // Background well brick pattern representation
+                // Background well stone wall column (left side)
                 Positioned(
                   left: 10,
-                  top: 40,
+                  top: 36,
                   bottom: 10,
                   width: 70,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white10,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white24, width: 1),
+                      gradient: LinearGradient(
+                        colors: [Colors.grey.shade800, Colors.grey.shade700, Colors.grey.shade900],
+                      ),
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(8),
+                        topRight: Radius.circular(8),
+                      ),
+                      border: Border.all(color: Colors.white10),
+                      boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 4)],
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -781,7 +787,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Colors.grey.shade800, Colors.grey.shade600, Colors.grey.shade900],
+                        colors: [Colors.grey.shade900, Colors.grey.shade600, Colors.grey.shade950],
                       ),
                       borderRadius: BorderRadius.circular(4),
                     ),
@@ -797,7 +803,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                   child: AnimatedRotation(
                     turns: winchTurns,
                     duration: Duration(milliseconds: _winchState == 'lifting' ? 1200 : 300),
-                    child: Icon(Icons.incomplete_circle_rounded, color: Colors.amber.shade800, size: 40),
+                    child: Icon(Icons.settings, color: Colors.amber.shade800, size: 40),
                   ),
                 ),
                 Positioned(
@@ -808,7 +814,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                   child: AnimatedRotation(
                     turns: winchTurns,
                     duration: Duration(milliseconds: _winchState == 'lifting' ? 1200 : 300),
-                    child: Icon(Icons.incomplete_circle_rounded, color: Colors.amber.shade800, size: 40),
+                    child: Icon(Icons.settings, color: Colors.amber.shade800, size: 40),
                   ),
                 ),
 
@@ -845,9 +851,9 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
 
                 // Winch Lever (Pull Lever)
                 Positioned(
-                  right: 10,
+                  right: 15,
                   top: 15,
-                  width: 60,
+                  width: 50,
                   height: 80,
                   child: Column(
                     children: [
@@ -901,18 +907,44 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                                 }
                               },
                         child: Container(
-                          height: 50,
+                          width: 24,
+                          height: 52,
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _leverPulled ? Colors.red.shade900 : Colors.amber.shade900,
-                            border: Border.all(color: Colors.amber.shade300, width: 1.5),
-                            boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 4, offset: Offset(2, 2))],
+                            color: const Color(0xFF2E2E2E), // Cast iron base
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF4A4A4A), width: 1.5),
+                            boxShadow: const [BoxShadow(color: Colors.black80, blurRadius: 4)],
                           ),
-                          alignment: Alignment.center,
-                          child: AnimatedRotation(
-                            turns: _leverPulled ? 0.12 : 0.0,
-                            duration: const Duration(milliseconds: 1200),
-                            child: const Icon(Icons.build_outlined, color: Colors.white, size: 24),
+                          child: Stack(
+                            alignment: Alignment.bottomCenter,
+                            children: [
+                              // Handle stick/rod
+                              AnimatedPositioned(
+                                duration: const Duration(milliseconds: 250),
+                                bottom: _leverPulled ? 4 : 22,
+                                left: 5,
+                                child: Column(
+                                  children: [
+                                    // Wooden handle knob
+                                    Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Color(0xFF8B4513), // Wood brown knob
+                                        boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 1)],
+                                      ),
+                                    ),
+                                    // Metal rod
+                                    Container(
+                                      width: 3,
+                                      height: 20,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -921,6 +953,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                     ],
                   ),
                 ),
+
 
                 // Ropes from drum
                 // Left Rope (connecting Pulley Left to Bucket)
@@ -974,39 +1007,58 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                   child: AnimatedRotation(
                     turns: platformTilt,
                     duration: const Duration(milliseconds: 1200),
-                    child: Column(
+                    child: Stack(
+                      alignment: Alignment.center,
                       children: [
-                        // Placed items emojis (up to 5 stacked/shown)
-                        Container(
-                          height: 24,
-                          alignment: Alignment.bottomCenter,
-                          child: Wrap(
-                            spacing: -4,
-                            children: _selectedWinchItems.map((itemId) {
-                              final item = _winchItems.firstWhere((it) => it['id'] == itemId);
-                              return Text(item['emoji'] as String, style: const TextStyle(fontSize: 16));
-                            }).toList(),
+                        // Triangle suspension ropes
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _ScaleSuspensionPainter(),
                           ),
                         ),
-                        // The Basket Plate representation
-                        Container(
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: Colors.amber.shade800,
-                            borderRadius: BorderRadius.circular(2),
-                            border: Border.all(color: Colors.amber.shade900),
-                          ),
+                        // Plate and items
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            // Placed items emojis (up to 5 stacked/shown)
+                            Container(
+                              height: 24,
+                              alignment: Alignment.bottomCenter,
+                              child: Wrap(
+                                spacing: -4,
+                                children: _selectedWinchItems.map((itemId) {
+                                  final item = _winchItems.firstWhere((it) => it['id'] == itemId);
+                                  return Text(item['emoji'] as String, style: const TextStyle(fontSize: 16));
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            // The Wooden Basket Plate representation
+                            Container(
+                              height: 6,
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF8B5A2B), // Wood brown
+                                borderRadius: BorderRadius.circular(2),
+                                border: Border.all(color: const Color(0xFF5A3A1C)),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                          ],
                         ),
-                        const SizedBox(height: 2),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
-                          child: const Text(
-                            'ZÁVAŽÍ',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
+                        // Label container
+                        Positioned(
+                          bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
+                            child: const Text(
+                              'ZÁVAŽÍ',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -1014,6 +1066,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                     ),
                   ),
                 ),
+
 
                 // Broken Rope Indicator ("KŘUP! 💥")
                 Positioned.fill(
@@ -2110,61 +2163,112 @@ class _WinchDialPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height - 4);
-    final radius = size.height - 8;
+    final radius = size.height - 6;
 
-    final paint = Paint()
+    // 1. Draw outer brass rim
+    final brassPaint = Paint()
+      ..color = const Color(0xFFC5A059) // Antique Brass
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
+      ..strokeWidth = 3;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi,
+      math.pi,
+      false,
+      brassPaint,
+    );
+
+    // 2. Draw gauge face backing
+    final facePaint = Paint()
+      ..color = const Color(0xFF1C1E1B)
+      ..style = PaintingStyle.fill;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi,
+      math.pi,
+      true,
+      facePaint,
+    );
+
+    // 3. Draw colored segments on the arc
+    final segmentPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
       ..strokeCap = StrokeCap.round;
 
-    // Draw background arcs
-    paint.color = Colors.grey.shade700;
+    // Underweight segment (0 - 20)
+    segmentPaint.color = Colors.orangeAccent.withOpacity(0.5);
     canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -3.14159,
-      3.14159 * (20 / 40),
+      Rect.fromCircle(center: center, radius: radius - 4),
+      -math.pi,
+      math.pi * (20 / 40),
       false,
-      paint,
+      segmentPaint,
     );
 
-    paint.color = Colors.green.shade600;
+    // Safe Target segment (21 - 28)
+    segmentPaint.color = Colors.greenAccent;
     canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -3.14159 + 3.14159 * (20 / 40),
-      3.14159 * (8 / 40),
+      Rect.fromCircle(center: center, radius: radius - 4),
+      -math.pi + math.pi * (20.5 / 40),
+      math.pi * (7.5 / 40),
       false,
-      paint,
+      segmentPaint,
     );
 
-    paint.color = Colors.red.shade700;
+    // Overweight segment (29 - 40)
+    segmentPaint.color = Colors.redAccent.withOpacity(0.7);
     canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -3.14159 + 3.14159 * (28 / 40),
-      3.14159 * (12 / 40),
+      Rect.fromCircle(center: center, radius: radius - 4),
+      -math.pi + math.pi * (28.5 / 40),
+      math.pi * (11.5 / 40),
       false,
-      paint,
+      segmentPaint,
     );
 
-    // Draw needle
+    // 4. Draw tick marks on the dial
+    final tickPaint = Paint()
+      ..color = Colors.white24
+      ..strokeWidth = 1.0;
+    for (int i = 0; i <= 8; i++) {
+      final double angle = -math.pi + (math.pi * (i / 8));
+      final innerTick = Offset(
+        center.dx + (radius - 12) * math.cos(angle),
+        center.dy + (radius - 12) * math.sin(angle),
+      );
+      final outerTick = Offset(
+        center.dx + (radius - 5) * math.cos(angle),
+        center.dy + (radius - 5) * math.sin(angle),
+      );
+      canvas.drawLine(innerTick, outerTick, tickPaint);
+    }
+
+    // 5. Draw the Needle with glowing tip
     final double clampWeight = currentWeight.clamp(0.0, 40.0);
-    final double needleAngle = -3.14159 + (3.14159 * (clampWeight / 40.0));
+    final double needleAngle = -math.pi + (math.pi * (clampWeight / 40.0));
+    
+    final needleGlow = Paint()
+      ..color = Colors.orange.withOpacity(0.3)
+      ..strokeWidth = 5.0
+      ..strokeCap = StrokeCap.round;
     final needlePaint = Paint()
       ..color = Colors.orangeAccent
-      ..strokeWidth = 2.5
+      ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round;
 
     final needleEnd = Offset(
-      center.dx + radius * 0.85 * math.cos(needleAngle),
-      center.dy + radius * 0.85 * math.sin(needleAngle),
+      center.dx + (radius - 6) * math.cos(needleAngle),
+      center.dy + (radius - 6) * math.sin(needleAngle),
     );
 
+    canvas.drawLine(center, needleEnd, needleGlow);
     canvas.drawLine(center, needleEnd, needlePaint);
 
-    // Draw cap
-    final capPaint = Paint()..color = Colors.amber.shade800;
-    canvas.drawCircle(center, 4, capPaint);
+    // 6. Draw center cap
+    final capPaint = Paint()..color = const Color(0xFFC5A059);
+    canvas.drawCircle(center, 5, capPaint);
     capPaint.color = Colors.black;
-    canvas.drawCircle(center, 1.5, capPaint);
+    canvas.drawCircle(center, 2, capPaint);
   }
 
   @override
@@ -2172,4 +2276,20 @@ class _WinchDialPainter extends CustomPainter {
     return oldDelegate.currentWeight != currentWeight;
   }
 }
+
+class _ScaleSuspensionPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.orange.shade800
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawLine(Offset(size.width / 2, 0), Offset(0, size.height - 14), paint);
+    canvas.drawLine(Offset(size.width / 2, 0), Offset(size.width, size.height - 14), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 

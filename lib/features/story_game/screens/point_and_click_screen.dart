@@ -1157,6 +1157,34 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                 _service.updateRoomState('node4_water_taken', true);
                 _collectItem('pure_water', "⚙️ Otočil jsi klikou a bez námahy vytáhl kbelík nahoru. Našel jsi v něm čistou, pramenitou vodu! Nablízku v inventáři máš i kotlík, nabral jsi ji do něj.");
               } else {
+                _showDialog("Zdvihací mechanismus studny je zablokován těžkým kbelíkem. Kbelík nelze vytáhnout, dokud nevyvážíš protizávaží na váze vedle studny.");
+              }
+            } else if (_selectedItemId == 'well_handle') {
+              _service.updateRoomState('node4_well_handle', true);
+              _service.removeItem('well_handle');
+              setState(() => _selectedItemId = null);
+              _showDialog("Nasadil jsi kliku navijáku na osu studny. Zkus ji otočit.");
+            } else {
+              _showDialog("Stará studna je hluboká a navijáku chybí otočná rukojeť, lano nejde navinout. Hned vedle studny se nachází váha spojená s navijákem.");
+            }
+          },
+        ));
+
+        // Scale hotspot (Váha)
+        list.add(_Hotspot(
+          name: "Váha",
+          x: 0.65, y: 0.5, w: 0.14, h: 0.28,
+          onTap: () {
+            if (waterTaken) {
+              _showDialog("Voda je již úspěšně vytažena, váhu už není potřeba používat.");
+              return;
+            }
+
+            if (wellHandlePlaced) {
+              final wellBalanced = state.roomStates['node4_well_balanced'] == true;
+              if (wellBalanced) {
+                _showDialog("Váha je již úspěšně vyvážena.");
+              } else {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -1171,16 +1199,12 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                   ),
                 );
               }
-            } else if (_selectedItemId == 'well_handle') {
-              _service.updateRoomState('node4_well_handle', true);
-              _service.removeItem('well_handle');
-              setState(() => _selectedItemId = null);
-              _showDialog("Nasadil jsi kliku navijáku na osu studny. Zkus ji otočit.");
             } else {
-              _showDialog("Stará studna je hluboká a navijáku chybí otočná rukojeť, lano nejde navinout. Zdvihací mechanismus je navíc zablokován těžkým kbelíkem (protizávažím).");
+              _showDialog("Mechanismus váhy je propojen s navijákem studny. Nejdříve musíš nasadit kliku studny na osu navijáku.");
             }
           },
         ));
+
 
 
       } else if (_currentSubroom == "cave") {
