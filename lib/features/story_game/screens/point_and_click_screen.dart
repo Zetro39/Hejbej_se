@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/story_quest_model.dart';
 import '../services/story_game_service.dart';
@@ -1157,7 +1157,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                 _service.updateRoomState('node4_water_taken', true);
                 _collectItem('pure_water', "⚙️ Otočil jsi klikou a bez námahy vytáhl kbelík nahoru. Našel jsi v něm čistou, pramenitou vodu! Nablízku v inventáři máš i kotlík, nabral jsi ji do něj.");
               } else {
-                _showDialog("Zdvihací mechanismus studny je zablokován těžkým kbelíkem. Kbelík nelze vytáhnout, dokud nevyvážíš protizávaží na váze vedle studny.");
+                _showDialog("Zdvihací mechanismus studny je zablokován těžkým kbelíkem. Kbelík nelze vytáhnout, dokud nevyvážíš protizávaží na váze ve stodole.");
               }
             } else if (_selectedItemId == 'well_handle') {
               _service.updateRoomState('node4_well_handle', true);
@@ -1165,47 +1165,22 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
               setState(() => _selectedItemId = null);
               _showDialog("Nasadil jsi kliku navijáku na osu studny. Zkus ji otočit.");
             } else {
-              _showDialog("Stará studna je hluboká a navijáku chybí otočná rukojeť, lano nejde navinout. Hned vedle studny se nachází váha spojená s navijákem.");
+              _showDialog("Stará studna je hluboká a navijáku chybí otočná rukojeť, lano nejde navinout. Hned vedle studny se nachází váha ve stodole.");
             }
           },
         ));
 
-        // Scale hotspot (Váha)
+        // Barn hotspot (Stodola) instead of Váha
         list.add(_Hotspot(
-          name: "Váha",
-          x: 0.65, y: 0.5, w: 0.14, h: 0.28,
+          name: "Stodola",
+          x: 0.65, y: 0.38, w: 0.2, h: 0.35,
           onTap: () {
-            if (waterTaken) {
-              _showDialog("Voda je již úspěšně vytažena, váhu už není potřeba používat.");
-              return;
-            }
-
-            if (wellHandlePlaced) {
-              final wellBalanced = state.roomStates['node4_well_balanced'] == true;
-              if (wellBalanced) {
-                _showDialog("Váha je již úspěšně vyvážena.");
-              } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => LogicPuzzlesScreen(
-                      puzzleType: "scales",
-                      onSolved: () {
-                        _service.updateRoomState('node4_well_balanced', true);
-                        _service.updateRoomState('node4_water_taken', true);
-                        _collectItem('pure_water', "⚙️ Vyvážil jsi protizávaží studny! Lano jde otočit lehoučce a vytáhl jsi kbelík nahoru s čistou pramenitou vodou! Nablízku v inventáři máš i kotlík, nabral jsi ji do něj.");
-                      },
-                    ),
-                  ),
-                );
-              }
-            } else {
-              _showDialog("Mechanismus váhy je propojen s navijákem studny. Nejdříve musíš nasadit kliku studny na osu navijáku.");
-            }
+            setState(() {
+              _currentSubroom = "barn";
+              _dialogText = "Vstoupil jsi do staré zaprášené stodoly. V rohu stojí masivní mechanismus váhy spojený se studnou.";
+            });
           },
         ));
-
-
 
       } else if (_currentSubroom == "cave") {
         // Uvnitř jeskyně
@@ -1292,6 +1267,96 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           },
         ));
 
+      } else if (_currentSubroom == "barn") {
+        // Váha (Detail) click
+        list.add(_Hotspot(
+          name: "Váha (Detail)",
+          x: 0.35, y: 0.3, w: 0.3, h: 0.5,
+          onTap: () {
+            setState(() {
+              _currentSubroom = "scale_zoom";
+              _dialogText = state.roomStates['node4_barn_cleaned'] == true
+                  ? "Detailní pohled na očištěnou váhu. Všechny piktogramy jsou jasně čitelné."
+                  : "Pohled na starou váhu. Je zcela pokrytá prachem a pavučinami. Štítek s piktogramy není čitelný.";
+            });
+          },
+        ));
+
+        // Return button
+        list.add(_Hotspot(
+          name: "Odejít ven",
+          x: 0.42, y: 0.82, w: 0.16, h: 0.12,
+          onTap: () {
+            setState(() {
+              _currentSubroom = "exterior";
+              _dialogText = "Stojíš venku v bažině.";
+            });
+          },
+        ));
+
+      } else if (_currentSubroom == "scale_zoom") {
+        final wellHandlePlaced = state.roomStates['node4_well_handle'] == true;
+        final waterTaken = state.roomStates['node4_water_taken'] == true;
+        final barnCleaned = state.roomStates['node4_barn_cleaned'] == true;
+
+        if (!barnCleaned) {
+          // Clean the scale hotspot (click anywhere on the scale to clean)
+          list.add(_Hotspot(
+            name: "Očistit váhu",
+            x: 0.2, y: 0.2, w: 0.6, h: 0.6,
+            onTap: () {
+              _service.updateRoomState('node4_barn_cleaned', true);
+              _showDialog("Setřel jsi nánosy prachu a pavučin z kovového štítku. Piktogramy kbelíku, vah a přetrženého lana jsou nyní krásně vidět!");
+            },
+          ));
+        } else {
+          // Cleaned scale interaction (run the puzzle)
+          list.add(_Hotspot(
+            name: "Mechanismus váhy",
+            x: 0.25, y: 0.25, w: 0.5, h: 0.5,
+            onTap: () {
+              if (waterTaken) {
+                _showDialog("Voda je již úspěšně vytažena, váhu už není potřeba používat.");
+                return;
+              }
+
+              if (wellHandlePlaced) {
+                final wellBalanced = state.roomStates['node4_well_balanced'] == true;
+                if (wellBalanced) {
+                  _showDialog("Váha je již úspěšně vyvážena.");
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => LogicPuzzlesScreen(
+                        puzzleType: "scales",
+                        onSolved: () {
+                          _service.updateRoomState('node4_well_balanced', true);
+                          _service.updateRoomState('node4_water_taken', true);
+                          _collectItem('pure_water', "⚙️ Vyvážil jsi protizávaží studny! Lano jde otočit lehoučce a vytáhl jsi kbelík nahoru s čistou pramenitou vodou! Nablízku v inventáři máš i kotlík, nabral jsi ji do něj.");
+                        },
+                      ),
+                    ),
+                  );
+                }
+              } else {
+                _showDialog("Mechanismus váhy je propojen s navijákem studny. Nejdříve musíš nasadit kliku studny na osu navijáku.");
+              }
+            },
+          ));
+        }
+
+        // Return button
+        list.add(_Hotspot(
+          name: "Zpět do stodoly",
+          x: 0.42, y: 0.82, w: 0.16, h: 0.12,
+          onTap: () {
+            setState(() {
+              _currentSubroom = "barn";
+              _dialogText = "Stojíš uvnitř stodoly.";
+            });
+          },
+        ));
       }
     } else if (widget.nodeId == 'node5') {
       // Zapomenutá pevnost
@@ -1742,6 +1807,16 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         return caveLit
             ? 'assets/images/story_room_cave_lit.png'
             : 'assets/images/story_room_cave.png';
+      } else if (_currentSubroom == "barn") {
+        final barnCleaned = state.roomStates['node4_barn_cleaned'] == true;
+        return barnCleaned
+            ? 'assets/images/story_room_barn_interior_clean.png'
+            : 'assets/images/story_room_barn_interior.png';
+      } else if (_currentSubroom == "scale_zoom") {
+        final barnCleaned = state.roomStates['node4_barn_cleaned'] == true;
+        return barnCleaned
+            ? 'assets/images/story_room_barn_scale_clean.png'
+            : 'assets/images/story_room_barn_scale_dusty.png';
       }
       final caveLit = state.roomStates['node4_cave_lit'] == true;
       final wellBalanced = state.roomStates['node4_well_balanced'] == true;
@@ -1818,6 +1893,10 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                                   ? 'Poustevníkova jeskyně'
                                   : widget.nodeId == 'node4' && _currentSubroom == 'shrine'
                                       ? 'Svatyně'
+                                  : widget.nodeId == 'node4' && _currentSubroom == 'barn'
+                                      ? 'Stodola'
+                                  : widget.nodeId == 'node4' && _currentSubroom == 'scale_zoom'
+                                      ? 'Detail váhy'
                                       : widget.nodeId == 'node5' && _currentSubroom == 'library'
                                           ? 'Knihovna'
                                           : _service.nodes.firstWhere((n) => n.id == widget.nodeId).name,

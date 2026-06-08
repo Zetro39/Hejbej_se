@@ -110,6 +110,7 @@ class QuestState {
         'node4_has_herbs': false,
         'node4_tea_brewed': false,
         'node4_hermit_healed': false,
+        'node4_barn_cleaned': false,
         'node5_gate_open': false,
         'node5_has_sword': false,
         'node5_has_acid': false,
