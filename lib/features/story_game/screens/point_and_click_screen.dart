@@ -1699,9 +1699,10 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       if (_currentSubroom == "interior") {
         final chestOpen = state.roomStates['node3_chest_open'] == true;
         return chestOpen
-            ? 'assets/images/story_room_barn_interior_clean.png'
-            : 'assets/images/story_room_barn_interior.png';
+            ? 'assets/images/story_room_cabin_interior_open_chest.png'
+            : 'assets/images/story_room_cabin_interior.png';
       }
+
       final hasCloth = state.roomStates['node3_has_cloth'] == true;
       final vinesBurned = state.roomStates['node3_vines_burned'] == true;
       if (vinesBurned) {
