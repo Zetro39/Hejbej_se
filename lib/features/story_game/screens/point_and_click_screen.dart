@@ -1147,7 +1147,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           onTap: () {
             final hasWaterOrPlaced = state.inventory.contains('pure_water') || state.roomStates['node6_water_placed'] == true;
             if (waterTaken && hasWaterOrPlaced) {
-              _showDialog("Ve studni zbývá už jen zablácené dno, čistou pramenitou vodu jsi již nabral do kotlíku.");
+              _showDialog("Ve studni zbývá už jen zablácené dno, kbelík s čistou pramenitou vodou jsi již vzal.");
               return;
             }
 
@@ -1155,7 +1155,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
               final wellBalanced = state.roomStates['node4_well_balanced'] == true;
               if (wellBalanced) {
                 _service.updateRoomState('node4_water_taken', true);
-                _collectItem('pure_water', "⚙️ Otočil jsi klikou a bez námahy vytáhl kbelík nahoru. Našel jsi v něm čistou, pramenitou vodu! 💧");
+                _collectItem('pure_water', "💧 Vzal jsi kbelík s čistou pramenitou vodou ze studny!");
               } else {
                 _showDialog("Zdvihací mechanismus studny je zablokován těžkým kbelíkem. Kbelík nelze vytáhnout, dokud nevyvážíš protizávaží na váze ve stodole.");
               }
@@ -1332,8 +1332,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                         puzzleType: "scales",
                         onSolved: () {
                           _service.updateRoomState('node4_well_balanced', true);
-                          _service.updateRoomState('node4_water_taken', true);
-                          _collectItem('pure_water', "⚙️ Vyvážil jsi protizávaží studny! Otočil jsi klikou a bez námyhy vytáhl kbelík nahoru s čistou pramenitou vodou! 💧");
+                          _showDialog("⚙️ Vyvážil jsi protizávaží studny! Otočil jsi klikou a kbelík s čistou pramenitou vodou se s tichým zavrzáním vytáhl nahoru.");
                         },
                       ),
                     ),
