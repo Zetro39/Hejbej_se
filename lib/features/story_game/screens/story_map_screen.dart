@@ -485,215 +485,281 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showIntro) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: _buildIntroWidget(),
+      );
+    }
+
     return Scaffold(
-      appBar: _showIntro ? null : AppBar(
-        title: const Text('PŘÍBĚHOVÁ VÝPRAVA'),
-        backgroundColor: Colors.lightBlue,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.menu_book),
-            tooltip: 'Zobrazit prolog příběhu',
-            onPressed: () {
-              setState(() {
-                _showIntro = true;
-                _introSlideIndex = 0;
-              });
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Restartovat příběh',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Restartovat výpravu?'),
-                  content: const Text('Tímto přmažeš veškerý svůj dosavadní pokrok, předměty a budeš muset začít od nuly. Přejete si pokračovat?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Zrušit'),
+      backgroundColor: Colors.black,
+      body: ValueListenableBuilder<QuestState>(
+        valueListenable: _service.stateNotifier,
+        builder: (context, state, _) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final mapWidth = constraints.maxWidth;
+              final mapHeight = constraints.maxHeight;
+              final avatarPos = _getAvatarPosition(state.currentDistanceWalked);
+
+              return Stack(
+                children: [
+                  // Map Background Image (fills the entire screen)
+                  Positioned.fill(
+                    child: Image.asset(
+                      'assets/images/story_map.png',
+                      fit: BoxFit.cover,
                     ),
-                    TextButton(
-                      onPressed: () async {
-                        await _service.resetQuest();
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                        }
-                      },
-                      style: TextButton.styleFrom(foregroundColor: Colors.red),
-                      child: const Text('Restartovat'),
+                  ),
+
+                  // Overlay fog for locked chapters
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withOpacity(0.05), // subtle dark overlay
                     ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: _showIntro
-          ? _buildIntroWidget()
-          : ValueListenableBuilder<QuestState>(
-              valueListenable: _service.stateNotifier,
-              builder: (context, state, _) {
-          return Column(
-            children: [
-              Card(
-                margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                color: Colors.white.withOpacity(0.92),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.directions_walk, color: Colors.lightBlue, size: 28),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+
+                  // Custom Painter to draw paths
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _MapPathPainter(
+                        nodes: _service.nodes,
+                        walkedDistance: state.currentDistanceWalked,
+                        unlockedNodes: state.unlockedNodes,
+                      ),
+                    ),
+                  ),
+
+                  // Render nodes (Locations)
+                  ..._service.nodes.map((node) {
+                    final isUnlocked = state.unlockedNodes.contains(node.id);
+                    final isCompleted = state.completedNodes.contains(node.id);
+                    final posX = node.mapPosition.dx * mapWidth;
+                    final posY = node.mapPosition.dy * mapHeight;
+
+                    return Positioned(
+                      left: posX - 28,
+                      top: posY - 28,
+                      child: GestureDetector(
+                        onTap: () => _onNodeTap(node, state),
+                        child: _buildNodeMarker(node, isUnlocked, isCompleted),
+                      ),
+                    );
+                  }),
+
+                  // User Avatar marker
+                  Positioned(
+                    left: (avatarPos.dx * mapWidth) - 20,
+                    top: (avatarPos.dy * mapHeight) - 35,
+                    child: IgnorePointer(
+                      child: AnimatedBobbingWidget(
+                        child: _buildAvatarMarker(),
+                      ),
+                    ),
+                  ),
+
+                  // Sleek integrated floating HUD at the top (KM progress + actions)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Pokrok ve výpravě',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black54),
+                            // Left: Capsule showing progress and inventory
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.65),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: Colors.white24, width: 1.5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.35),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  )
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.directions_walk, color: Colors.cyanAccent, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${(state.currentDistanceWalked / 1000).toStringAsFixed(2)} km / 6.00 km',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.5,
+                                      shadows: [
+                                        Shadow(color: Colors.black, blurRadius: 4),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    width: 1.5,
+                                    height: 14,
+                                    color: Colors.white24,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '🎒 ${state.inventory.length}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Uchozeno: ${(state.currentDistanceWalked / 1000).toStringAsFixed(2)} km / 6.00 km',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+
+                            // Right: Sleek round action buttons
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildFloatingRoundButton(
+                                  icon: Icons.menu_book,
+                                  tooltip: 'Zobrazit prolog',
+                                  onTap: () {
+                                    setState(() {
+                                      _showIntro = true;
+                                      _introSlideIndex = 0;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 10),
+                                _buildFloatingRoundButton(
+                                  icon: Icons.refresh,
+                                  tooltip: 'Restartovat příběh',
+                                  onTap: _showRestartDialog,
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.lime.shade100,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '🎒 ${state.inventory.length} věcí',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.lime.shade900),
-                        ),
-                      )
-                    ],
+                    ),
                   ),
-                ),
-              ),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final mapWidth = constraints.maxWidth;
-                    final mapHeight = constraints.maxHeight;
-                    final avatarPos = _getAvatarPosition(state.currentDistanceWalked);
 
-                    return Stack(
+                  // Helper test button to simulate walking (ONLY FOR CONVENIENCE FOR USER TESTING)
+                  Positioned(
+                    bottom: 24,
+                    right: 16,
+                    child: Column(
                       children: [
-                        // Map Background Image
-                        Positioned.fill(
-                          child: Image.asset(
-                            'assets/images/story_map.png',
-                            fit: BoxFit.cover,
-                          ),
+                        FloatingActionButton.small(
+                          heroTag: 'skip_walk',
+                          backgroundColor: Colors.red.shade800,
+                          foregroundColor: Colors.white,
+                          onPressed: () => _service.addMeters(6000),
+                          tooltip: 'Přeskočit veškerou chůzi (K1 - K6)',
+                          child: const Icon(Icons.fast_forward),
                         ),
-
-                        // Overlay fog for locked chapters
-                        Positioned.fill(
-                          child: Container(
-                            color: Colors.black.withOpacity(0.05), // subtle dark overlay
-                          ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Přeskočit\nchůzi',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
+                            Shadow(color: Colors.black, blurRadius: 4),
+                          ]),
                         ),
-
-                        // Custom Painter to draw paths
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: _MapPathPainter(
-                              nodes: _service.nodes,
-                              walkedDistance: state.currentDistanceWalked,
-                              unlockedNodes: state.unlockedNodes,
-                            ),
-                          ),
+                        const SizedBox(height: 12),
+                        FloatingActionButton.small(
+                          heroTag: 'walk_100',
+                          backgroundColor: Colors.lime.shade800,
+                          foregroundColor: Colors.white,
+                          onPressed: () => _service.addMeters(200),
+                          tooltip: 'Simulovat +200 metrů chůze',
+                          child: const Icon(Icons.add_road),
                         ),
-
-                        // Render nodes (Locations)
-                        ..._service.nodes.map((node) {
-                          final isUnlocked = state.unlockedNodes.contains(node.id);
-                          final isCompleted = state.completedNodes.contains(node.id);
-                          final posX = node.mapPosition.dx * mapWidth;
-                          final posY = node.mapPosition.dy * mapHeight;
-
-                          return Positioned(
-                            left: posX - 28,
-                            top: posY - 28,
-                            child: GestureDetector(
-                              onTap: () => _onNodeTap(node, state),
-                              child: _buildNodeMarker(node, isUnlocked, isCompleted),
-                            ),
-                          );
-                        }),
-
-                        // User Avatar marker
-                        Positioned(
-                          left: (avatarPos.dx * mapWidth) - 20,
-                          top: (avatarPos.dy * mapHeight) - 35,
-                          child: IgnorePointer(
-                            child: AnimatedBobbingWidget(
-                              child: _buildAvatarMarker(),
-                            ),
-                          ),
-                        ),
-
-                        // Helper test button to simulate walking (ONLY FOR CONVENIENCE FOR USER TESTING)
-                        Positioned(
-                          bottom: 24,
-                          right: 16,
-                          child: Column(
-                            children: [
-                              FloatingActionButton.small(
-                                heroTag: 'skip_walk',
-                                backgroundColor: Colors.red.shade800,
-                                foregroundColor: Colors.white,
-                                onPressed: () => _service.addMeters(6000),
-                                tooltip: 'Přeskočit veškerou chůzi (K1 - K6)',
-                                child: const Icon(Icons.fast_forward),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Přeskočit\nchůzi',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
-                                  Shadow(color: Colors.black, blurRadius: 4),
-                                ]),
-                              ),
-                              const SizedBox(height: 12),
-                              FloatingActionButton.small(
-                                heroTag: 'walk_100',
-                                backgroundColor: Colors.lime.shade800,
-                                foregroundColor: Colors.white,
-                                onPressed: () => _service.addMeters(200),
-                                tooltip: 'Simulovat +200 metrů chůze',
-                                child: const Icon(Icons.add_road),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Simulovat\n+200 m',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
-                                  Shadow(color: Colors.black, blurRadius: 4),
-                                ]),
-                              )
-                            ],
-                          ),
-                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Simulovat\n+200 m',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
+                            Shadow(color: Colors.black, blurRadius: 4),
+                          ]),
+                        )
                       ],
-                    );
-                  },
-                ),
-              ),
-            ],
+                    ),
+                  ),
+                ],
+              );
+            },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildFloatingRoundButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.65),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white24, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.35),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              )
+            ],
+          ),
+          child: Icon(icon, color: Colors.white, size: 19),
+        ),
+      ),
+    );
+  }
+
+  void _showRestartDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Restartovat výpravu?',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Tímto smažeš veškerý svůj dosavadní pokrok, předměty a budeš muset začít od nuly. Přejete si pokračovat?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Zrušit', style: TextStyle(color: Colors.cyanAccent)),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _service.resetQuest();
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Restartovat'),
+          ),
+        ],
       ),
     );
   }

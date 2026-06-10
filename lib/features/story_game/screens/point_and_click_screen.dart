@@ -21,13 +21,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
   String? _selectedItemId;
   final FlutterTts _tts = FlutterTts();
 
-  void _speakHeroLine(String line) async {
-    try {
-      await _tts.setLanguage("cs-CZ");
-      await _tts.setPitch(0.85); // Deeper pitch to sound like a man
-      await _tts.setSpeechRate(0.4); // Slower, natural reading speed
-      await _tts.speak(line);
-    } catch (_) {}
+  void _speakHeroLine(String line) {
+    // voiceover disabled due to robot-like TTS quality
   }
 
   void _collectItem(String itemId, String pickupMessage) {
@@ -200,18 +195,13 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       _showDialog("🔧 Nanesl jsi olej na rezavý klíč a očistil ho. Získal jsi funkční Klíč od brány! 🔑");
       return true;
     }
-    // 4. blue_mushrooms + pure_water -> potion (requires pot in inventory)
-    if (id1 == 'blue_mushrooms' && id2 == 'pure_water') {
-      if (state.inventory.contains('pot')) {
-        _service.removeItem('blue_mushrooms');
-        _service.removeItem('pure_water');
-        _service.collectItem('potion'); _speakHeroLine("Podařilo se!");
-        _showDialog("🍵 Svařil jsi modré houby s čistou vodou v měděném kotlíku a vyrobil zářící Léčivý elixír!");
-        return true;
-      } else {
-        _showDialog("Máš sice houby i čistou vodu, ale nemáš v čem elixír svařit. Chce to nějakou nádobu/kotlík.");
-        return false;
-      }
+    // 4. blue_mushrooms + item_water -> potion
+    if (id1 == 'blue_mushrooms' && id2 == 'item_water') {
+      _service.removeItem('blue_mushrooms');
+      _service.removeItem('item_water');
+      _service.collectItem('potion'); _speakHeroLine("Podařilo se!");
+      _showDialog("🍵 Svařil jsi modré houby s čistou vodou a vyrobil zářící Léčivý elixír!");
+      return true;
     }
     // 5. lens + tinder -> smoldering_tinder
     if (id1 == 'lens' && id2 == 'tinder') {
@@ -730,7 +720,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
   }
 
   // Get active hotspots for current room
-  List<_Hotspot> _getHotspots(QuestState state) {
+    List<_Hotspot> _getHotspots(QuestState state) {
     final list = <_Hotspot>[];
 
     if (widget.nodeId == 'node1') {
@@ -738,7 +728,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       // Gate hotspot
       list.add(_Hotspot(
         name: "Lesní brána",
-        x: 0.35, y: 0.25, w: 0.3, h: 0.45,
+        x: 0.35, y: 0.2, w: 0.3, h: 0.55,
         onTap: () {
           final isGateOpen = state.roomStates['node1_gate_open'] == true;
           if (isGateOpen) {
@@ -758,80 +748,63 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             _speakHeroLine("Tohle sem nepatří.");
             _showDialog("Tento předmět na bránu nepasuje.");
           } else {
-            _showDialog("Masivní brána z dubového dřeva. Zámek je zrezivělý a chybí klika.");
+            _showDialog("Masivní brána z dubového dřeva. Zámek je zrezivélý a chybí klika.");
           }
         },
       ));
 
-      // Handle in grass
-      final hasHandle = state.roomStates['node1_has_handle'] == true;
-      if (!hasHandle) {
+      // Starý pařez (Sparkling!)
+      final hasStumpItems = state.roomStates['node1_stump_checked'] == true;
+      if (!hasStumpItems) {
         list.add(_Hotspot(
-          name: "Klika v trávě",
-          x: 0.15, y: 0.75, w: 0.15, h: 0.12,
+          name: "Starý pařez",
+          x: 0.1, y: 0.7, w: 0.25, h: 0.2,
+          showSparkle: true,
           onTap: () {
-            _service.updateRoomState('node1_has_handle', true);
-            _collectItem('iron_handle', "V trávě pod kamenným pilířem jsi našel těžkou kovanou kliku. Beru ji.");
+            _service.updateRoomState('node1_stump_checked', true);
+            _service.collectItem('dirty_key');
+            _service.collectItem('oil');
+            _speakHeroLine("To se bude hodit.");
+            setState(() {
+              _highlightCombineTutorial = true;
+            });
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: const Color(0xFF1E1E24),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: const Text(
+                  '💡 Výuka kombinování',
+                  style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                content: const Text(
+                  "Některé předměty v inventáři můžeš kombinovat!\n\nZkus vybrat jeden předmět (např. Olej na rez) a potom klepnout na druhý předmět (Zanesený klíč) v inventáři na dolním panelu.",
+                  style: TextStyle(color: Colors.white70, fontSize: 15),
+                  textAlign: TextAlign.center,
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Rozumím', style: TextStyle(color: Colors.cyanAccent)),
+                  ),
+                ],
+              ),
+            );
+            _showDialog("Našel jsi Zanesený klíč a Olej na rez! Zkus je v inventáři spojit.");
           },
         ));
       }
-
-      // Key under stone (New)
-      final hasKey = state.roomStates['node1_has_key'] == true;
-      if (!hasKey) {
-        list.add(_Hotspot(
-          name: "Uvolněný kámen",
-          x: 0.76, y: 0.62, w: 0.1, h: 0.08,
-          onTap: () {
-            _service.updateRoomState('node1_has_key', true);
-            _collectItem('fixed_key', "Odhrnul jsi uvolněný kámen v pilíři brány a našel klíč od brány!");
-          },
-        ));
-      }
-
-      // Bedna u cesty (Flavor)
-      list.add(_Hotspot(
-        name: "Bedna u cesty",
-        x: 0.16, y: 0.72, w: 0.12, h: 0.1,
-        onTap: () {
-          _showDialog("Stará dřevěná bedna lesníků u cesty. Je prázdná, zbyla v ní jen trocha shnilého listí.");
-        },
-      ));
-
-      // Signpost (New - Flavor)
-      list.add(_Hotspot(
-        name: "Rozcestník",
-        x: 0.02, y: 0.35, w: 0.1, h: 0.25,
-        onTap: () {
-          _showDialog("Starý zvětralý ukazatel hlásá:\n'Vstup na vlastní nebezpečí! Stezka střežená čtyřmi elementy.'");
-        },
-      ));
-
-      // Divoké křoví (Flavor)
-      list.add(_Hotspot(
-        name: "Divoké křoví",
-        x: 0.85, y: 0.35, w: 0.12, h: 0.25,
-        onTap: () {
-          _showDialog("Husté trnité křoví podél kamenné zdi. Bez mačety nebo ohně skrz něj neprojdeš.");
-        },
-      ));
     } else if (widget.nodeId == 'node2') {
       // Starý dub
-      // Hollow/Chest (Rune dial lock 472)
+      // Hollow/Chest (Rune dial lock 574)
       final chestOpen = state.roomStates['node2_chest_open'] == true;
       list.add(_Hotspot(
         name: "Dutina u kořenů",
         x: 0.42, y: 0.68, w: 0.18, h: 0.15,
         onTap: () {
           if (chestOpen) {
-            final hasAmulet = state.roomStates['node2_has_amulet'] == true;
-            if (!hasAmulet) {
-              _service.updateRoomState('node2_has_amulet', true);
-              _service.collectItem('amulet');
-              _completeNodeAndPop('node2', "🔮 Vzal jsi ze schránky vyhaslý kovový amulet. Cesta lesem pokračuje dál!");
-            } else {
-              _showDialog("Schránka je prázdná.");
-            }
+            _completeNodeAndPop('node2', "🔮 Otevřel jsi tajnou schránku! Dozvěděl ses o oltáři věčnosti. Cesta lesem pokračuje dál!");
             return;
           }
 
@@ -845,7 +818,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                 onSolved: () {
                   _service.updateRoomState('node2_chest_open', true);
                   _speakHeroLine("Mám to! Otevřelo se to.");
-                  _showDialog("🎉 Truhla v dutině cvakla a otevřela se! Uvnitř leží vyhaslý kovový amulet.");
+                  _showDialog("🎉 Truhla v dutině cvakla a otevřela se!");
                 },
               ),
             ),
@@ -869,7 +842,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         ));
       }
 
-      // Kresba na kmeni (New - clue for 472)
+      // Kresba na kmeni (clue for 574)
       list.add(_Hotspot(
         name: "Kresba na kmeni",
         x: 0.42, y: 0.42, w: 0.15, h: 0.18,
@@ -897,7 +870,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    "Na kůře stromu je vyrytá kresba dubu. Všimni si rozdělení a počtu hlavních větví směřujících k nebi zleva doprava. Tento počet větví (3 číslice) ti napoví kód k schránce.",
+                    "Na kůa stromu je vyrytá kresba dubu. Všimni si rozdělení a počtu hlavní větví směřujících k nebi zleva doprava. Tento počet větví (3 číslice) ti napoví kód k schránce.",
                     style: TextStyle(color: Colors.white70, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),
@@ -914,7 +887,19 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         },
       ));
 
-      // Squirrel on branch (New - Flavor)
+      // Forest right side (blue mushrooms)
+      final hasMushrooms = state.inventory.contains('blue_mushrooms');
+      if (!hasMushrooms) {
+        list.add(_Hotspot(
+          name: "Les vpravo (Houby)",
+          x: 0.75, y: 0.55, w: 0.18, h: 0.25,
+          onTap: () {
+            _collectItem('blue_mushrooms', "Prohledal jsi les za starým dubem a pod jedním z kořenů jsi našel svítící modré houby!");
+          },
+        ));
+      }
+
+      // Squirrel on branch (Flavor)
       list.add(_Hotspot(
         name: "Veverka",
         x: 0.72, y: 0.32, w: 0.08, h: 0.08,
@@ -943,7 +928,6 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
             if (_selectedItemId == 'burning_torch') {
               _service.updateRoomState('node3_vines_burned', true);
-              // Torch is not removed when burning vines so the player doesn't lose it
               _speakHeroLine("Mám to! Trní hoří.");
               setState(() => _selectedItemId = null);
               _showDialog("🔥 Přiložil jsi zapálenou pochodeň k ostnatému křoví. Suché větve okamžitě vzplály a spálily se na uhel! Vchod do chýše je volný.");
@@ -954,28 +938,28 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
               _speakHeroLine("Tohle sem nepatří.");
               _showDialog("Tento předmět ti s odklizením křoví nepomůže.");
             } else {
-              _showDialog("Dveře chýše jsou kompletně zarostlé tlustými ostnatými šlahouny. Holýma rukama neprojdou.");
+              _showDialog("Dveře chýše jsou kompletně zarostlé tlustými ostnatými šlahouny. Holýma rukama neprojdeš.");
             }
           },
         ));
 
-        // Hromada popela (New - Element Ohně)
-        final ashPlaced = state.roomStates['node6_ash_placed'] == true;
+        // Hromada popela (Element Vzduchu)
+        final ashPlaced = state.roomStates['node6_dust_placed'] == true;
         final hasAsh = state.inventory.contains('item_ash');
         final canCollectAsh = !ashPlaced && !hasAsh;
-        final hasAmuletOrPlaced = state.inventory.contains('amulet');
-        if (vinesBurned && canCollectAsh && hasAmuletOrPlaced) {
+        if (vinesBurned && canCollectAsh) {
           list.add(_Hotspot(
             name: "Hromada popela",
             x: 0.45, y: 0.65, w: 0.1, h: 0.1,
+            showSparkle: true,
             onTap: () {
               _service.collectItem('item_ash');
-              _showDialog("Z ohniště po spáleném křoví jsi nabral popel do amuletu jako Element Ohně.");
+              _showDialog("💨 Z popela po spáleném křoví jsi sesbíral jemný popel a prach jako Element Vzduchu.");
             },
           ));
         }
 
-        // Hadr na plotě (New)
+        // Hadr na plotě
         final hasCloth = state.roomStates['node3_has_cloth'] == true;
         final hasTorchInInventory = state.inventory.contains('torch') || state.inventory.contains('burning_torch');
         final caveLit = state.roomStates['node4_cave_lit'] == true;
@@ -986,12 +970,12 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             x: 0.15, y: 0.65, w: 0.1, h: 0.1,
             onTap: () {
               _service.updateRoomState('node3_has_cloth', true);
-              _collectItem('cloth', "Z dřevěného plotu jsi sundal starý, olejem nasáklý hadr. Bude skvěle hořet, pokud ho připevníš na větev.");
+              _collectItem('cloth', "Z dřevého plotu jsi sundal starý, olejem nasáklý hadr. Bude skvěle hořet, pokud ho připevníš na větev.");
             },
           ));
         }
 
-        // Lupa na okně (New)
+        // Lupa na okně
         final hasLens = state.roomStates['node3_has_lens'] == true;
         final hasTinderProductInInventory = state.inventory.contains('smoldering_tinder') || state.inventory.contains('burning_torch');
         final canGatherLens = !hasLens || (!state.inventory.contains('lens') && !hasTinderProductInInventory && !caveLit);
@@ -1006,13 +990,14 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           ));
         }
 
-        // Mech u plotu (New)
+        // Mech u plotu
         final hasTinder = state.roomStates['node3_has_tinder'] == true;
         final canGatherTinder = !hasTinder || (!state.inventory.contains('tinder') && !hasTinderProductInInventory && !caveLit);
         if (canGatherTinder) {
           list.add(_Hotspot(
             name: "Suchý mech",
             x: 0.82, y: 0.78, w: 0.1, h: 0.1,
+            showSparkle: true,
             onTap: () {
               _service.updateRoomState('node3_has_tinder', true);
               _collectItem('tinder', "U paty plotového sloupku jsi nasbíral chuchvalec suchého troudu (mechu). Výborný na rozdělání ohně.");
@@ -1022,52 +1007,20 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
         // Dřevěný plot (Flavor)
         list.add(_Hotspot(
-          name: "Dřevěný plot",
+          name: "Dřevéný plot",
           x: 0.7, y: 0.65, w: 0.2, h: 0.2,
           onTap: () {
-            _showDialog("Starý chatrný dřevěný plot. Některé latě jsou shnilé a rozpadají se.");
+            _showDialog("Starý chatrný dřevéný plot. Některé laté jsou shnilé a rozpadají se.");
           },
         ));
       } else {
         // Interior of Forester's Cabin
-        // Grinding pot (shelf)
-        final hasPot = state.roomStates['node3_has_pot'] == true;
-        list.add(_Hotspot(
-          name: "Police se džbánem (Kotlík)",
-          x: 0.12, y: 0.35, w: 0.15, h: 0.2,
-          onTap: () {
-            if (!hasPot) {
-              _service.updateRoomState('node3_has_pot', true);
-              _collectItem('pot', "Pod převráceným hliněným džbánem na polici ležel starý měděný kotlík. Hodí se na vaření lektvarů.");
-              _checkNode3Completion(state);
-            } else {
-              _showDialog("Police je prázdná.");
-            }
-          },
-        ));
-
-        // Well handle in drawer (New)
-        final hasWellHandle = state.roomStates['node3_has_well_handle'] == true;
-        list.add(_Hotspot(
-          name: "Zásuvka stolu",
-          x: 0.28, y: 0.6, w: 0.22, h: 0.22,
-          onTap: () {
-            if (!hasWellHandle) {
-              _service.updateRoomState('node3_has_well_handle', true);
-              _collectItem('well_handle', "Otevřel jsi zásuvku dílenského stolu a našel v ní masivní železnou kliku od studničního navijáku!");
-              _checkNode3Completion(state);
-            } else {
-              _showDialog("Zásuvka je prázdná.");
-            }
-          },
-        ));
-
         // Diary
         list.add(_Hotspot(
           name: "Starý sešit",
           x: 0.42, y: 0.58, w: 0.15, h: 0.12,
           onTap: () {
-            _showDialog("Čteš z Deníku hajného:\n'Našel jsem v bažinách studnu a vedle ní svatyni. Kliku od navijáku studny si schovávám k sobě do chýše do zásuvky, aby z ní nikdo cizí nepil. Studna je těžká a k vytažení vědra vyžaduje přesné vyvážení (25 kg)...'");
+            _completeNodeAndPop('node3', "📖 Přečtetl jsi deník lesníka! Dozvěděl ses o studni v bažinách a o tom, jak ji vyvážit.");
           },
         ));
 
@@ -1104,81 +1057,43 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
               _currentSubroom = "cave";
               _dialogText = state.roomStates['node4_hermit_healed'] == true
                   ? "Poustevník sedí v jeskyni u malého ohýnku a usmívá se."
-                  : "Uvnitř temné jeskyně leží na slaměném lůžku poustevník. Silně blouzní v horečkách.";
+                  : "Uvnitř temné jeskyně leží na slaměném lůžku poustevník. Silné blouzní v horečkách.";
             });
           },
         ));
 
-        // Distillation setup at fireplace (requires pot + water + copper pipe + jar)
-        final distilled = state.roomStates['node4_water_distilled'] == true;
-        if (!distilled && state.inventory.contains('pot') && state.inventory.contains('copper_pipe') && state.inventory.contains('pure_water') == false) {
-          list.add(_Hotspot(
-            name: "Ohniště (Destilace)",
-            x: 0.72, y: 0.72, w: 0.2, h: 0.2,
-            onTap: () {
-              _service.removeItem('pot');
-              _service.removeItem('copper_pipe');
-              _service.collectItem('pure_water');
-              _showDialog("🧪 Sestavil jsi destilační přístroj: Do kotlíku jsi nalil špinavou vodu z bažiny, napojil měděnou trubku a páru odvedl do prázdné lahve nad ohněm. Získal jsi čistou destilovanou vodu!");
-            },
-          ));
-        }
-
-        // Swamp Water hotspot (requires pot)
-        list.add(_Hotspot(
-          name: "Bažina (Voda)",
-          x: 0.42, y: 0.78, w: 0.25, h: 0.18,
-          onTap: () {
-            if (_selectedItemId == 'pot') {
-              _showDialog("Nabral jsi špinavou a otrávenou vodu z bažiny do kotlíku.");
-            } else {
-              _showDialog("Voda v bažině je znečištěná, pít se nedá.");
-            }
-          },
-        ));
-
-        // Old Well (requires well handle)
-        final wellHandlePlaced = state.roomStates['node4_well_handle'] == true;
+        // Old Well (no handle required)
         final waterTaken = state.roomStates['node4_water_taken'] == true &&
-            (state.inventory.contains('pure_water') || state.roomStates['node6_water_placed'] == true);
+            (state.inventory.contains('item_water') || state.roomStates['node6_water_placed'] == true);
 
         list.add(_Hotspot(
           name: "Kamenná studna",
           x: 0.4, y: 0.4, w: 0.24, h: 0.38,
           onTap: () {
-            final hasWaterOrPlaced = state.inventory.contains('pure_water') || state.roomStates['node6_water_placed'] == true;
+            final hasWaterOrPlaced = state.inventory.contains('item_water') || state.roomStates['node6_water_placed'] == true;
             if (waterTaken && hasWaterOrPlaced) {
-              _showDialog("Ve studni zbývá už jen zablácené dno, kbelík s čistou pramenitou vodou jsi již vzal.");
+              _showDialog("Kbelík s čistou pramenitou vodou jsi již nabral. Pokud jej ztratíš nebo spotřebuješ, můžeš nabrat další.");
               return;
             }
 
-            if (wellHandlePlaced) {
-              final wellBalanced = state.roomStates['node4_well_balanced'] == true;
-              if (wellBalanced) {
-                _service.updateRoomState('node4_water_taken', true);
-                _collectItem('pure_water', "💧 Vzal jsi kbelík s čistou pramenitou vodou ze studny!");
-              } else {
-                _showDialog("Zdvihací mechanismus studny je zablokován těžkým kbelíkem. Kbelík nelze vytáhnout, dokud nevyvážíš protizávaží na váze ve stodole.");
-              }
-            } else if (_selectedItemId == 'well_handle') {
-              _service.updateRoomState('node4_well_handle', true);
-              _service.removeItem('well_handle');
-              setState(() => _selectedItemId = null);
-              _showDialog("Nasadil jsi kliku navijáku na osu studny. Zkus ji otočit.");
+            final wellBalanced = state.roomStates['node4_well_balanced'] == true;
+            if (wellBalanced) {
+              _service.updateRoomState('node4_water_taken', true);
+              _collectItem('item_water', "💧 Vytáhl jsi kbelík s čistou pramenitou vodou ze studny!");
             } else {
-              _showDialog("Stará studna je hluboká a navijáku chybí otočná rukojeť, lano nejde navinout. Hned vedle studny se nachází váha ve stodole.");
+              _showDialog("Zdvihací mechanismus studny je zablokován těžkým kbelíkem. Kbelík nelze vytáhnout, dokud nevyvážíš protizávaží na váže ve stodole.");
             }
           },
         ));
 
-        // Barn hotspot (Stodola) instead of Váha
+        // Barn hotspot (Stodola)
         list.add(_Hotspot(
           name: "Stodola",
           x: 0.65, y: 0.38, w: 0.2, h: 0.35,
           onTap: () {
             setState(() {
               _currentSubroom = "barn";
-              _dialogText = "Vstoupil jsi do staré zaprášené stodoly. V rohu stojí masivní mechanismus váhy spojený se studnou.";
+              _dialogText = "Vstoupil jsi do staré zaprášené stodoly. V rohu stojí mechanismus váhy spojený se studnou.";
             });
           },
         ));
@@ -1206,7 +1121,6 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             onTap: () {
               if (_selectedItemId == 'burning_torch') {
                 _service.updateRoomState('node4_cave_lit', true);
-                _service.removeItem('burning_torch');
                 setState(() => _selectedItemId = null);
                 _showDialog("🔥 Pomocí zapálené pochodně jsi rozkřesal staré ohniště uprostřed jeskyně! Plameny ozářily kamenné stěny a v rohu jsi spatřil ležet nemocného poustevníka.");
               } else {
@@ -1215,56 +1129,11 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             },
           ));
         } else {
-          final healed = state.roomStates['node4_hermit_healed'] == true;
-
           list.add(_Hotspot(
             name: "Poustevník",
             x: 0.38, y: 0.42, w: 0.25, h: 0.35,
             onTap: () => _startPoustevnikDialogue(state),
           ));
-
-          // Pot on ground
-          final hasPot = state.roomStates['node4_has_pot'] == true;
-          if (!hasPot) {
-            list.add(_Hotspot(
-              name: "Měděný kotlík",
-              x: 0.72, y: 0.72, w: 0.15, h: 0.12,
-              onTap: () {
-                _service.updateRoomState('node4_has_pot', true);
-                _service.collectItem('pot');
-                _showDialog("Sebral jsi ze země prázdný měděný kotlík.");
-              },
-            ));
-          }
-
-          // Copper pipe
-          final hasPipe = state.roomStates['node4_has_pipe'] == true;
-          if (!hasPipe) {
-            list.add(_Hotspot(
-              name: "Měděná trubka",
-              x: 0.15, y: 0.65, w: 0.15, h: 0.15,
-              onTap: () {
-                _service.updateRoomState('node4_has_pipe', true);
-                _service.collectItem('copper_pipe');
-                _showDialog("V rohu jeskyně leží stará měděná trubka. Mohla by se hodit na destilaci.");
-              },
-            ));
-          }
-
-          // Ohniště (Vaření) - Brew potion inside lit cave (requires pure water + blue mushrooms + pot)
-          if (state.inventory.contains('pure_water') && state.inventory.contains('blue_mushrooms')) {
-            list.add(_Hotspot(
-              name: "Ohniště (Vaření)",
-              x: 0.62, y: 0.72, w: 0.15, h: 0.15,
-              onTap: () {
-                _service.removeItem('pure_water');
-                _service.removeItem('blue_mushrooms');
-                _service.collectItem('potion');
-                _speakHeroLine("Podařilo se!");
-                _showDialog("🍯 Svařil jsi modré houby v čisté destilované vodě v kotlíku. Získal jsi zářící modrý léčivý elixír!");
-              },
-            ));
-          }
         }
 
         // Return button
@@ -1308,12 +1177,11 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         ));
 
       } else if (_currentSubroom == "scale_zoom") {
-        final wellHandlePlaced = state.roomStates['node4_well_handle'] == true;
         final waterTaken = state.roomStates['node4_water_taken'] == true;
         final barnCleaned = state.roomStates['node4_barn_cleaned'] == true;
 
         if (!barnCleaned) {
-          // Clean the scale hotspot (click anywhere on the scale to clean)
+          // Clean the scale hotspot
           list.add(_Hotspot(
             name: "Očistit váhu",
             x: 0.2, y: 0.2, w: 0.6, h: 0.6,
@@ -1323,36 +1191,32 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             },
           ));
         } else {
-          // Cleaned scale interaction (run the puzzle)
+          // Cleaned scale interaction
           list.add(_Hotspot(
             name: "Mechanismus váhy",
             x: 0.25, y: 0.25, w: 0.5, h: 0.5,
             onTap: () {
               if (waterTaken) {
-                _showDialog("Voda je již úspěšně vytažena, váhu už není potřeba používat.");
+                _showDialog("Voda je již ůspěšně vytažena, váhu už není potřeba používat.");
                 return;
               }
 
-              if (wellHandlePlaced) {
-                final wellBalanced = state.roomStates['node4_well_balanced'] == true;
-                if (wellBalanced) {
-                  _showDialog("Váha je již úspěšně vyvážena.");
-                } else {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LogicPuzzlesScreen(
-                        puzzleType: "scales",
-                        onSolved: () {
-                          _service.updateRoomState('node4_well_balanced', true);
-                          _showDialog("⚙️ Vyvážil jsi protizávaží studny! Otočil jsi klikou a kbelík s čistou pramenitou vodou se s tichým zavrzáním vytáhl nahoru.");
-                        },
-                      ),
-                    ),
-                  );
-                }
+              final wellBalanced = state.roomStates['node4_well_balanced'] == true;
+              if (wellBalanced) {
+                _showDialog("Váha je již ůspěšně vyvážena.");
               } else {
-                _showDialog("Mechanismus váhy je propojen s navijákem studny. Nejdříve musíš nasadit kliku studny na osu navijáku.");
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LogicPuzzlesScreen(
+                      puzzleType: "scales",
+                      onSolved: () {
+                        _service.updateRoomState('node4_well_balanced', true);
+                        _showDialog("⚙ Vyvážil jsi protizávaží studny! Otočil jsi klikou a kbelík s čistou pramenitou vodou se s tichým zavrzáním vytáhl nahoru.");
+                      },
+                    ),
+                  ),
+                );
               }
             },
           ));
@@ -1413,32 +1277,18 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       if (_currentSubroom == "exterior") {
         // Knight Statue
         final swordPlaced = state.roomStates['node5_has_sword'] == true;
-        final lensCleaned = state.roomStates['node5_lens_cleaned'] == true;
 
         list.add(_Hotspot(
           name: "Socha rytíře",
           x: 0.15, y: 0.42, w: 0.2, h: 0.45,
           onTap: () {
-            if (lensCleaned) {
-              _showDialog("Socha drží kamenný meč a čočka je již vyleštěná.");
-              return;
-            }
-
             if (swordPlaced) {
-              if (_selectedItemId == 'acid') {
-                _service.removeItem('acid');
-                _service.updateRoomState('node5_lens_cleaned', true);
-                _service.collectItem('clean_lens');
-                setState(() => _selectedItemId = null);
-                _showDialog("🧪 Nanesl jsi kyselinu na čočku sochy. Tvrdá pryskyřice se okamžitě rozpustila a odhalila čisté leštěné sklo. Sebral jsi čistou čočku!");
-              } else {
-                _showDialog("Socha rytíře se otočila. V jejím hrudním plátu se odhalila čočka, ale je zalitá tvrdou stromovou pryskyřicí, která nejde seškrábat.");
-              }
+              _showDialog("Socha rytíře se otočila a drží kamenný meč.");
             } else if (_selectedItemId == 'stone_sword') {
               _service.updateRoomState('node5_has_sword', true);
               _service.removeItem('stone_sword');
               setState(() => _selectedItemId = null);
-              _showDialog("🗡️ Vložil jsi kamenný meč do rukou sochy rytíře. Mechanismus za zdí zabzučel a socha se otočila čelem ke zdi!");
+              _showDialog("🗡ž Vložil jsi kamenný meč do rukou sochy rytíře. Mechanismus za zdí zabzučel a socha se otočila čelem ke zdi!");
             } else {
               _showDialog("Obří kamenná socha rytíře chránící pevnost. V rukou jí chybí rituální meč.");
             }
@@ -1456,8 +1306,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
               if (!taken) {
                 _service.updateRoomState('node5_items_taken', true);
                 _service.collectItem('stone_sword');
-                _service.collectItem('acid');
-                _showDialog("Vstoupil jsi do zbrojnice. Na stojanu leží Kamenný meč a na polici lahvička s kyselinou.");
+                _service.collectItem('clean_lens');
+                _showDialog("Vstoupil jsi do zbrojnice. Na stojanu leží Kamenný meč a na polici čistá čočka dalekohledu.");
               } else {
                 _showDialog("Zbrojnice je prázdná.");
               }
@@ -1555,7 +1405,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
               ).then((_) {
                 final solved = _service.stateNotifier.value.roomStates['node5_puzzle_solved'] == true;
                 if (solved) {
-                  _showDialog("🎉 Správně jsi zaměřil všechna 3 souhvězdí! Dalekohled se uzamkl a paprsek světla ukázal přesnou lokaci kamenného oltáře.");
+                  _showDialog("🎉 Správně jsi zaměřil všechna 3 souhvězdí! Dalekohled se uzamkl a paprsek světla ukázal přesnou lokaci kamenného oltář.");
                   Future.delayed(const Duration(milliseconds: 3000), () {
                     if (mounted) {
                       Navigator.pop(context, true);
@@ -1567,21 +1417,14 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           },
         ));
 
-        // Gather dust element (requires amulet or placed)
-        final dustPlaced = state.roomStates['node6_dust_placed'] == true;
-        final hasDust = state.inventory.contains('item_dust');
-        final canCollectDust = !dustPlaced && !hasDust;
-        final hasAmuletOrPlaced = state.inventory.contains('amulet');
-        if (canCollectDust && hasAmuletOrPlaced) {
-          list.add(_Hotspot(
-            name: "Starý regál",
-            x: 0.72, y: 0.25, w: 0.18, h: 0.32,
-            onTap: () {
-              _service.collectItem('item_dust');
-              _showDialog("Prach na knihách je starý stovky let. Nabral jsi ho do amuletu jako Element Vzduchu.");
-            },
-          ));
-        }
+        // Flavor old bookshelf
+        list.add(_Hotspot(
+          name: "Starý regál",
+          x: 0.72, y: 0.25, w: 0.18, h: 0.32,
+          onTap: () {
+            _showDialog("Starý dřevéný regál plný rozpadajících se knih. Je na něm tlustá vrstva stoletého prachu.");
+          },
+        ));
 
         // Hvězdopravec NPC
         list.add(_Hotspot(
@@ -1614,7 +1457,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
         x: 0.35, y: 0.42, w: 0.3, h: 0.3,
         onTap: () {
           if (completed) {
-            _showDialog("Rituál byl úspěšně dokončen. Amulet září věčným světlem!");
+            _showDialog("Rituál byl ůspěšně dokončen. Amulet září věčným světlem!");
             return;
           }
 
@@ -1635,7 +1478,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             ).then((_) {
               final active = _service.stateNotifier.value.roomStates['node6_amulet_active'] == true;
               if (active) {
-                _showDialog("🏆 Úspěšně jsi dokončil celou výpravu! Získal jsi 50 Limenek a tvůj zvířecí maskot slaví vítězství!");
+                _showDialog("🏆 Úspěšně jsi dokončil celou výpravu! Získal jsi 50 Limetek a tvůj zvířecí maskot slaví vítězství!");
                 Future.delayed(const Duration(milliseconds: 3500), () {
                   if (mounted) {
                     Navigator.pop(context, true);
@@ -1656,41 +1499,35 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           final Map<String, dynamic> roomStatesToUpdate = {};
           final List<String> placedNow = [];
 
-          // Try placing ash
-          if (!ashPlaced && state.inventory.contains('item_ash')) {
-            itemsToRemove.add('item_ash');
+          // Try placing Fire (burning_torch)
+          if (!ashPlaced && state.inventory.contains('burning_torch')) {
             roomStatesToUpdate['node6_ash_placed'] = true;
             ashPlaced = true;
-            placedNow.add("Popel (Oheň) 🔥");
+            placedNow.add("Zapálenou pochodneň (Oheň) 🔥");
           }
 
-          // Try placing water
-          final hasWater = state.inventory.contains('item_water') || state.inventory.contains('pure_water');
-          if (!waterPlaced && hasWater) {
-            if (state.inventory.contains('item_water')) {
-              itemsToRemove.add('item_water');
-            } else if (state.inventory.contains('pure_water')) {
-              itemsToRemove.add('pure_water');
-            }
+          // Try placing Water (item_water)
+          if (!waterPlaced && state.inventory.contains('item_water')) {
+            itemsToRemove.add('item_water');
             roomStatesToUpdate['node6_water_placed'] = true;
             waterPlaced = true;
-            placedNow.add("Čistou vodu (Voda) 💦");
+            placedNow.add("Kbelík vody (Voda) 💧");
           }
 
-          // Try placing dust
-          if (!dustPlaced && state.inventory.contains('item_dust')) {
-            itemsToRemove.add('item_dust');
+          // Try placing Air (item_ash)
+          if (!dustPlaced && state.inventory.contains('item_ash')) {
+            itemsToRemove.add('item_ash');
             roomStatesToUpdate['node6_dust_placed'] = true;
             dustPlaced = true;
-            placedNow.add("Prach (Vzduch) 💨");
+            placedNow.add("Popel a prach (Vzduch) 💨");
           }
 
-          // Try placing salt
+          // Try placing Earth (item_salt)
           if (!saltPlaced && state.inventory.contains('item_salt')) {
             itemsToRemove.add('item_salt');
             roomStatesToUpdate['node6_salt_placed'] = true;
             saltPlaced = true;
-            placedNow.add("Horskou sůl (Země) 🌱");
+            placedNow.add("Kamenný krystal (Země) 🌱");
           }
 
           // Check if all are now placed
@@ -1708,38 +1545,38 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
           }
 
           if (allPlaced) {
-            _showDialog("🔮 Všechny 4 elementy byly úspěšně rozmístěny na oltář! Oltář se rozsvítil zářivým tyrkysovým světlem. Klikni na něj znovu a zahaj aktivaci.");
+            _showDialog("🔮 Všechny 4 elementy byly ůspěšně rozmístěny na oltář! Oltář se rozsvítil zářivým tyrkysovým světlem. Klikni na něj znovu a zahaj aktivaci.");
             return;
           }
 
           if (placedNow.isNotEmpty) {
             _showDialog("Vložil jsi do oltáře: ${placedNow.join(', ')}.\n\nStav oltáře:\n"
-                "${ashPlaced ? '✅ Popel (Oheň)' : '❌ Chybí Popel (Oheň)'}\n"
-                "${waterPlaced ? '✅ Čistá voda (Voda)' : '❌ Chybí Čistá voda (Voda)'}\n"
-                "${dustPlaced ? '✅ Prach (Vzduch)' : '❌ Chybí Prach (Vzduch)'}\n"
-                "${saltPlaced ? '✅ Horská sůl (Země)' : '❌ Chybí Horská sůl (Země)'}");
+                "${ashPlaced ? '✅ Zapálená pochodeň (Oheň)' : '❌ Chybí Zapálená pochodeň (Oheň)'}\n"
+                "${waterPlaced ? '✅ Kbelík vody (Voda)' : '❌ Chybí Kbelík vody (Voda)'}\n"
+                "${dustPlaced ? '✅ Popel a prach (Vzduch)' : '❌ Chybí Popel a prach (Vzduch)'}\n"
+                "${saltPlaced ? '✅ Kamenný krystal (Země)' : '❌ Chybí Kamenný krystal (Země)'}");
           } else {
             _showDialog("K oltáři jsi neměl co nového přiložit.\n\nStav oltáře:\n"
-                "${ashPlaced ? '✅ Popel (Oheň)' : '❌ Chybí Popel (Oheň)'}\n"
-                "${waterPlaced ? '✅ Čistá voda (Voda)' : '❌ Chybí Čistá voda (Voda)'}\n"
-                "${dustPlaced ? '✅ Prach (Vzduch)' : '❌ Chybí Prach (Vzduch)'}\n"
-                "${saltPlaced ? '✅ Horská sůl (Země)' : '❌ Chybí Horská sůl (Země)'}");
+                "${ashPlaced ? '✅ Zapálená pochodeň (Oheň)' : '❌ Chybí Zapálená pochodeň (Oheň)'}\n"
+                "${waterPlaced ? '✅ Kbelík vody (Voda)' : '❌ Chybí Kbelík vody (Voda)'}\n"
+                "${dustPlaced ? '✅ Popel a prach (Vzduch)' : '❌ Chybí Popel a prach (Vzduch)'}\n"
+                "${saltPlaced ? '✅ Kamenný krystal (Země)' : '❌ Chybí Kamenný krystal (Země)'}");
           }
         },
       ));
 
-      // Salt hotspot (requires amulet or placed)
+      // Salt hotspot (Kamenný krystal)
       final saltPlaced = state.roomStates['node6_salt_placed'] == true;
       final hasSalt = state.inventory.contains('item_salt');
       final canCollectSalt = !saltPlaced && !hasSalt;
-      final hasAmuletOrPlaced = state.inventory.contains('amulet');
-      if (canCollectSalt && hasAmuletOrPlaced) {
+      if (canCollectSalt) {
         list.add(_Hotspot(
           name: "Skalní trhlina (Sůl)",
           x: 0.08, y: 0.65, w: 0.18, h: 0.18,
+          showSparkle: true,
           onTap: () {
             _service.collectItem('item_salt');
-            _showDialog("V trhlině skály se vysrážela čistá horská sůl. Nabral jsi ji do amuletu jako Element Země.");
+            _showDialog("Ve skalní trhlině jsi našel zářivý Kamenný krystal! Sebral jsi ho jako Element Země.");
           },
         ));
       }
@@ -1873,7 +1710,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       final caveLit = state.roomStates['node4_cave_lit'] == true;
       final wellBalanced = state.roomStates['node4_well_balanced'] == true;
       final waterTaken = state.roomStates['node4_water_taken'] == true &&
-          (state.inventory.contains('pure_water') || state.roomStates['node6_water_placed'] == true);
+          (state.inventory.contains('item_water') || state.roomStates['node6_water_placed'] == true);
       if (caveLit) {
         if (waterTaken) {
           return 'assets/images/story_room_swamp_cave_lit_hook_only.png';
@@ -2301,34 +2138,53 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                                     }
                                   });
                                 },
-                                child: Container(
-                                  margin: const EdgeInsets.only(right: 12),
-                                  width: 60,
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? Colors.lime.shade700 : Colors.grey.shade800,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: isSelected ? Border.all(color: Colors.lime, width: 2) : null,
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      InventoryItemIcon(
-                                        itemId: itemId,
-                                        size: 32,
+                                child: AnimatedBuilder(
+                                  animation: _pulseController,
+                                  builder: (context, child) {
+                                    final shouldGlow = _highlightCombineTutorial && (itemId == 'dirty_key' || itemId == 'oil');
+                                    return Container(
+                                      margin: const EdgeInsets.only(right: 12),
+                                      width: 60,
+                                      decoration: BoxDecoration(
+                                        color: isSelected ? Colors.lime.shade700 : Colors.grey.shade800,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: isSelected
+                                            ? Border.all(color: Colors.lime, width: 2)
+                                            : (shouldGlow
+                                                ? Border.all(color: Colors.cyanAccent.withOpacity(0.3 + _pulseController.value * 0.7), width: 2)
+                                                : null),
+                                        boxShadow: shouldGlow
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.cyanAccent.withOpacity(0.1 + _pulseController.value * 0.4),
+                                                  blurRadius: 4 + _pulseController.value * 6,
+                                                  spreadRadius: _pulseController.value * 2,
+                                                )
+                                              ]
+                                            : null,
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        item.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: isSelected ? Colors.black : Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      )
-                                    ],
-                                  ),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          InventoryItemIcon(
+                                            itemId: itemId,
+                                            size: 32,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            item.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: isSelected ? Colors.black : Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          )
+                                        ],
+                                      ),
+                                    );
+                                  },
                                 ),
                               );
                             },
@@ -2350,6 +2206,7 @@ class _Hotspot {
   final double w; // width percentage (0-1)
   final double h; // height percentage (0-1)
   final VoidCallback onTap;
+  final bool showSparkle;
 
   _Hotspot({
     required this.name,
@@ -2358,6 +2215,7 @@ class _Hotspot {
     required this.w,
     required this.h,
     required this.onTap,
+    this.showSparkle = false,
   });
 }
 
@@ -2518,3 +2376,5 @@ class InventoryItemIcon extends StatelessWidget {
     );
   }
 }
+
+

@@ -61,22 +61,52 @@ class StoryGameService {
   ];
 
   final Map<String, QuestItem> allItems = {
-    'iron_handle': QuestItem(
-      id: 'iron_handle',
-      name: 'Kovaná klika',
-      description: 'Stará železná klika, která pasuje do lesní brány.',
-      assetPath: 'assets/images/story_item_handle.png',
+    'dirty_key': QuestItem(
+      id: 'dirty_key',
+      name: 'Zanesený klíč',
+      description: 'Zanesený a rezavý klíč. Bude potřeba ho vyčistit a naolejovat.',
+      assetPath: 'assets/images/story_item_dirty_key.png',
+    ),
+    'oil': QuestItem(
+      id: 'oil',
+      name: 'Olej na rez',
+      description: 'Jemný mechanický olej. Skvělý na odstranění rzi a promazání zámků.',
+      assetPath: 'assets/images/story_item_oil.png',
+    ),
+    'fixed_key': QuestItem(
+      id: 'fixed_key',
+      name: 'Klíč od brány',
+      description: 'Vyčištěný a naolejovaný klíč k lesní bráně.',
+      assetPath: 'assets/images/story_item_fixed_key.png',
+    ),
+    'stick': QuestItem(
+      id: 'stick',
+      name: 'Suchá větev',
+      description: 'Dlouhá suchá větev. Ideální základ pro pochodeň.',
+      assetPath: 'assets/images/story_item_stick.png',
+    ),
+    'blue_mushrooms': QuestItem(
+      id: 'blue_mushrooms',
+      name: 'Modré houby',
+      description: 'Vzácné houby se silnými léčivými účinky.',
+      assetPath: 'assets/images/story_item_mushrooms.png',
+    ),
+    'cloth': QuestItem(
+      id: 'cloth',
+      name: 'Mastný hadr',
+      description: 'Mastný hadr nalezený v chýši. Skvěle hoří.',
+      assetPath: 'assets/images/story_item_cloth.png',
     ),
     'lens': QuestItem(
       id: 'lens',
       name: 'Prasklá lupa',
-      description: 'Díky loupání slunce s ní lze zažehnout suchý troud.',
+      description: 'Stará lupa s popraskaným sklem. Lze ji využít k zažehnutí troudu.',
       assetPath: 'assets/images/story_item_lens.png',
     ),
     'tinder': QuestItem(
       id: 'tinder',
       name: 'Suchý mech',
-      description: 'Velmi suchý lesní mech, skvělý pro rozdělání ohně.',
+      description: 'Velmi suchý mech, skvělý pro rozdělání ohně.',
       assetPath: 'assets/images/story_item_tinder.png',
     ),
     'smoldering_tinder': QuestItem(
@@ -85,71 +115,35 @@ class StoryGameService {
       description: 'Doutnající mech, který dokáže zapálit oheň.',
       assetPath: 'assets/images/story_item_smoldering.png',
     ),
-    'oil': QuestItem(
-      id: 'oil',
-      name: 'Olej na rez',
-      description: 'Mazadlo pro uvolnění zrezivělých mechanismů.',
-      assetPath: 'assets/images/story_item_oil.png',
+    'torch': QuestItem(
+      id: 'torch',
+      name: 'Nezapálená pochodeň',
+      description: 'Nezapálená pochodeň vyrobená z větve a hadru.',
+      assetPath: 'assets/images/story_item_torch.png',
     ),
-    'dirty_key': QuestItem(
-      id: 'dirty_key',
-      name: 'Zanesený klíč',
-      description: 'Klíč od lesní brány pokrytý rzí. Chce to obrousit.',
-      assetPath: 'assets/images/story_item_dirty_key.png',
+    'burning_torch': QuestItem(
+      id: 'burning_torch',
+      name: 'Zapálená pochodeň',
+      description: 'Jasně planoucí pochodeň. Slouží zároveň jako Element Ohně.',
+      assetPath: 'assets/images/story_item_burning_torch.png',
     ),
-    'fixed_key': QuestItem(
-      id: 'fixed_key',
-      name: 'Klíč od brány',
-      description: 'Obroušený a namazaný klíč k lesní bráně.',
-      assetPath: 'assets/images/story_item_fixed_key.png',
+    'item_ash': QuestItem(
+      id: 'item_ash',
+      name: 'Popel a prach',
+      description: 'Popel ze spáleného křoví. Slouží zároveň jako Element Vzduchu.',
+      assetPath: 'assets/images/story_item_ash.png',
     ),
-    'blue_mushrooms': QuestItem(
-      id: 'blue_mushrooms',
-      name: 'Modré houby',
-      description: 'Vzácné houby z bažiny se silnými hojivými účinky.',
-      assetPath: 'assets/images/story_item_mushrooms.png',
-    ),
-    'copper_pipe': QuestItem(
-      id: 'copper_pipe',
-      name: 'Měděná trubka',
-      description: 'Ohebná trubka, užitečná pro odvádění páry.',
-      assetPath: 'assets/images/story_item_pipe.png',
-    ),
-    'pot': QuestItem(
-      id: 'pot',
-      name: 'Kotlík',
-      description: 'Kovový kotlík pro vaření vody a lektvarů.',
-      assetPath: 'assets/images/story_item_pot.png',
-    ),
-    'pure_water': QuestItem(
-      id: 'pure_water',
-      name: 'Destilovaná voda',
-      description: 'Čistá, nezávadná voda získaná destilací.',
+    'item_water': QuestItem(
+      id: 'item_water',
+      name: 'Kbelík vody',
+      description: 'Kbelík s čistou vodou vytažený ze studny. Slouží zároveň jako Element Vody.',
       assetPath: 'assets/images/story_item_water.png',
     ),
     'potion': QuestItem(
       id: 'potion',
       name: 'Léčivý elixír',
-      description: 'Modrý lektvar, který spolehlivě léčí horečku.',
+      description: 'Modrý lektvar, který spolehlivě vyléčí poustevníkovu horečku.',
       assetPath: 'assets/images/story_item_potion.png',
-    ),
-    'well_handle': QuestItem(
-      id: 'well_handle',
-      name: 'Klika navijáku',
-      description: 'Klika ke studni, slouží k vytažení vědra.',
-      assetPath: 'assets/images/story_item_well_handle.png',
-    ),
-    'triangular_key': QuestItem(
-      id: 'triangular_key',
-      name: 'Trojúhelníkový klíč',
-      description: 'Starobylý klíč s trojúhelníkovým profilem.',
-      assetPath: 'assets/images/story_item_triangular_key.png',
-    ),
-    'amulet': QuestItem(
-      id: 'amulet',
-      name: 'Vyhaslý amulet',
-      description: 'Prázdný kovový amulet. Potřebuje nabít živly.',
-      assetPath: 'assets/images/story_item_amulet.png',
     ),
     'key_armory': QuestItem(
       id: 'key_armory',
@@ -163,65 +157,17 @@ class StoryGameService {
       description: 'Stará replika meče, pasuje do rukou sochy rytíře.',
       assetPath: 'assets/images/story_item_sword.png',
     ),
-    'acid': QuestItem(
-      id: 'acid',
-      name: 'Kyselina v lahvičce',
-      description: 'Silná kyselina, rozpouští pryskyřici a čistí sklo.',
-      assetPath: 'assets/images/story_item_acid.png',
-    ),
     'clean_lens': QuestItem(
       id: 'clean_lens',
       name: 'Čistá čočka',
-      description: 'Vyleštěná čočka pro dalekohled.',
+      description: 'Vyleštěná skleněná čočka pro dalekohled.',
       assetPath: 'assets/images/story_item_clean_lens.png',
-    ),
-    'item_ash': QuestItem(
-      id: 'item_ash',
-      name: 'Element Ohně (Popel)',
-      description: 'Popel z ohniště strážců, symbolizuje oheň.',
-      assetPath: 'assets/images/story_item_ash.png',
     ),
     'item_salt': QuestItem(
       id: 'item_salt',
-      name: 'Element Země (Sůl)',
-      description: 'Horská sůl ze skalního průsmyku.',
+      name: 'Kamenný krystal',
+      description: 'Zářící kamenný krystal nalezený v průsmyku. Slouží zároveň jako Element Země.',
       assetPath: 'assets/images/story_item_salt.png',
-    ),
-    'item_dust': QuestItem(
-      id: 'item_dust',
-      name: 'Element Vzduchu (Prach)',
-      description: 'Prach ze starobylé knihovny pevnosti.',
-      assetPath: 'assets/images/story_item_dust.png',
-    ),
-    'item_water': QuestItem(
-      id: 'item_water',
-      name: 'Element Vody',
-      description: 'Destilovaná voda bažiny.',
-      assetPath: 'assets/images/story_item_water.png',
-    ),
-    'stick': QuestItem(
-      id: 'stick',
-      name: 'Suchá větev',
-      description: 'Dlouhá suchá větev. Ideální základ pro pochodeň.',
-      assetPath: 'assets/images/story_item_stick.png',
-    ),
-    'cloth': QuestItem(
-      id: 'cloth',
-      name: 'Mastný hadr',
-      description: 'Mastný hadr nalezený v chýši. Skvěle hoří.',
-      assetPath: 'assets/images/story_item_cloth.png',
-    ),
-    'torch': QuestItem(
-      id: 'torch',
-      name: 'Nezapálená pochodeň',
-      description: 'Nezapálená pochodeň vyrobená z větve a hadru. Musíš ji něčím zapálit.',
-      assetPath: 'assets/images/story_item_torch.png',
-    ),
-    'burning_torch': QuestItem(
-      id: 'burning_torch',
-      name: 'Zapálená pochodeň',
-      description: 'Jasně planoucí pochodeň. Osvětlí temná místa a spálí překážky.',
-      assetPath: 'assets/images/story_item_burning_torch.png',
     ),
   };
 
