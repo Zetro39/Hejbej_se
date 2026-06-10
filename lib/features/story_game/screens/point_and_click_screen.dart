@@ -1831,17 +1831,17 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       final waterTaken = state.roomStates['node4_water_taken'] == true;
       if (caveLit) {
         if (waterTaken) {
-          return 'assets/images/story_room_swamp_cave_lit_bucket_up.png';
-        } else if (wellBalanced) {
           return 'assets/images/story_room_swamp_cave_lit_hook_only.png';
+        } else if (wellBalanced) {
+          return 'assets/images/story_room_swamp_cave_lit_bucket_up.png';
         } else {
           return 'assets/images/story_room_swamp_cave_lit.png';
         }
       } else {
         if (waterTaken) {
-          return 'assets/images/story_room_swamp_bucket_up.png';
-        } else if (wellBalanced) {
           return 'assets/images/story_room_swamp_hook_only.png';
+        } else if (wellBalanced) {
+          return 'assets/images/story_room_swamp_bucket_up.png';
         } else {
           return 'assets/images/story_room_swamp.png';
         }
