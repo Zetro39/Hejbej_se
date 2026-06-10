@@ -16,10 +16,12 @@ class PointAndClickScreen extends StatefulWidget {
   State<PointAndClickScreen> createState() => _PointAndClickScreenState();
 }
 
-class _PointAndClickScreenState extends State<PointAndClickScreen> {
+class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTickerProviderStateMixin {
   final StoryGameService _service = StoryGameService();
   String? _selectedItemId;
   final FlutterTts _tts = FlutterTts();
+  late AnimationController _pulseController;
+  bool _highlightCombineTutorial = false;
 
   void _speakHeroLine(String line) {
     // voiceover disabled due to robot-like TTS quality
@@ -71,8 +73,18 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
     _setInitialDialog();
     _loadPlayerAvatar();
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPlayerAvatar() async {
@@ -2157,8 +2169,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                                             ? [
                                                 BoxShadow(
                                                   color: Colors.cyanAccent.withOpacity(0.1 + _pulseController.value * 0.4),
-                                                  blurRadius: 4 + _pulseController.value * 6,
-                                                  spreadRadius: _pulseController.value * 2,
+                                                  blurRadius: 4.0 + _pulseController.value * 6.0,
+                                                  spreadRadius: _pulseController.value * 2.0,
                                                 )
                                               ]
                                             : null,
