@@ -1154,12 +1154,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
             if (wellHandlePlaced) {
               final wellBalanced = state.roomStates['node4_well_balanced'] == true;
               if (wellBalanced) {
-                if (state.inventory.contains('pot')) {
-                  _service.updateRoomState('node4_water_taken', true);
-                  _collectItem('pure_water', "💧 Do měděného kotlíku jsi nabral čistou pramenitou vodu z vytaženého kbelíku!");
-                } else {
-                  _showDialog("Kbelík s čistou pramenitou vodou je vytažen nahoru. Nemáš ji však do čeho nabrat. Potřebuješ nějakou nádobu, například měděný kotlík z chýše.");
-                }
+                _service.updateRoomState('node4_water_taken', true);
+                _collectItem('pure_water', "⚙️ Otočil jsi klikou a bez námahy vytáhl kbelík nahoru. Našel jsi v něm čistou, pramenitou vodu! 💧");
               } else {
                 _showDialog("Zdvihací mechanismus studny je zablokován těžkým kbelíkem. Kbelík nelze vytáhnout, dokud nevyvážíš protizávaží na váze ve stodole.");
               }
@@ -1337,11 +1333,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
                         onSolved: () {
                           _service.updateRoomState('node4_well_balanced', true);
                           _service.updateRoomState('node4_water_taken', true);
-                          if (state.inventory.contains('pot')) {
-                            _collectItem('pure_water', "⚙️ Vyvážil jsi protizávaží studny! Otočil jsi klikou a vytáhl kbelík nahoru. Do měděného kotlíku jsi nabral čistou pramenitou vodu! 💧");
-                          } else {
-                            _showDialog("⚙️ Vyvážil jsi protizávaží studny! Otočil jsi klikou a vytáhl kbelík s čistou pramenitou vodou nahoru. Nemáš ji však do čeho nabrat. Potřebuješ nějakou nádobu (např. měděný kotlík z chýše).");
-                          }
+                          _collectItem('pure_water', "⚙️ Vyvážil jsi protizávaží studny! Otočil jsi klikou a bez námyhy vytáhl kbelík nahoru s čistou pramenitou vodou! 💧");
                         },
                       ),
                     ),
