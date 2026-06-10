@@ -1139,7 +1139,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
 
         // Old Well (requires well handle)
         final wellHandlePlaced = state.roomStates['node4_well_handle'] == true;
-        final waterTaken = state.roomStates['node4_water_taken'] == true;
+        final waterTaken = state.roomStates['node4_water_taken'] == true &&
+            (state.inventory.contains('pure_water') || state.roomStates['node6_water_placed'] == true);
 
         list.add(_Hotspot(
           name: "Kamenná studna",
@@ -1871,7 +1872,8 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> {
       }
       final caveLit = state.roomStates['node4_cave_lit'] == true;
       final wellBalanced = state.roomStates['node4_well_balanced'] == true;
-      final waterTaken = state.roomStates['node4_water_taken'] == true;
+      final waterTaken = state.roomStates['node4_water_taken'] == true &&
+          (state.inventory.contains('pure_water') || state.roomStates['node6_water_placed'] == true);
       if (caveLit) {
         if (waterTaken) {
           return 'assets/images/story_room_swamp_cave_lit_hook_only.png';
