@@ -2222,6 +2222,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
           },
         ),
       ),
+    );
   }
 
   void _showHintDialog(QuestState state) {

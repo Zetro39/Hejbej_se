@@ -290,6 +290,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
         style: TextStyle(
           color: unlocked ? Colors.deepPurple.shade900 : Colors.black54,
           fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
