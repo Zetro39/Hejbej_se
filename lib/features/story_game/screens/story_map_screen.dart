@@ -34,6 +34,13 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
     'node4_node5': [],
     'node5_node6': [],
   };
+  Offset _debugPanelOffset = const Offset(16, 200);
+  bool _debugPanelCollapsed = false;
+
+  // Custom tap detection for scrollable map to avoid conflict with dragging/scrolling
+  Offset? _pointerDownGlobalPosition;
+  Offset? _pointerDownLocalPosition;
+  DateTime? _pointerDownTime;
 
   @override
   void initState() {
@@ -668,27 +675,46 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                               height: 3234,
                               child: Stack(
                                 children: [
-                                  // Map Background Image with coordinate debug detector
+                                  // Map Background Image with coordinate debug detector using custom tap Listener to prevent conflict with scrolling
                                   Positioned.fill(
-                                    child: GestureDetector(
+                                    child: Listener(
                                       behavior: HitTestBehavior.translucent,
-                                      onTapUp: (details) {
+                                      onPointerDown: (event) {
                                         if (_showDebugCoords) {
-                                          final double tapX = details.localPosition.dx / 1080;
-                                          final double tapY = details.localPosition.dy / 3234;
-                                          setState(() {
-                                            _debugMapTap = Offset(tapX, tapY);
-                                            // Add to active draft path
-                                            final key = [
-                                              'node1_node2',
-                                              'node2_node3',
-                                              'node3_node4',
-                                              'node4_node5',
-                                              'node5_node6',
-                                            ][_selectedDebugSegment];
-                                            _debugDraftPaths[key]?.add(Offset(tapX, tapY));
-                                          });
+                                          _pointerDownGlobalPosition = event.position;
+                                          _pointerDownLocalPosition = event.localPosition;
+                                          _pointerDownTime = DateTime.now();
                                         }
+                                      },
+                                      onPointerUp: (event) {
+                                        if (_showDebugCoords &&
+                                            _pointerDownGlobalPosition != null &&
+                                            _pointerDownLocalPosition != null &&
+                                            _pointerDownTime != null) {
+                                          final double screenDistance = (event.position - _pointerDownGlobalPosition!).distance;
+                                          final int durationMs = DateTime.now().difference(_pointerDownTime!).inMilliseconds;
+
+                                          // Allow a small wiggle (up to 22 logical screen pixels) and typical tap duration (400ms)
+                                          if (screenDistance < 22.0 && durationMs < 400) {
+                                            final double tapX = _pointerDownLocalPosition!.dx / 1080;
+                                            final double tapY = _pointerDownLocalPosition!.dy / 3234;
+                                            setState(() {
+                                              _debugMapTap = Offset(tapX, tapY);
+                                              // Add to active draft path
+                                              final key = [
+                                                'node1_node2',
+                                                'node2_node3',
+                                                'node3_node4',
+                                                'node4_node5',
+                                                'node5_node6',
+                                              ][_selectedDebugSegment];
+                                              _debugDraftPaths[key]?.add(Offset(tapX, tapY));
+                                            });
+                                          }
+                                        }
+                                        _pointerDownGlobalPosition = null;
+                                        _pointerDownLocalPosition = null;
+                                        _pointerDownTime = null;
                                       },
                                       child: Image.asset(
                                         'assets/images/story_map.png',
@@ -697,24 +723,28 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                     ),
                                   ),
 
-                                  // Overlay fog for locked chapters
+                                  // Overlay fog for locked chapters (IgnorePointer to allow taps to pass through)
                                   Positioned.fill(
-                                    child: Container(
-                                      color: Colors.black.withOpacity(0.05), // subtle dark overlay
+                                    child: IgnorePointer(
+                                      child: Container(
+                                        color: Colors.black.withOpacity(0.05), // subtle dark overlay
+                                      ),
                                     ),
                                   ),
 
-                                  // Custom Painter to draw paths
+                                  // Custom Painter to draw paths (IgnorePointer to allow taps to pass through)
                                   Positioned.fill(
-                                    child: CustomPaint(
-                                      painter: _MapPathPainter(
-                                        nodes: _service.nodes,
-                                        walkedDistance: state.currentDistanceWalked,
-                                        unlockedNodes: state.unlockedNodes,
-                                        service: _service,
-                                        showDebugCoords: _showDebugCoords,
-                                        debugDraftPaths: _debugDraftPaths,
-                                        selectedDebugSegment: _selectedDebugSegment,
+                                    child: IgnorePointer(
+                                      child: CustomPaint(
+                                        painter: _MapPathPainter(
+                                          nodes: _service.nodes,
+                                          walkedDistance: state.currentDistanceWalked,
+                                          unlockedNodes: state.unlockedNodes,
+                                          service: _service,
+                                          showDebugCoords: _showDebugCoords,
+                                          debugDraftPaths: _debugDraftPaths,
+                                          selectedDebugSegment: _selectedDebugSegment,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -858,18 +888,22 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                _buildFloatingRoundButton(
-                                  icon: _showDebugCoords ? Icons.location_searching : Icons.location_disabled,
-                                  tooltip: 'Ladění souřadnic',
-                                  onTap: () {
-                                    setState(() {
-                                      _showDebugCoords = !_showDebugCoords;
-                                      if (!_showDebugCoords) {
-                                        _debugMapTap = null;
-                                      }
-                                    });
-                                  },
-                                ),
+                                  _buildFloatingRoundButton(
+                                    icon: _showDebugCoords ? Icons.location_searching : Icons.location_disabled,
+                                    tooltip: 'Ladění souřadnic',
+                                    onTap: () {
+                                      setState(() {
+                                        _showDebugCoords = !_showDebugCoords;
+                                        if (_showDebugCoords) {
+                                          _service.segmentPaths.forEach((key, list) {
+                                            _debugDraftPaths[key] = List.from(list);
+                                          });
+                                        } else {
+                                          _debugMapTap = null;
+                                        }
+                                      });
+                                    },
+                                  ),
                                 const SizedBox(width: 10),
                                 _buildFloatingRoundButton(
                                   icon: Icons.menu_book,
@@ -895,14 +929,13 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                     ),
                   ),
 
-                  // Floating Debug Coordinates Panel
+                  // Floating Debug Coordinates Panel (Draggable and collapsible)
                   if (_showDebugCoords)
                     Positioned(
-                      bottom: 24,
-                      left: 16,
-                      right: 80, // Leave space for simulation buttons on the right!
+                      left: _debugPanelOffset.dx,
+                      top: _debugPanelOffset.dy,
+                      width: _debugPanelCollapsed ? 180.0 : 280.0,
                       child: Container(
-                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: const Color(0xFF1E1E24).withOpacity(0.95),
                           borderRadius: BorderRadius.circular(16),
@@ -919,162 +952,241 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  "🛠️ EDITOR TRAS",
-                                  style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.cyanAccent.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    "Bodů: ${_debugDraftPaths[['node1_node2', 'node2_node3', 'node3_node4', 'node4_node5', 'node5_node6'][_selectedDebugSegment]]?.length ?? 0}",
-                                    style: const TextStyle(color: Colors.cyanAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            // Segment selector dropdown
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.black38,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<int>(
-                                  value: _selectedDebugSegment,
-                                  dropdownColor: const Color(0xFF1E1E24),
-                                  icon: const Icon(Icons.arrow_drop_down, color: Colors.cyanAccent),
-                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                                  items: const [
-                                    DropdownMenuItem(value: 0, child: Text("Segment 1: Brána ➔ Dub")),
-                                    DropdownMenuItem(value: 1, child: Text("Segment 2: Dub ➔ Chýše")),
-                                    DropdownMenuItem(value: 2, child: Text("Segment 3: Chýše ➔ Bažina")),
-                                    DropdownMenuItem(value: 3, child: Text("Segment 4: Bažina ➔ Pevnost")),
-                                    DropdownMenuItem(value: 4, child: Text("Segment 5: Pevnost ➔ Oltář")),
-                                  ],
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      setState(() {
-                                        _selectedDebugSegment = val;
-                                        _debugMapTap = null;
-                                      });
-                                    }
-                                  },
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            if (_debugMapTap != null) ...[
-                              Text(
-                                "Poslední bod: x: ${_debugMapTap!.dx.toStringAsFixed(4)}, y: ${_debugMapTap!.dy.toStringAsFixed(4)}",
-                                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontFamily: 'monospace'),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-                            // Actions Row
-                            Row(
-                              children: [
-                                // Undo Button
-                                Expanded(
-                                  child: TextButton.icon(
-                                    style: TextButton.styleFrom(
-                                      backgroundColor: Colors.white10,
-                                      foregroundColor: Colors.white,
-                                      padding: EdgeInsets.zero,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    icon: const Icon(Icons.undo, size: 14),
-                                    label: const Text("Zpět", style: TextStyle(fontSize: 11)),
-                                    onPressed: () {
-                                      final key = [
-                                        'node1_node2',
-                                        'node2_node3',
-                                        'node3_node4',
-                                        'node4_node5',
-                                        'node5_node6',
-                                      ][_selectedDebugSegment];
-                                      final list = _debugDraftPaths[key];
-                                      if (list != null && list.isNotEmpty) {
-                                        setState(() {
-                                          list.removeLast();
-                                          _debugMapTap = list.isNotEmpty ? list.last : null;
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                // Clear Button
-                                Expanded(
-                                  child: TextButton.icon(
-                                    style: TextButton.styleFrom(
-                                      backgroundColor: Colors.red.withOpacity(0.15),
-                                      foregroundColor: Colors.redAccent,
-                                      padding: EdgeInsets.zero,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    icon: const Icon(Icons.delete_outline, size: 14),
-                                    label: const Text("Smazat", style: TextStyle(fontSize: 11)),
-                                    onPressed: () {
-                                      final key = [
-                                        'node1_node2',
-                                        'node2_node3',
-                                        'node3_node4',
-                                        'node4_node5',
-                                        'node5_node6',
-                                      ][_selectedDebugSegment];
-                                      setState(() {
-                                        _debugDraftPaths[key]?.clear();
-                                        _debugMapTap = null;
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            // Copy Button (primary action)
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.cyanAccent.shade700,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                              ),
-                              icon: const Icon(Icons.copy, size: 14),
-                              label: const Text("KOPÍROVAT BODY", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              onPressed: () {
-                                final key = [
-                                  'node1_node2',
-                                  'node2_node3',
-                                  'node3_node4',
-                                  'node4_node5',
-                                  'node5_node6',
-                                ];
-                                final activeKey = key[_selectedDebugSegment];
-                                final points = _debugDraftPaths[activeKey] ?? [];
-                                if (points.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text("Trasa neobsahuje žádné body k zkopírování.")),
+                            // Draggable Header Handle
+                            GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onPanUpdate: (details) {
+                                setState(() {
+                                  _debugPanelOffset = Offset(
+                                    (_debugPanelOffset.dx + details.delta.dx).clamp(0.0, constraints.maxWidth - (_debugPanelCollapsed ? 180.0 : 280.0)),
+                                    (_debugPanelOffset.dy + details.delta.dy).clamp(0.0, constraints.maxHeight - 80.0),
                                   );
-                                  return;
-                                }
-                                final pointsStr = points.map((p) => "const Offset(${p.dx.toStringAsFixed(4)}, ${p.dy.toStringAsFixed(4)})").join(",\n");
-                                final formatted = "'$activeKey': [\n$pointsStr\n],";
-                                Clipboard.setData(ClipboardData(text: formatted));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text("Souřadnice segmentu $activeKey zkopírovány do schránky!")),
-                                );
+                                });
                               },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.cyanAccent.withOpacity(0.08),
+                                  borderRadius: BorderRadius.vertical(
+                                    top: const Radius.circular(14),
+                                    bottom: Radius.circular(_debugPanelCollapsed ? 14.0 : 0.0),
+                                  ),
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: _debugPanelCollapsed 
+                                          ? Colors.transparent 
+                                          : Colors.cyanAccent.withOpacity(0.2), 
+                                      width: 1
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.drag_indicator, color: Colors.cyanAccent, size: 18),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              _debugPanelCollapsed ? "EDITOR" : "🛠️ EDITOR TRAS",
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.cyanAccent, 
+                                                fontWeight: FontWeight.bold, 
+                                                fontSize: 12, 
+                                                letterSpacing: 0.8
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.cyanAccent.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            "${_debugDraftPaths[['node1_node2', 'node2_node3', 'node3_node4', 'node4_node5', 'node5_node6'][_selectedDebugSegment]]?.length ?? 0}b",
+                                            style: const TextStyle(color: Colors.cyanAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              _debugPanelCollapsed = !_debugPanelCollapsed;
+                                              // Adjust offset if expanding would push it off-screen
+                                              final targetWidth = _debugPanelCollapsed ? 180.0 : 280.0;
+                                              final maxDx = constraints.maxWidth - targetWidth;
+                                              if (_debugPanelOffset.dx > maxDx) {
+                                                _debugPanelOffset = Offset(maxDx.clamp(0.0, constraints.maxWidth), _debugPanelOffset.dy);
+                                              }
+                                            });
+                                          },
+                                          child: Icon(
+                                            _debugPanelCollapsed ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                                            color: Colors.white70,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
+                            if (!_debugPanelCollapsed) ...[
+                              Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    // Segment selector dropdown
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black38,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: DropdownButtonHideUnderline(
+                                        child: DropdownButton<int>(
+                                          value: _selectedDebugSegment,
+                                          dropdownColor: const Color(0xFF1E1E24),
+                                          icon: const Icon(Icons.arrow_drop_down, color: Colors.cyanAccent),
+                                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                          items: const [
+                                            DropdownMenuItem(value: 0, child: Text("Segment 1: Brána ➔ Dub")),
+                                            DropdownMenuItem(value: 1, child: Text("Segment 2: Dub ➔ Chýše")),
+                                            DropdownMenuItem(value: 2, child: Text("Segment 3: Chýše ➔ Bažina")),
+                                            DropdownMenuItem(value: 3, child: Text("Segment 4: Bažina ➔ Pevnost")),
+                                            DropdownMenuItem(value: 4, child: Text("Segment 5: Pevnost ➔ Oltář")),
+                                          ],
+                                          onChanged: (val) {
+                                            if (val != null) {
+                                              setState(() {
+                                                _selectedDebugSegment = val;
+                                                _debugMapTap = null;
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    if (_debugMapTap != null) ...[
+                                      Text(
+                                        "Poslední bod: x: ${_debugMapTap!.dx.toStringAsFixed(4)}, y: ${_debugMapTap!.dy.toStringAsFixed(4)}",
+                                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontFamily: 'monospace'),
+                                      ),
+                                      const SizedBox(height: 8),
+                                    ],
+                                    // Actions Row
+                                    Row(
+                                      children: [
+                                        // Undo Button
+                                        Expanded(
+                                          child: TextButton.icon(
+                                            style: TextButton.styleFrom(
+                                              backgroundColor: Colors.white10,
+                                              foregroundColor: Colors.white,
+                                              padding: EdgeInsets.zero,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            ),
+                                            icon: const Icon(Icons.undo, size: 14),
+                                            label: const Text("Zpět", style: TextStyle(fontSize: 11)),
+                                            onPressed: () {
+                                              final key = [
+                                                'node1_node2',
+                                                'node2_node3',
+                                                'node3_node4',
+                                                'node4_node5',
+                                                'node5_node6',
+                                              ][_selectedDebugSegment];
+                                              final list = _debugDraftPaths[key];
+                                              if (list != null && list.isNotEmpty) {
+                                                setState(() {
+                                                  list.removeLast();
+                                                  _debugMapTap = list.isNotEmpty ? list.last : null;
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        // Clear Button
+                                        Expanded(
+                                          child: TextButton.icon(
+                                            style: TextButton.styleFrom(
+                                              backgroundColor: Colors.red.withOpacity(0.15),
+                                              foregroundColor: Colors.redAccent,
+                                              padding: EdgeInsets.zero,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            ),
+                                            icon: const Icon(Icons.delete_outline, size: 14),
+                                            label: const Text("Smazat", style: TextStyle(fontSize: 11)),
+                                            onPressed: () {
+                                              final key = [
+                                                'node1_node2',
+                                                'node2_node3',
+                                                'node3_node4',
+                                                'node4_node5',
+                                                'node5_node6',
+                                              ][_selectedDebugSegment];
+                                              setState(() {
+                                                _debugDraftPaths[key]?.clear();
+                                                _debugMapTap = null;
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    // Copy Button (primary action)
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.cyanAccent.shade700,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                      ),
+                                      icon: const Icon(Icons.copy, size: 14),
+                                      label: const Text("KOPÍROVAT BODY", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                      onPressed: () {
+                                        final key = [
+                                          'node1_node2',
+                                          'node2_node3',
+                                          'node3_node4',
+                                          'node4_node5',
+                                          'node5_node6',
+                                        ];
+                                        final activeKey = key[_selectedDebugSegment];
+                                        final points = _debugDraftPaths[activeKey] ?? [];
+                                        if (points.isEmpty) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text("Trasa neobsahuje žádné body k zkopírování.")),
+                                          );
+                                          return;
+                                        }
+                                        final pointsStr = points.map((p) => "const Offset(${p.dx.toStringAsFixed(4)}, ${p.dy.toStringAsFixed(4)})").join(",\n");
+                                        final formatted = "'$activeKey': [\n$pointsStr\n],";
+                                        Clipboard.setData(ClipboardData(text: formatted));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text("Souřadnice segmentu $activeKey zkopírovány do schránky!")),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
