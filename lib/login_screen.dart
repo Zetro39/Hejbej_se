@@ -30,21 +30,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Test buildu'),
-          content: const Text('🎉 Funguje to! Úspěšně jsi sestavil a nasadil novou verzi z lokálního počítače.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Super!'),
-            ),
-          ],
-        ),
-      );
-    });
   }
 
   @override

@@ -98,6 +98,7 @@ class QuestState {
         'node1_gate_open': false,
         'node1_has_handle': false,
         'node2_chest_open': false,
+        'node2_chest_taken': false,
         'node2_has_amulet': false,
         'node3_has_key': false,
         'node3_has_moss': false,

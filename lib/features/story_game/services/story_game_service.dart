@@ -21,42 +21,42 @@ class StoryGameService {
       name: 'Lesní brána',
       description: 'Vstup do hlubokého lesa chráněný starou bránou.',
       requiredDistance: 0,
-      mapPosition: const Offset(0.2, 0.85),
+      mapPosition: const Offset(0.50, 0.90),
     ),
     QuestNode(
       id: 'node2',
       name: 'Starý dub',
       description: 'Prastarý strom s vyřezanými magickými symboly.',
       requiredDistance: 400,
-      mapPosition: const Offset(0.55, 0.72),
+      mapPosition: const Offset(0.45, 0.78),
     ),
     QuestNode(
       id: 'node3',
       name: 'Zřícenina chýše',
       description: 'Zřícenina domku bývalého hajného.',
       requiredDistance: 1000,
-      mapPosition: const Offset(0.25, 0.6),
+      mapPosition: const Offset(0.55, 0.66),
     ),
     QuestNode(
       id: 'node4',
       name: 'Bažina & Studna',
       description: 'Svatyně skrytá v mlžném oparu bažin.',
       requiredDistance: 2500,
-      mapPosition: const Offset(0.7, 0.5),
+      mapPosition: const Offset(0.48, 0.54),
     ),
     QuestNode(
       id: 'node5',
       name: 'Zapomenutá pevnost',
       description: 'Opuštěná kamenná pevnost s vysokou věží.',
       requiredDistance: 4500,
-      mapPosition: const Offset(0.4, 0.38),
+      mapPosition: const Offset(0.52, 0.42),
     ),
     QuestNode(
       id: 'node6',
       name: 'Kamenný oltář',
       description: 'Vrcholek skály s rituálním kruhem.',
       requiredDistance: 6000,
-      mapPosition: const Offset(0.75, 0.26),
+      mapPosition: const Offset(0.50, 0.30),
     ),
   ];
 
@@ -81,8 +81,8 @@ class StoryGameService {
     ),
     'stick': QuestItem(
       id: 'stick',
-      name: 'Suchá větev',
-      description: 'Dlouhá suchá větev. Ideální základ pro pochodeň.',
+      name: 'Dřevěný sloupek',
+      description: 'Dřevěný sloupek z rozpadlé lesní značky. Ideální základ pro pochodeň.',
       assetPath: 'assets/images/story_item_stick.png',
     ),
     'blue_mushrooms': QuestItem(
@@ -139,6 +139,18 @@ class StoryGameService {
       description: 'Kbelík s čistou vodou vytažený ze studny. Slouží zároveň jako Element Vody.',
       assetPath: 'assets/images/story_item_water.png',
     ),
+    'pot': QuestItem(
+      id: 'pot',
+      name: 'Měděný kotlík',
+      description: 'Starý měděný kotlík. Hodí se na vaření elixírů.',
+      assetPath: 'assets/images/story_item_pot.png',
+    ),
+    'well_handle': QuestItem(
+      id: 'well_handle',
+      name: 'Klika od studny',
+      description: 'Těžká železná klika, která pasuje do navijáku studny.',
+      assetPath: 'assets/images/story_item_well_handle.png',
+    ),
     'potion': QuestItem(
       id: 'potion',
       name: 'Léčivý elixír',
@@ -165,8 +177,8 @@ class StoryGameService {
     ),
     'item_salt': QuestItem(
       id: 'item_salt',
-      name: 'Kamenný krystal',
-      description: 'Zářící kamenný krystal nalezený v průsmyku. Slouží zároveň jako Element Země.',
+      name: 'Posvátný kámen',
+      description: 'Kámen ze starobylé kamenné mohyly u oltáře. Představuje Element Země.',
       assetPath: 'assets/images/story_item_salt.png',
     ),
   };

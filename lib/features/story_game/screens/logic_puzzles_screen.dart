@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 
 class LogicPuzzlesScreen extends StatefulWidget {
@@ -81,6 +82,13 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
     try {
       await _tts.stop();
       await _tts.speak(text);
+    } catch (_) {}
+  }
+
+  void _playSfx(String filename) async {
+    try {
+      final player = AudioPlayer();
+      await player.play(AssetSource('images/$filename'));
     } catch (_) {}
   }
 
@@ -325,7 +333,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
       final code = _dialValues.join();
       solved = (code == widget.correctCode);
       if (solved) {
-        _speak('Zámek s těžkým kovovým cvaknutím povolil. Truhla je otevřená!');
+        _playSfx('lock_unlock.mp3');
       }
     } else if (widget.puzzleType == 'scales') {
       solved = (_winchState == 'lifting');
@@ -338,7 +346,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         }
       }
       if (solved) {
-        _speak('Něco tiše cvaklo a regál s knihami se s rachotem odsunul!');
+        _playSfx('lock_unlock.mp3');
       }
     } else if (widget.puzzleType == 'telescope') {
       solved = _isSolved;
@@ -557,7 +565,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                                   onPressed: isCodeCorrect
                                       ? null
                                       : () {
-                                          _speak('cvak');
+                                          _playSfx('lock_click.mp3');
                                           setState(() {
                                             _dialValues[index] = (_dialValues[index] + 1) % 10;
                                           });
@@ -633,7 +641,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                                   onPressed: isCodeCorrect
                                       ? null
                                       : () {
-                                          _speak('cvak');
+                                          _playSfx('lock_click.mp3');
                                           setState(() {
                                             _dialValues[index] = (_dialValues[index] - 1 + 10) % 10;
                                           });

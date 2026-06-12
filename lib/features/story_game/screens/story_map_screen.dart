@@ -20,13 +20,20 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
   bool _showIntro = false;
   int _introSlideIndex = 0;
   final AudioPlayer _musicPlayer = AudioPlayer();
+  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     _service.initialize();
     _checkIntro();
     _initMusic();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
   }
 
   void _initMusic() async {
@@ -40,6 +47,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
   @override
   void dispose() {
     _musicPlayer.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -505,56 +513,80 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
 
               return Stack(
                 children: [
-                  // Map Background Image (fills the entire screen)
+                  // Map Background & Interactive Area scaled together to avoid coordinate drift
                   Positioned.fill(
-                    child: Image.asset(
-                      'assets/images/story_map.png',
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+                    child: SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      controller: _scrollController,
+                      child: Center(
+                        child: SizedBox(
+                          width: mapWidth * 1.4,
+                          height: mapWidth * 1.4 * (1920 / 1080),
+                          child: FittedBox(
+                            fit: BoxFit.fill,
+                            child: SizedBox(
+                              width: 1080,
+                              height: 1920,
+                              child: Stack(
+                                children: [
+                                  // Map Background Image
+                                  Positioned.fill(
+                                    child: Image.asset(
+                                      'assets/images/story_map.png',
+                                      fit: BoxFit.fill,
+                                    ),
+                                  ),
 
-                  // Overlay fog for locked chapters
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.black.withOpacity(0.05), // subtle dark overlay
-                    ),
-                  ),
+                                  // Overlay fog for locked chapters
+                                  Positioned.fill(
+                                    child: Container(
+                                      color: Colors.black.withOpacity(0.05), // subtle dark overlay
+                                    ),
+                                  ),
 
-                  // Custom Painter to draw paths
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _MapPathPainter(
-                        nodes: _service.nodes,
-                        walkedDistance: state.currentDistanceWalked,
-                        unlockedNodes: state.unlockedNodes,
-                      ),
-                    ),
-                  ),
+                                  // Custom Painter to draw paths
+                                  Positioned.fill(
+                                    child: CustomPaint(
+                                      painter: _MapPathPainter(
+                                        nodes: _service.nodes,
+                                        walkedDistance: state.currentDistanceWalked,
+                                        unlockedNodes: state.unlockedNodes,
+                                      ),
+                                    ),
+                                  ),
 
-                  // Render nodes (Locations)
-                  ..._service.nodes.map((node) {
-                    final isUnlocked = state.unlockedNodes.contains(node.id);
-                    final isCompleted = state.completedNodes.contains(node.id);
-                    final posX = node.mapPosition.dx * mapWidth;
-                    final posY = node.mapPosition.dy * mapHeight;
+                                  // Render nodes (Locations)
+                                  ..._service.nodes.map((node) {
+                                    final isUnlocked = state.unlockedNodes.contains(node.id);
+                                    final isCompleted = state.completedNodes.contains(node.id);
+                                    final posX = node.mapPosition.dx * 1080;
+                                    final posY = node.mapPosition.dy * 1920;
 
-                    return Positioned(
-                      left: posX - 28,
-                      top: posY - 28,
-                      child: GestureDetector(
-                        onTap: () => _onNodeTap(node, state),
-                        child: _buildNodeMarker(node, isUnlocked, isCompleted),
-                      ),
-                    );
-                  }),
+                                    return Positioned(
+                                      left: posX - 28,
+                                      top: posY - 28,
+                                      child: GestureDetector(
+                                        onTap: () => _onNodeTap(node, state),
+                                        child: _buildNodeMarker(node, isUnlocked, isCompleted),
+                                      ),
+                                    );
+                                  }),
 
-                  // User Avatar marker
-                  Positioned(
-                    left: (avatarPos.dx * mapWidth) - 20,
-                    top: (avatarPos.dy * mapHeight) - 35,
-                    child: IgnorePointer(
-                      child: AnimatedBobbingWidget(
-                        child: _buildAvatarMarker(),
+                                  // User Avatar marker
+                                  Positioned(
+                                    left: (avatarPos.dx * 1080) - 20,
+                                    top: (avatarPos.dy * 1920) - 35,
+                                    child: IgnorePointer(
+                                      child: AnimatedBobbingWidget(
+                                        child: _buildAvatarMarker(),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
