@@ -2400,6 +2400,9 @@ class InventoryItemIcon extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
   void _showHintDialog(QuestState state) {
     String hintText = "";
     
