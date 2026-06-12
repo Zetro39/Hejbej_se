@@ -993,7 +993,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         // Hermit cave entrance
         list.add(_Hotspot(
           name: "Poustevníkova jeskyně",
-          x: 0.20, y: 0.42, w: 0.25, h: 0.35,
+          x: 0.020, y: 0.174, w: 0.309, h: 0.338,
           onTap: () {
             setState(() {
               _currentSubroom = "cave";
@@ -1010,7 +1010,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
 
         list.add(_Hotspot(
           name: "Kamenná studna",
-          x: 0.4, y: 0.4, w: 0.24, h: 0.38,
+          x: 0.299, y: 0.415, w: 0.247, h: 0.302,
           onTap: () {
             final hasWaterOrPlaced = state.inventory.contains('item_water') || state.roomStates['node6_water_placed'] == true;
             if (waterTaken && hasWaterOrPlaced) {
@@ -1031,7 +1031,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         // Barn hotspot (Stodola)
         list.add(_Hotspot(
           name: "Stodola",
-          x: 0.78, y: 0.38, w: 0.18, h: 0.35,
+          x: 0.782, y: 0.269, w: 0.201, h: 0.291,
           onTap: () {
             setState(() {
               _currentSubroom = "barn";
@@ -1073,7 +1073,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         } else {
           list.add(_Hotspot(
             name: "Poustevník",
-            x: 0.38, y: 0.42, w: 0.25, h: 0.35,
+            x: 0.009, y: 0.522, w: 0.428, h: 0.315,
             onTap: () => _startPoustevnikDialogue(state),
           ));
         }
@@ -1095,7 +1095,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         // Váha (Detail) click
         list.add(_Hotspot(
           name: "Váha (Detail)",
-          x: 0.55, y: 0.3, w: 0.3, h: 0.5,
+          x: 0.537, y: 0.495, w: 0.376, h: 0.417,
           onTap: () {
             setState(() {
               _currentSubroom = "scale_zoom";
@@ -1103,6 +1103,15 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
                   ? "Detailní pohled na očištěnou váhu. Všechny piktogramy jsou jasně čitelné."
                   : "Pohled na starou váhu. Je zcela pokrytá prachem a pavučinami. Štítek s piktogramy není čitelný.";
             });
+          },
+        ));
+
+        // Staré haraburdí
+        list.add(_Hotspot(
+          name: "Staré haraburdí",
+          x: 0.016, y: 0.393, w: 0.464, h: 0.604,
+          onTap: () {
+            _showDialog("Staré haraburdí, rozbité nářadí a harampádí zanechané svému osudu.");
           },
         ));
 
@@ -1126,7 +1135,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
           // Clean the scale hotspot
           list.add(_Hotspot(
             name: "Očistit váhu",
-            x: 0.2, y: 0.2, w: 0.6, h: 0.6,
+            x: 0.137, y: 0.302, w: 0.757, h: 0.435,
             onTap: () {
               _service.updateRoomState('node4_barn_cleaned', true);
               _showDialog("Setřel jsi nánosy prachu a pavučin z kovového štítku. Piktogramy kbelíku, vah a přetrženého lana jsou nyní krásně vidět!");
@@ -1136,7 +1145,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
           // Cleaned scale interaction
           list.add(_Hotspot(
             name: "Mechanismus váhy",
-            x: 0.25, y: 0.25, w: 0.5, h: 0.5,
+            x: 0.137, y: 0.302, w: 0.757, h: 0.435,
             onTap: () {
               if (waterTaken) {
                 _showDialog("Voda je již úspěšně vytažena, váhu už není potřeba používat.");
@@ -1224,7 +1233,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
 
         list.add(_Hotspot(
           name: "Socha rytíře",
-          x: 0.10, y: 0.42, w: 0.2, h: 0.45,
+          x: 0.008, y: 0.215, w: 0.229, h: 0.750,
           onTap: () {
             if (swordPlaced) {
               _showDialog("Socha rytíře se otočila a drží kamenný meč. Ukazuje směrem k bráně.");
@@ -1242,7 +1251,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         if (swordPlaced && !lensTaken) {
           list.add(_Hotspot(
             name: "Čočka na zádech",
-            x: 0.12, y: 0.28, w: 0.08, h: 0.08,
+            x: 0.001, y: 0.294, w: 0.101, h: 0.120,
             showSparkle: true,
             onTap: () {
               _service.collectItem('clean_lens');
@@ -1256,7 +1265,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         final armoryOpen = state.roomStates['node5_armory_open'] == true;
         list.add(_Hotspot(
           name: "Mříž zbrojnice",
-          x: 0.78, y: 0.48, w: 0.18, h: 0.32,
+          x: 0.802, y: 0.440, w: 0.183, h: 0.385,
           onTap: () {
             if (armoryOpen) {
               final taken = state.roomStates['node5_items_taken'] == true;
@@ -1286,7 +1295,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         // Library transition
         list.add(_Hotspot(
           name: "Vchod do knihovny",
-          x: 0.45, y: 0.42, w: 0.15, h: 0.3,
+          x: 0.433, y: 0.516, w: 0.220, h: 0.209,
           onTap: () {
             setState(() {
               _currentSubroom = "library";
@@ -1302,7 +1311,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         // Bookshelf puzzle
         list.add(_Hotspot(
           name: "Police s knihami",
-          x: 0.15, y: 0.15, w: 0.20, h: 0.30,
+          x: 0.041, y: 0.348, w: 0.176, h: 0.244,
           onTap: () {
             if (!askedForHelp) {
               _showDialog("Police plná starých knih. Nevypadá to, že bys s nimi měl teď hýbat bez svolení hvězdopravce.");
@@ -1333,7 +1342,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         final telescopeSolved = state.roomStates['node5_puzzle_solved'] == true;
         list.add(_Hotspot(
           name: "Astronomický dalekohled",
-          x: 0.42, y: 0.45, w: 0.25, h: 0.35,
+          x: 0.427, y: 0.399, w: 0.224, h: 0.496,
           onTap: () {
             if (telescopeSolved) {
               _showDialog("Dalekohled je správně seřízen. Paprsek světla ukazuje na průsmyk.");
@@ -1408,7 +1417,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         // Hvězdopravec NPC (dialogue trigger moved to the left of telescope)
         list.add(_Hotspot(
           name: "Hvězdopravec",
-          x: 0.28, y: 0.55, w: 0.15, h: 0.30,
+          x: 0.245, y: 0.515, w: 0.127, h: 0.396,
           onTap: () => _startHvezdopravecDialogue(state),
         ));
       }
@@ -1420,7 +1429,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
       final elementsPlaced = state.roomStates['node6_elements_placed'] == true;
       list.add(_Hotspot(
         name: "Oltář (Sloty)",
-        x: 0.35, y: 0.42, w: 0.3, h: 0.3,
+        x: 0.198, y: 0.405, w: 0.612, h: 0.300,
         onTap: () {
           if (completed) {
             _showDialog("Rituál byl ůspěšně dokončen. Amulet září věčným světlem!");
@@ -1538,7 +1547,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
       if (canCollectSalt) {
         list.add(_Hotspot(
           name: "Kamenná mohyla",
-          x: 0.08, y: 0.65, w: 0.18, h: 0.18,
+          x: 0.236, y: 0.733, w: 0.169, h: 0.184,
           showSparkle: true,
           onTap: () {
             _service.collectItem('item_salt');
