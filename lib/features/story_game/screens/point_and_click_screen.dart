@@ -677,7 +677,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
       // Gate hotspot
       list.add(_Hotspot(
         name: "Lesní brána",
-        x: 0.35, y: 0.2, w: 0.3, h: 0.55,
+        x: 0.298, y: 0.327, w: 0.411, h: 0.398,
         onTap: () {
           final isGateOpen = state.roomStates['node1_gate_open'] == true;
           if (isGateOpen) {
@@ -707,7 +707,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
       if (!hasStumpItems) {
         list.add(_Hotspot(
           name: "Starý pařez",
-          x: 0.1, y: 0.7, w: 0.25, h: 0.2,
+          x: 0.788, y: 0.559, w: 0.201, h: 0.310,
           showSparkle: true,
           onTap: () {
             _service.updateRoomState('node1_stump_checked', true);
@@ -791,7 +791,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
       if (canGatherStick) {
         list.add(_Hotspot(
           name: "Rozpadlá značka",
-          x: 0.15, y: 0.8, w: 0.2, h: 0.12,
+          x: 0.035, y: 0.605, w: 0.147, h: 0.331,
           onTap: () {
             _service.updateRoomState('node2_has_stick', true);
             _collectItem('stick', "Hele, rozpadlá značka. Ten sloupek si vezmu, mohl by posloužit jako základ pochodně.");
@@ -802,7 +802,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
       // Kresba na kmeni (clue for 674) - enlarged
       list.add(_Hotspot(
         name: "Kresba na kmeni",
-        x: 0.40, y: 0.38, w: 0.20, h: 0.25,
+        x: 0.333, y: 0.228, w: 0.368, h: 0.297,
         onTap: () {
           showDialog(
             context: context,
@@ -849,7 +849,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
       if (!hasMushrooms) {
         list.add(_Hotspot(
           name: "Les vpravo (Houby)",
-          x: 0.75, y: 0.55, w: 0.18, h: 0.25,
+          x: 0.687, y: 0.775, w: 0.301, h: 0.208,
           onTap: () {
             _service.updateRoomState('node2_mushrooms_taken', true);
             _collectItem('blue_mushrooms', "Prohledal jsi les za starým dubem a pod jedním z kořenů jsi našel svítící modré houby!");
@@ -864,7 +864,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         // Vines / Door
         list.add(_Hotspot(
           name: vinesBurned ? "Vchod do chýše" : "Trnité křoví",
-          x: 0.38, y: 0.32, w: 0.22, h: 0.42,
+          x: 0.304, y: 0.484, w: 0.459, h: 0.293,
           onTap: () {
             if (vinesBurned) {
               setState(() {
@@ -902,7 +902,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         if (canGatherCloth) {
           list.add(_Hotspot(
             name: "Hadr na plotě",
-            x: 0.10, y: 0.62, w: 0.12, h: 0.12,
+            x: 0.025, y: 0.559, w: 0.199, h: 0.304,
             onTap: () {
               _service.updateRoomState('node3_has_cloth', true);
               _collectItem('cloth', "Z dřevěného plotu jsi sundal starý, olejem nasáklý hadr. Bude skvěle hořet, pokud ho připevníš na větev.");
@@ -917,7 +917,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         if (canGatherTinder) {
           list.add(_Hotspot(
             name: "Suchý mech",
-            x: 0.82, y: 0.84, w: 0.1, h: 0.1,
+            x: 0.538, y: 0.845, w: 0.359, h: 0.100,
             showSparkle: true,
             onTap: () {
               _service.updateRoomState('node3_has_tinder', true);
@@ -942,7 +942,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         // Diary
         list.add(_Hotspot(
           name: "Starý sešit",
-          x: 0.42, y: 0.58, w: 0.15, h: 0.12,
+          x: 0.020, y: 0.201, w: 0.195, h: 0.319,
           onTap: () {
             _service.updateRoomState('node3_diary_read', true);
             if (chestTaken) {
@@ -956,7 +956,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
         // Chest
         list.add(_Hotspot(
           name: "Železná truhla",
-          x: 0.72, y: 0.62, w: 0.18, h: 0.18,
+          x: 0.687, y: 0.643, w: 0.269, h: 0.252,
           onTap: () {
             if (!chestTaken) {
               _service.batchUpdate(
