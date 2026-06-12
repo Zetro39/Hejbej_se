@@ -912,6 +912,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
 
         // Mech u plotu
         final hasTinder = state.roomStates['node3_has_tinder'] == true;
+        final hasTinderProductInInventory = state.inventory.contains('smoldering_tinder') || state.inventory.contains('burning_torch');
         final canGatherTinder = !hasTinder || (!state.inventory.contains('tinder') && !hasTinderProductInInventory && !caveLit);
         if (canGatherTinder) {
           list.add(_Hotspot(
