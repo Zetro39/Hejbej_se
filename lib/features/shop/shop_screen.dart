@@ -27,6 +27,8 @@ class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateM
   List<String> _unlockedCompanions = [];
   String? _selectedCompanion;
   bool _loadingLimetky = true;
+  int _pendingLimetkyPurchaseAmount = 0;
+  double _pendingLimetkyPurchasePrice = 0.0;
 
   final List<Map<String, dynamic>> _companions = [
     {
@@ -259,14 +261,35 @@ class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateM
       if (!hasToken) {
         throw Exception('Neplatný platební token');
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Děkujeme za podporu! Vaší pomocí vylepšujeme aplikaci.'),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.green,
-        ),
-      );
+
+      if (_pendingLimetkyPurchaseAmount > 0) {
+        final amount = _pendingLimetkyPurchaseAmount;
+        _pendingLimetkyPurchaseAmount = 0; // reset
+        
+        AuthService().addLimetky(amount).then((_) {
+          _loadLimetkyAndCompanions();
+        });
+
+        Navigator.of(context).pop(); // Close the purchase dialog
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Nákup úspěšný! Bylo připsáno $amount Limetek 🍋'),
+            duration: const Duration(seconds: 4),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Děkujeme za podporu! Vaší pomocí vylepšujeme aplikaci.'),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
+      _pendingLimetkyPurchaseAmount = 0;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Platba se nepodařila: $e'),
@@ -538,10 +561,158 @@ class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateM
                       );
                     },
                   ),
+                  const Divider(height: 40),
+                  const Text(
+                    'Koupit Limetky 🍋',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Nemáš dostatek Limetek z výletů? Kup si je pohodlně a podpoř tím vývoj aplikace.',
+                    style: TextStyle(fontSize: 13, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 16),
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.4,
+                    children: [
+                      _buildLimetkyPackageCard(10, 100.0),
+                      _buildLimetkyPackageCard(25, 250.0),
+                      _buildLimetkyPackageCard(50, 500.0),
+                      _buildLimetkyPackageCard(100, 1000.0),
+                    ],
+                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
           );
+  }
+
+  Widget _buildLimetkyPackageCard(int amount, double price) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: Colors.lime.shade50.withOpacity(0.3),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _showPurchaseDialog(amount, price),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '🍋 $amount',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.lime),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${price.toInt()} Kč',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                '1 ks = 10 Kč',
+                style: TextStyle(fontSize: 10, color: Colors.black38),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPurchaseDialog(int amount, double price) {
+    setState(() {
+      _pendingLimetkyPurchaseAmount = amount;
+      _pendingLimetkyPurchasePrice = price;
+    });
+
+    final priceStr = price.toStringAsFixed(2);
+    final pItems = [
+      PaymentItem(
+        label: 'Nákup $amount Limetek 🍋',
+        amount: priceStr,
+        status: PaymentItemStatus.final_price,
+      )
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text('Koupit $amount Limetek?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Cena: ${price.toInt()} Kč',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.lime),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Limetky ti budou připsány na tvůj účet hned po dokončení platby.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.black54),
+              ),
+              const SizedBox(height: 20),
+              if (!_paymentReady)
+                const CircularProgressIndicator()
+              else if (_applePayAvailable && _applePayConfig != null)
+                ApplePayButton(
+                  paymentConfiguration: _applePayConfig!,
+                  paymentItems: pItems,
+                  style: ApplePayButtonStyle.black,
+                  type: ApplePayButtonType.buy,
+                  onPaymentResult: _onPaymentResult,
+                  loadingIndicator: const Center(child: CircularProgressIndicator()),
+                  width: double.infinity,
+                  height: 48,
+                )
+              else if (_googlePayConfig != null)
+                GooglePayButton(
+                  paymentConfiguration: _googlePayConfig!,
+                  paymentItems: pItems,
+                  type: GooglePayButtonType.buy,
+                  onPaymentResult: _onPaymentResult,
+                  loadingIndicator: const Center(child: CircularProgressIndicator()),
+                  width: double.infinity,
+                  height: 48,
+                )
+              else
+                const Text('Platby přes Google/Apple Pay nejsou na tomto zařízení dostupné.'),
+              if (kDebugMode) ...[
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () {
+                    _onPaymentResult({'token': 'debug_simulated_token'});
+                  },
+                  child: const Text('Simulovat úspěšnou platbu (Debug)', style: TextStyle(color: Colors.grey)),
+                ),
+              ]
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _pendingLimetkyPurchaseAmount = 0;
+                  _pendingLimetkyPurchasePrice = 0.0;
+                });
+                Navigator.of(context).pop();
+              },
+              child: const Text('Zrušit'),
+            )
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildDonationShop() {

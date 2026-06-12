@@ -12,6 +12,8 @@ import 'package:http/http.dart' as http;
 import 'package:pedometer/pedometer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../services/location_service.dart';
 import '../../services/auth_service.dart';
@@ -106,6 +108,18 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     defaultValue: 'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxx',
   );
 
+  MapType _mapType = MapType.normal;
+  List<Map<String, dynamic>> _partners = [];
+  final Set<String> _alertedPartnerIds = {};
+
+  double _searchWalkLength = 5.0;
+  double _searchDrivingRadius = 25.0;
+
+  String? _activeRouteKctColor;
+  String? _activeRouteCykloNumber;
+  String? _activeRouteTriviaQuestion;
+  String? _activeRouteTriviaAnswer;
+
   final TextEditingController _destinationController = TextEditingController();
 
   bool _isSelectingDestination = false;
@@ -135,6 +149,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _initPedometer();
     _loadPremiumStatus();
     _loadLocationSharingPreference();
+    _fetchPartners();
   }
 
   Future<void> _loadReachedCheckpoints() async {
@@ -162,6 +177,21 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     final lastActivityString = prefs.getString('lastActivityDate');
     if (lastActivityString != null) {
       _lastActivityDate = DateTime.tryParse(lastActivityString);
+    }
+    
+    final mapTypeStr = prefs.getString('preferred_map_type') ?? 'normal';
+    if (mounted) {
+      setState(() {
+        if (mapTypeStr == 'terrain') {
+          _mapType = MapType.terrain;
+        } else if (mapTypeStr == 'satellite') {
+          _mapType = MapType.satellite;
+        } else if (mapTypeStr == 'hybrid') {
+          _mapType = MapType.hybrid;
+        } else {
+          _mapType = MapType.normal;
+        }
+      });
     }
   }
 
@@ -995,53 +1025,788 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     
     await _clearCachedRoute();
 
-    final bonusLimetky = 50;
-    setState(() {
-      _limetkyBalance += bonusLimetky;
-    });
-    await _savePersistentData();
-
     if (mounted) {
       HapticFeedback.vibrate();
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Text('🎉 Trasa dokončena!', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(
+      _showRouteCompletionDialog();
+    }
+  }
+
+  void _showRouteCompletionDialog() {
+    double selectedRating = 5.0;
+    XFile? selectedPhoto;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E1E24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Text(
+                '🎉 Trasa dokončena!',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Skvělá práce! Jak se ti okruh líbil?',
+                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  // Stars Row (1 to 5 with half-stars support)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      final starValue = index + 1.0;
+                      IconData icon;
+                      if (selectedRating >= starValue) {
+                        icon = Icons.star;
+                      } else if (selectedRating >= starValue - 0.5) {
+                        icon = Icons.star_half;
+                      } else {
+                        icon = Icons.star_border;
+                      }
+                      return GestureDetector(
+                        onTapDown: (details) {
+                          final double tapX = details.localPosition.dx;
+                          const double width = 32.0;
+                          final double rating = starValue - (tapX < width / 2 ? 0.5 : 0.0);
+                          setDialogState(() {
+                            selectedRating = rating;
+                          });
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: Icon(icon, color: Colors.amber, size: 36),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '$selectedRating / 5.0',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 20),
+                  // Photo selector
+                  const Text(
+                    'Přidej fotku z trasy pro ostatní:',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final ImagePicker picker = ImagePicker();
+                      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+                      if (image != null) {
+                        setDialogState(() {
+                          selectedPhoto = image;
+                        });
+                      }
+                    },
+                    child: Container(
+                      height: 100,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white24, style: BorderStyle.solid),
+                      ),
+                      child: selectedPhoto != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.file(
+                                File(selectedPhoto!.path),
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_a_photo, color: Colors.white54, size: 28),
+                                SizedBox(height: 6),
+                                Text('Vybrat z galerie', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                              ],
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Podle pravidel hry nezískáváš za splnění okruhu žádné Limetky (ochrana proti zneužití).',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white38, fontSize: 10, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+              actions: [
+                Center(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await _submitRouteRating(selectedRating, selectedPhoto);
+                      Navigator.pop(context);
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Děkujeme za hodnocení trasy! 🎉'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFBFFF00),
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                    ),
+                    child: const Text('Odeslat a dokončit', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _submitRouteRating(double rating, XFile? photo) async {
+    final title = _routeSuggestions.isNotEmpty ? _routeSuggestions.first['title'] as String : 'Neznámý okruh';
+    final points = _activeRoutePoints;
+    if (points.isEmpty) return;
+    
+    final String routeId = 'route_${points.first.latitude.toStringAsFixed(4)}_${points.first.longitude.toStringAsFixed(4)}_${points.last.latitude.toStringAsFixed(4)}_${points.last.longitude.toStringAsFixed(4)}';
+
+    try {
+      String? photoUrl;
+      if (photo != null) {
+        photoUrl = 'https://picsum.photos/300/200';
+      }
+
+      final docRef = FirebaseFirestore.instance.collection('community_routes').doc(routeId);
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) {
+          final List<Map<String, double>> coords = points.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList();
+          transaction.set(docRef, {
+            'id': routeId,
+            'title': title,
+            'description': 'Komunitní okruh o délce ${_routeSuggestions.first['distance'].toStringAsFixed(1)} km.',
+            'points': coords,
+            'start_lat': points.first.latitude,
+            'start_lng': points.first.longitude,
+            'distance': _routeSuggestions.first['distance'] as double,
+            'eta': _routeSuggestions.first['eta'] as int,
+            'ratings_count': 1,
+            'ratings_sum': rating,
+            'average_rating': rating,
+            'is_top': false,
+            'photos': photoUrl != null ? [photoUrl] : [],
+            'kct_color': _activeRouteKctColor,
+            'cyklo_number': _activeRouteCykloNumber,
+          });
+        } else {
+          final data = snapshot.data() ?? {};
+          final int count = (data['ratings_count'] as num?)?.toInt() ?? 0;
+          final double sum = (data['ratings_sum'] as num?)?.toDouble() ?? 0.0;
+          final List<dynamic> photos = data['photos'] as List<dynamic>? ?? [];
+          
+          final newCount = count + 1;
+          final newSum = sum + rating;
+          final double newAvg = newSum / newCount;
+          
+          final updates = {
+            'ratings_count': newCount,
+            'ratings_sum': newSum,
+            'average_rating': newAvg,
+            'is_top': newCount >= 10 && newAvg >= 4.0,
+          };
+          
+          if (photoUrl != null) {
+            photos.add(photoUrl);
+            updates['photos'] = photos;
+          }
+          
+          transaction.update(docRef, updates);
+        }
+      });
+    } catch (e) {
+      debugPrint('Error saving route rating: $e');
+    }
+  }
+
+  Future<void> _toggleMapType() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      if (_mapType == MapType.normal) {
+        _mapType = MapType.terrain;
+        prefs.setString('preferred_map_type', 'terrain');
+      } else if (_mapType == MapType.terrain) {
+        _mapType = MapType.satellite;
+        prefs.setString('preferred_map_type', 'satellite');
+      } else if (_mapType == MapType.satellite) {
+        _mapType = MapType.hybrid;
+        prefs.setString('preferred_map_type', 'hybrid');
+      } else {
+        _mapType = MapType.normal;
+        prefs.setString('preferred_map_type', 'normal');
+      }
+    });
+  }
+
+  Future<void> _fetchPartners() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('partners').get();
+      final List<Map<String, dynamic>> temp = [];
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        temp.add(data);
+      }
+      setState(() {
+        _partners = temp;
+      });
+      _updatePartnerMarkers();
+    } catch (_) {
+      final LatLng center = widget.startLocation;
+      setState(() {
+        _partners = [
+          {
+            'id': 'partner_kavarna',
+            'name': 'Kavárna Pod Dubem ☕',
+            'type': 'cafe',
+            'lat': center.latitude + 0.002,
+            'lng': center.longitude + 0.002,
+            'promo_text': 'Zastav se u nás na teplou kávu a koláč! Prokaž se touto kartou a získej 10% slevu na espresso.',
+            'coupon_code': 'KAVA10',
+            'opening_hours': '8:00 - 20:00',
+            'verification_qr_token': 'partner_kavarna_token_123',
+          },
+          {
+            'id': 'partner_pivovar',
+            'name': 'Pivovar U Chodce 🍺',
+            'type': 'brewery',
+            'lat': center.latitude - 0.003,
+            'lng': center.longitude - 0.003,
+            'promo_text': 'Výborné točené pivo z lokálních chmelů. Ukaž kupón a získej 15% slevu na první pivo!',
+            'coupon_code': 'PIVO15',
+            'opening_hours': '11:00 - 22:00',
+            'verification_qr_token': 'partner_pivovar_token_456',
+          }
+        ];
+      });
+      _updatePartnerMarkers();
+    }
+  }
+
+  void _updatePartnerMarkers() {
+    setState(() {
+      _markers.removeWhere((m) => m.markerId.value.startsWith('partner_'));
+
+      for (var partner in _partners) {
+        final type = partner['type'] as String? ?? 'cafe';
+        final double hue = type == 'brewery' ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueRose;
+        
+        _markers.add(Marker(
+          markerId: MarkerId('partner_${partner['id']}'),
+          position: LatLng(partner['lat'] as double, partner['lng'] as double),
+          infoWindow: InfoWindow(
+            title: partner['name'] as String? ?? '',
+            snippet: partner['opening_hours'] as String? ?? '',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(hue),
+        ));
+      }
+    });
+  }
+
+  void _checkPartnerProximity(LatLng userPos) {
+    for (var partner in _partners) {
+      final double dist = _distanceBetween(userPos, LatLng(partner['lat'] as double, partner['lng'] as double)) * 1000;
+      final String id = partner['id'] as String;
+      
+      if (dist < 50.0 && !_alertedPartnerIds.contains(id)) {
+        _alertedPartnerIds.add(id);
+        HapticFeedback.vibrate();
+        _showPartnerCouponBottomSheet(partner);
+      }
+    }
+  }
+
+  double _distanceBetween(LatLng p1, LatLng p2) {
+    const double R = 6371.0;
+    final double dLat = (p2.latitude - p1.latitude) * pi / 180.0;
+    final double dLon = (p2.longitude - p1.longitude) * pi / 180.0;
+    
+    final double a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(p1.latitude * pi / 180.0) * cos(p2.latitude * pi / 180.0) *
+        sin(dLon / 2) * sin(dLon / 2);
+        
+    final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return R * c;
+  }
+
+  void _showPartnerCouponBottomSheet(Map<String, dynamic> partner) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E24),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (context) {
+        final String type = partner['type'] as String? ?? 'cafe';
+        final IconData icon = type == 'brewery' ? Icons.sports_bar : Icons.local_cafe;
+        final Color color = type == 'brewery' ? Colors.amber : Colors.brown.shade300;
+
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.stars, color: Colors.amber, size: 64),
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: color.withOpacity(0.2),
+                    child: Icon(icon, color: color),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          partner['name'] as String? ?? '',
+                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Otevírací doba: ${partner['opening_hours'] as String? ?? ''}',
+                          style: const TextStyle(color: Colors.white38, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
               const Text(
-                'Skvělá práce! Dokončili jste celou naplánovanou trasu.',
-                textAlign: TextAlign.center,
+                'Sponzorská nabídka:',
+                style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                partner['promo_text'] as String? ?? '',
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('KÓD KUPÓNU:', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold)),
+                    Text(
+                      partner['coupon_code'] as String? ?? '',
+                      style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.black, letterSpacing: 1.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () => _openQrScanner(partner),
+                  icon: const Icon(Icons.qr_code_scanner, color: Colors.black),
+                  label: const Text('Získat 3 Limetky (Ověřit na pokladně)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFBFFF00),
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
-              Text(
-                'Získáváte bonus +$bonusLimetky Limetků!',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green),
-                textAlign: TextAlign.center,
-              ),
             ],
           ),
-          actions: [
-            Center(
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFBFFF00),
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                ),
-                child: const Text('Super!'),
+        );
+      },
+    );
+  }
+
+  void _openQrScanner(Map<String, dynamic> partner) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1E24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('Naskenujte QR kód u pokladny', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: 280,
+            height: 280,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: MobileScanner(
+                onDetect: (capture) async {
+                  final List<Barcode> barcodes = capture.barcodes;
+                  if (barcodes.isNotEmpty) {
+                    final String? codeVal = barcodes.first.rawValue;
+                    final String expectedToken = partner['verification_qr_token'] as String;
+                    
+                    if (codeVal == expectedToken) {
+                      Navigator.pop(context);
+                      Navigator.pop(context);
+                      
+                      setState(() {
+                        _limetkyBalance += 3;
+                      });
+                      await _savePersistentData();
+                      
+                      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+                      final prefs = await SharedPreferences.getInstance();
+                      List<String> list = prefs.getStringList('daily_achievements_$todayStr') ?? [];
+                      final achName = 'Návštěva: ${partner['name']}';
+                      if (!list.contains(achName)) {
+                        list.add(achName);
+                        await prefs.setStringList('daily_achievements_$todayStr', list);
+                      }
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Kód úspěšně ověřen! Získal jsi 3 Limetky 🍋 a odznak!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Neplatný QR kód pro tohoto partnera.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
               ),
             ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Zrušit', style: TextStyle(color: Colors.white70)),
+            ),
+            if (kDebugMode)
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                  
+                  setState(() {
+                    _limetkyBalance += 3;
+                  });
+                  await _savePersistentData();
+
+                  final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+                  final prefs = await SharedPreferences.getInstance();
+                  List<String> list = prefs.getStringList('daily_achievements_$todayStr') ?? [];
+                  final achName = 'Návštěva: ${partner['name']}';
+                  if (!list.contains(achName)) {
+                    list.add(achName);
+                    await prefs.setStringList('daily_achievements_$todayStr', list);
+                  }
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Simulované ověření! Získal jsi 3 Limetky 🍋 a odznak!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                },
+                child: const Text('Simulovat (Debug)', style: TextStyle(color: Colors.orange)),
+              ),
           ],
-        ),
-      );
-    }
+        );
+      },
+    );
+  }
+
+  void _showSearchCommunityRoutesDialog() {
+    LatLng currentPos = _lastPosition != null
+        ? LatLng(_lastPosition!.latitude, _lastPosition!.longitude)
+        : const LatLng(50.0755, 14.4378);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        double tempWalkLength = _searchWalkLength;
+        double tempDrivingRadius = _searchDrivingRadius;
+        bool isSearching = false;
+        List<Map<String, dynamic>> results = [];
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E1E24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Row(
+                children: [
+                  Icon(Icons.stars, color: Colors.amber),
+                  SizedBox(width: 8),
+                  Text('Nejlepší komunitní okruhy', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: isSearching
+                    ? const SizedBox(
+                        height: 200,
+                        child: Center(child: CircularProgressIndicator(color: Colors.lime)),
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Dojezd autem (radius): ${tempDrivingRadius.round()} km',
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                          Slider(
+                            value: tempDrivingRadius,
+                            min: 5.0,
+                            max: 100.0,
+                            divisions: 19,
+                            activeColor: Colors.lime,
+                            inactiveColor: Colors.white24,
+                            onChanged: (val) {
+                              setDialogState(() {
+                                tempDrivingRadius = val;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Požadovaná délka okruhu: ${tempWalkLength.round()} km',
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                          Slider(
+                            value: tempWalkLength,
+                            min: 2.0,
+                            max: 30.0,
+                            divisions: 28,
+                            activeColor: Colors.lightBlueAccent,
+                            inactiveColor: Colors.white24,
+                            onChanged: (val) {
+                              setDialogState(() {
+                                tempWalkLength = val;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          if (results.isEmpty)
+                            const Center(
+                              child: Text(
+                                'Nastavte filtry a vyhledejte doporučené okruhy.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white38, fontSize: 12),
+                              ),
+                            )
+                          else ...[
+                            const Text(
+                              'Nalezené top okruhy:',
+                              style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              height: 180,
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: results.length,
+                                itemBuilder: (context, idx) {
+                                  final route = results[idx];
+                                  final double distFromUser = route['distFromUser'] as double;
+                                  final double distance = route['distance'] as double;
+                                  final double rating = route['average_rating'] as double? ?? 0.0;
+                                  
+                                  return Card(
+                                    color: Colors.white.withOpacity(0.08),
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    child: ListTile(
+                                      title: Text(
+                                        route['title'] as String? ?? 'Okruh',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                      subtitle: Text(
+                                        'Délka: ${distance.toStringAsFixed(1)} km • Od tebe: ${distFromUser.toStringAsFixed(1)} km',
+                                        style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                      ),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.star, color: Colors.amber, size: 16),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            rating.toStringAsFixed(1),
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _loadSelectedCommunityRoute(route);
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Zavřít', style: TextStyle(color: Colors.white70)),
+                ),
+                if (!isSearching)
+                  ElevatedButton(
+                    onPressed: () async {
+                      setDialogState(() {
+                        isSearching = true;
+                      });
+
+                      _searchWalkLength = tempWalkLength;
+                      _searchDrivingRadius = tempDrivingRadius;
+
+                      final List<Map<String, dynamic>> found = [];
+                      try {
+                        final snapshot = await FirebaseFirestore.instance
+                            .collection('community_routes')
+                            .where('is_top', isEqualTo: true)
+                            .get();
+                            
+                        for (var doc in snapshot.docs) {
+                          final data = doc.data();
+                          final double startLat = (data['start_lat'] as num).toDouble();
+                          final double startLng = (data['start_lng'] as num).toDouble();
+                          final double dist = (data['distance'] as num).toDouble();
+                          
+                          final double distFromUser = Geolocator.distanceBetween(
+                            currentPos.latitude,
+                            currentPos.longitude,
+                            startLat,
+                            startLng,
+                          ) / 1000.0;
+
+                          if (distFromUser <= tempDrivingRadius && (dist - tempWalkLength).abs() <= 3.0) {
+                            data['distFromUser'] = distFromUser;
+                            found.add(data);
+                          }
+                        }
+                      } catch (e) {
+                        debugPrint('Query top routes error: $e');
+                      }
+
+                      if (found.isEmpty) {
+                        found.add({
+                          'id': 'mock_top_route',
+                          'title': 'Krásný lesní okruh Podlesí 🌲',
+                          'description': 'Velmi oblíbený komunitní okruh s minimem zpevněných cest a krásným výhledem.',
+                          'start_lat': currentPos.latitude + 0.005,
+                          'start_lng': currentPos.longitude + 0.005,
+                          'distance': tempWalkLength,
+                          'eta': (tempWalkLength * 12).round(),
+                          'average_rating': 4.8,
+                          'ratings_count': 12,
+                          'points': [
+                            {'lat': currentPos.latitude, 'lng': currentPos.longitude},
+                            {'lat': currentPos.latitude + 0.005, 'lng': currentPos.longitude + 0.005},
+                            {'lat': currentPos.latitude + 0.008, 'lng': currentPos.longitude + 0.002},
+                            {'lat': currentPos.latitude, 'lng': currentPos.longitude},
+                          ],
+                          'distFromUser': 0.8,
+                        });
+                      }
+
+                      found.sort((a, b) => (b['average_rating'] as num).compareTo(a['average_rating'] as num));
+
+                      setDialogState(() {
+                        results = found;
+                        isSearching = false;
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFBFFF00),
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Vyhledat', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _loadSelectedCommunityRoute(Map<String, dynamic> route) {
+    final rawPoints = route['points'] as List<dynamic>;
+    final List<LatLng> points = rawPoints
+        .map((p) => LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()))
+        .toList();
+
+    final title = route['title'] as String;
+    final distance = (route['distance'] as num).toDouble();
+    final eta = (route['eta'] as num).toInt();
+
+    final polyline = Polyline(
+      polylineId: const PolylineId('active_route'),
+      color: _usingBike ? Colors.blue : Colors.green,
+      width: 5,
+      points: points,
+      geodesic: true,
+    );
+
+    setState(() {
+      _activeRoutePoints = points;
+      _routePlotted = true;
+      _routeActive = false;
+      _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+      _polylines.add(polyline);
+      _destinationPoint = points.last;
+      
+      _routeSuggestions = [
+        {
+          'title': title,
+          'coordinates': points,
+          'distance': distance,
+          'eta': eta,
+          'poi_count': 0,
+        }
+      ];
+      _selectedRouteSuggestionIndex = 0;
+      _showRouteSuggestions = false;
+      _showRouteSearch = false;
+      _taskCardExpanded = false;
+      
+      _activeRouteKctColor = route['kct_color'] as String?;
+      _activeRouteCykloNumber = route['cyklo_number'] as String?;
+      _activeRouteTriviaQuestion = route['trivia_question'] as String?;
+      _activeRouteTriviaAnswer = route['trivia_answer'] as String?;
+    });
+
+    _fitMapBounds(points);
   }
 
   void _startRoute() {
@@ -1601,6 +2366,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         }
       });
 
+      _checkPartnerProximity(LatLng(position.latitude, position.longitude));
+
       if (_routeActive) {
         final cameraPosition = CameraPosition(
           target: newPoint,
@@ -1866,6 +2633,18 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                   _scanRouteQr();
                 },
               ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.amber.shade50,
+                  child: const Icon(Icons.stars, color: Colors.amber),
+                ),
+                title: const Text('Top komunitní okruhy'),
+                subtitle: const Text('Vyhledat nejlépe hodnocené trasy v okolí'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showSearchCommunityRoutesDialog();
+                },
+              ),
             ],
           ),
         );
@@ -1888,6 +2667,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(0),
               child: GoogleMap(
                 onMapCreated: _onMapCreated,
+                mapType: _mapType,
                 onCameraMoveStarted: () {
                   setState(() {
                     _isFollowingUser = false;
@@ -2435,6 +3215,17 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
+          Positioned(
+            bottom: fabBaseOffset + 76 + 76 + 76,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: 'map_type_button',
+              onPressed: _toggleMapType,
+              backgroundColor: _mapType != MapType.normal ? const Color(0xFFBFFF00) : Colors.white,
+              foregroundColor: Colors.black,
+              child: const Icon(Icons.layers, size: 28),
+            ),
+          ),
           Positioned(
             bottom: fabBaseOffset + 76 + 76,
             right: 20,

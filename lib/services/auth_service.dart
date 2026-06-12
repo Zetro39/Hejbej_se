@@ -563,6 +563,25 @@ class AuthService {
     }
   }
 
+  Future<void> addLimetky(int amount) async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentLocal = prefs.getInt('limetkyBalance') ?? 0;
+      final newLocal = currentLocal + amount;
+      await prefs.setInt('limetkyBalance', newLocal);
+
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        final currentDb = (doc.data()?['limetky'] as num?)?.toInt() ?? 0;
+        await _firestore.collection('users').doc(user.uid).update({
+          'limetky': currentDb + amount,
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> selectCompanion(String? companionId) async {
     final user = currentUser;
     if (user == null) return;
