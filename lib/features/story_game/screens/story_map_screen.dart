@@ -790,55 +790,68 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Left: Capsule showing progress and inventory
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.65),
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: Colors.white24, width: 1.5),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.35),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  )
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.directions_walk, color: Colors.cyanAccent, size: 20),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${(state.currentDistanceWalked / 1000).toStringAsFixed(2)} km / 6.00 km',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 0.5,
-                                      shadows: [
-                                        Shadow(color: Colors.black, blurRadius: 4),
-                                      ],
-                                    ),
+                            // Left: Exit Button + Capsule showing progress and inventory
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildFloatingRoundButton(
+                                  icon: Icons.arrow_back,
+                                  tooltip: 'Zpět do aplikace',
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                  },
+                                ),
+                                const SizedBox(width: 10),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.65),
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(color: Colors.white24, width: 1.5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.35),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      )
+                                    ],
                                   ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    width: 1.5,
-                                    height: 14,
-                                    color: Colors.white24,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.directions_walk, color: Colors.cyanAccent, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '${(state.currentDistanceWalked / 1000).toStringAsFixed(2)} km / 6.00 km',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 0.5,
+                                          shadows: [
+                                            Shadow(color: Colors.black, blurRadius: 4),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        width: 1.5,
+                                        height: 14,
+                                        color: Colors.white24,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '🎒 ${state.inventory.length}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '🎒 ${state.inventory.length}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
 
                             // Right: Sleek round action buttons
