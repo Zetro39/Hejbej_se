@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/story_quest_model.dart';
 import '../services/story_game_service.dart';
@@ -42,10 +43,16 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
   Offset? _pointerDownLocalPosition;
   DateTime? _pointerDownTime;
 
+  // Temporary node positions for debugging
+  late Map<String, Offset> _debugNodePositions;
+
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    _debugNodePositions = {
+      for (var node in _service.nodes) node.id: node.mapPosition
+    };
     _service.initialize();
     _checkIntro();
     _initMusic();
@@ -353,9 +360,17 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
   Offset _getAvatarPosition(int walkedMeters) {
     if (_service.nodes.isEmpty) return const Offset(0.5, 0.5);
     
-    if (walkedMeters <= 0) return _service.nodes.first.mapPosition;
+    final nodeAPosition = _showDebugCoords 
+        ? (_debugNodePositions[_service.nodes.first.id] ?? _service.nodes.first.mapPosition)
+        : _service.nodes.first.mapPosition;
+        
+    final nodeBPosition = _showDebugCoords
+        ? (_debugNodePositions[_service.nodes.last.id] ?? _service.nodes.last.mapPosition)
+        : _service.nodes.last.mapPosition;
+
+    if (walkedMeters <= 0) return nodeAPosition;
     if (walkedMeters >= _service.nodes.last.requiredDistance) {
-      return _service.nodes.last.mapPosition;
+      return nodeBPosition;
     }
 
     // Find current segment
@@ -374,12 +389,21 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
 
     // Get segment path
     final pathPoints = _service.getFullSegmentPath(nodeA, nodeB);
+    
+    // Override start and end points of pathPoints if in debug mode
+    final List<Offset> adjustedPoints = List.from(pathPoints);
+    if (_showDebugCoords && adjustedPoints.isNotEmpty) {
+      final aPos = _debugNodePositions[nodeA.id] ?? nodeA.mapPosition;
+      final bPos = _debugNodePositions[nodeB.id] ?? nodeB.mapPosition;
+      adjustedPoints[0] = aPos;
+      adjustedPoints[adjustedPoints.length - 1] = bPos;
+    }
 
     // Interpolate
     double segmentTotal = (nodeB.requiredDistance - nodeA.requiredDistance).toDouble();
     double segmentProgress = (walkedMeters - nodeA.requiredDistance) / (segmentTotal > 0 ? segmentTotal : 1.0);
 
-    return _interpolatePositionAlongPath(pathPoints, segmentProgress);
+    return _interpolatePositionAlongPath(adjustedPoints, segmentProgress);
   }
 
   Offset _interpolatePositionAlongPath(List<Offset> points, double progress) {
@@ -672,10 +696,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                             fit: BoxFit.fill,
                             child: SizedBox(
                               width: 1080,
-                              height: 3234,
-                              child: Stack(
-                                children: [
-                                  // Map Background Image with coordinate debug detector using custom tap Listener to prevent conflict with scrolling
+                                   // Map Background Image with coordinate debug detector using custom tap Listener to prevent conflict with scrolling
                                   Positioned.fill(
                                     child: Listener(
                                       behavior: HitTestBehavior.translucent,
@@ -700,15 +721,29 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                             final double tapY = _pointerDownLocalPosition!.dy / 3234;
                                             setState(() {
                                               _debugMapTap = Offset(tapX, tapY);
-                                              // Add to active draft path
-                                              final key = [
-                                                'node1_node2',
-                                                'node2_node3',
-                                                'node3_node4',
-                                                'node4_node5',
-                                                'node5_node6',
-                                              ][_selectedDebugSegment];
-                                              _debugDraftPaths[key]?.add(Offset(tapX, tapY));
+                                              
+                                              if (_selectedDebugSegment < 5) {
+                                                // Add to active draft path
+                                                final key = [
+                                                  'node1_node2',
+                                                  'node2_node3',
+                                                  'node3_node4',
+                                                  'node4_node5',
+                                                  'node5_node6',
+                                                ][_selectedDebugSegment];
+                                                _debugDraftPaths[key]?.add(Offset(tapX, tapY));
+                                              } else {
+                                                // Update main node position
+                                                final nodeId = [
+                                                  'node1',
+                                                  'node2',
+                                                  'node3',
+                                                  'node4',
+                                                  'node5',
+                                                  'node6',
+                                                ][_selectedDebugSegment - 5];
+                                                _debugNodePositions[nodeId] = Offset(tapX, tapY);
+                                              }
                                             });
                                           }
                                         }
@@ -744,6 +779,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                           showDebugCoords: _showDebugCoords,
                                           debugDraftPaths: _debugDraftPaths,
                                           selectedDebugSegment: _selectedDebugSegment,
+                                          debugNodePositions: _debugNodePositions,
                                         ),
                                       ),
                                     ),
@@ -753,15 +789,21 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                   ..._service.nodes.map((node) {
                                     final isUnlocked = state.unlockedNodes.contains(node.id);
                                     final isCompleted = state.completedNodes.contains(node.id);
-                                    final posX = node.mapPosition.dx * 1080;
-                                    final posY = node.mapPosition.dy * 3234;
+                                    final pos = _showDebugCoords 
+                                        ? (_debugNodePositions[node.id] ?? node.mapPosition)
+                                        : node.mapPosition;
+                                    final posX = pos.dx * 1080;
+                                    final posY = pos.dy * 3234;
 
                                     return Positioned(
-                                      left: posX - 28,
-                                      top: posY - 28,
-                                      child: GestureDetector(
-                                        onTap: () => _onNodeTap(node, state),
-                                        child: _buildNodeMarker(node, isUnlocked, isCompleted),
+                                      left: posX - 34,
+                                      top: posY - 34,
+                                      child: IgnorePointer(
+                                        ignoring: _showDebugCoords,
+                                        child: GestureDetector(
+                                          onTap: () => _onNodeTap(node, state),
+                                          child: _buildNodeMarker(node, isUnlocked, isCompleted),
+                                        ),
                                       ),
                                     );
                                   }),
@@ -1013,7 +1055,9 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                             borderRadius: BorderRadius.circular(6),
                                           ),
                                           child: Text(
-                                            "${_debugDraftPaths[['node1_node2', 'node2_node3', 'node3_node4', 'node4_node5', 'node5_node6'][_selectedDebugSegment]]?.length ?? 0}b",
+                                            _selectedDebugSegment < 5
+                                                ? "${_debugDraftPaths[['node1_node2', 'node2_node3', 'node3_node4', 'node4_node5', 'node5_node6'][_selectedDebugSegment]]?.length ?? 0}b"
+                                                : "📍",
                                             style: const TextStyle(color: Colors.cyanAccent, fontSize: 10, fontWeight: FontWeight.bold),
                                           ),
                                         ),
@@ -1067,6 +1111,12 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                             DropdownMenuItem(value: 2, child: Text("Segment 3: Chýše ➔ Bažina")),
                                             DropdownMenuItem(value: 3, child: Text("Segment 4: Bažina ➔ Pevnost")),
                                             DropdownMenuItem(value: 4, child: Text("Segment 5: Pevnost ➔ Oltář")),
+                                            DropdownMenuItem(value: 5, child: Text("📍 Pozice: Lesní brána")),
+                                            DropdownMenuItem(value: 6, child: Text("📍 Pozice: Starý dub")),
+                                            DropdownMenuItem(value: 7, child: Text("📍 Pozice: Chýše")),
+                                            DropdownMenuItem(value: 8, child: Text("📍 Pozice: Bažina & Studna")),
+                                            DropdownMenuItem(value: 9, child: Text("📍 Pozice: Pevnost")),
+                                            DropdownMenuItem(value: 10, child: Text("📍 Pozice: Oltář")),
                                           ],
                                           onChanged: (val) {
                                             if (val != null) {
@@ -1080,7 +1130,19 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 8),
-                                    if (_debugMapTap != null) ...[
+                                    if (_selectedDebugSegment >= 5) ...[
+                                      Builder(
+                                        builder: (context) {
+                                          final nodeId = ['node1', 'node2', 'node3', 'node4', 'node5', 'node6'][_selectedDebugSegment - 5];
+                                          final pos = _debugNodePositions[nodeId]!;
+                                          return Text(
+                                            "Pozice: x: ${pos.dx.toStringAsFixed(4)}, y: ${pos.dy.toStringAsFixed(4)}",
+                                            style: TextStyle(color: Colors.cyanAccent.withOpacity(0.9), fontSize: 11, fontFamily: 'monospace'),
+                                          );
+                                        }
+                                      ),
+                                      const SizedBox(height: 8),
+                                    ] else if (_debugMapTap != null) ...[
                                       Text(
                                         "Poslední bod: x: ${_debugMapTap!.dx.toStringAsFixed(4)}, y: ${_debugMapTap!.dy.toStringAsFixed(4)}",
                                         style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontFamily: 'monospace'),
@@ -1095,28 +1157,30 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                           child: TextButton.icon(
                                             style: TextButton.styleFrom(
                                               backgroundColor: Colors.white10,
-                                              foregroundColor: Colors.white,
+                                              foregroundColor: _selectedDebugSegment < 5 ? Colors.white : Colors.white24,
                                               padding: EdgeInsets.zero,
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                             ),
                                             icon: const Icon(Icons.undo, size: 14),
                                             label: const Text("Zpět", style: TextStyle(fontSize: 11)),
-                                            onPressed: () {
-                                              final key = [
-                                                'node1_node2',
-                                                'node2_node3',
-                                                'node3_node4',
-                                                'node4_node5',
-                                                'node5_node6',
-                                              ][_selectedDebugSegment];
-                                              final list = _debugDraftPaths[key];
-                                              if (list != null && list.isNotEmpty) {
-                                                setState(() {
-                                                  list.removeLast();
-                                                  _debugMapTap = list.isNotEmpty ? list.last : null;
-                                                });
-                                              }
-                                            },
+                                            onPressed: _selectedDebugSegment < 5 
+                                                ? () {
+                                                    final key = [
+                                                      'node1_node2',
+                                                      'node2_node3',
+                                                      'node3_node4',
+                                                      'node4_node5',
+                                                      'node5_node6',
+                                                    ][_selectedDebugSegment];
+                                                    final list = _debugDraftPaths[key];
+                                                    if (list != null && list.isNotEmpty) {
+                                                      setState(() {
+                                                        list.removeLast();
+                                                        _debugMapTap = list.isNotEmpty ? list.last : null;
+                                                      });
+                                                    }
+                                                  }
+                                                : null,
                                           ),
                                         ),
                                         const SizedBox(width: 6),
@@ -1124,25 +1188,50 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                         Expanded(
                                           child: TextButton.icon(
                                             style: TextButton.styleFrom(
-                                              backgroundColor: Colors.red.withOpacity(0.15),
-                                              foregroundColor: Colors.redAccent,
+                                              backgroundColor: _selectedDebugSegment < 5 
+                                                  ? Colors.red.withOpacity(0.15)
+                                                  : Colors.orange.withOpacity(0.15),
+                                              foregroundColor: _selectedDebugSegment < 5 
+                                                  ? Colors.redAccent
+                                                  : Colors.orangeAccent,
                                               padding: EdgeInsets.zero,
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                             ),
-                                            icon: const Icon(Icons.delete_outline, size: 14),
-                                            label: const Text("Smazat", style: TextStyle(fontSize: 11)),
+                                            icon: Icon(
+                                              _selectedDebugSegment < 5 ? Icons.delete_outline : Icons.refresh, 
+                                              size: 14
+                                            ),
+                                            label: Text(
+                                              _selectedDebugSegment < 5 ? "Smazat" : "Reset", 
+                                              style: const TextStyle(fontSize: 11)
+                                            ),
                                             onPressed: () {
-                                              final key = [
-                                                'node1_node2',
-                                                'node2_node3',
-                                                'node3_node4',
-                                                'node4_node5',
-                                                'node5_node6',
-                                              ][_selectedDebugSegment];
-                                              setState(() {
-                                                _debugDraftPaths[key]?.clear();
-                                                _debugMapTap = null;
-                                              });
+                                              if (_selectedDebugSegment < 5) {
+                                                final key = [
+                                                  'node1_node2',
+                                                  'node2_node3',
+                                                  'node3_node4',
+                                                  'node4_node5',
+                                                  'node5_node6',
+                                                ][_selectedDebugSegment];
+                                                setState(() {
+                                                  _debugDraftPaths[key]?.clear();
+                                                  _debugMapTap = null;
+                                                });
+                                              } else {
+                                                final nodeId = [
+                                                  'node1',
+                                                  'node2',
+                                                  'node3',
+                                                  'node4',
+                                                  'node5',
+                                                  'node6',
+                                                ][_selectedDebugSegment - 5];
+                                                final defaultNode = _service.nodes.firstWhere((n) => n.id == nodeId);
+                                                setState(() {
+                                                  _debugNodePositions[nodeId] = defaultNode.mapPosition;
+                                                });
+                                              }
                                             },
                                           ),
                                         ),
@@ -1158,29 +1247,46 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                         padding: const EdgeInsets.symmetric(vertical: 8),
                                       ),
                                       icon: const Icon(Icons.copy, size: 14),
-                                      label: const Text("KOPÍROVAT BODY", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                      label: Text(
+                                        _selectedDebugSegment < 5 
+                                            ? "KOPÍROVAT BODY" 
+                                            : "KOPÍROVAT POZICE LOKACÍ", 
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)
+                                      ),
                                       onPressed: () {
-                                        final key = [
-                                          'node1_node2',
-                                          'node2_node3',
-                                          'node3_node4',
-                                          'node4_node5',
-                                          'node5_node6',
-                                        ];
-                                        final activeKey = key[_selectedDebugSegment];
-                                        final points = _debugDraftPaths[activeKey] ?? [];
-                                        if (points.isEmpty) {
+                                        if (_selectedDebugSegment < 5) {
+                                          final key = [
+                                            'node1_node2',
+                                            'node2_node3',
+                                            'node3_node4',
+                                            'node4_node5',
+                                            'node5_node6',
+                                          ];
+                                          final activeKey = key[_selectedDebugSegment];
+                                          final points = _debugDraftPaths[activeKey] ?? [];
+                                          if (points.isEmpty) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text("Trasa neobsahuje žádné body k zkopírování.")),
+                                            );
+                                            return;
+                                          }
+                                          final pointsStr = points.map((p) => "const Offset(${p.dx.toStringAsFixed(4)}, ${p.dy.toStringAsFixed(4)})").join(",\n");
+                                          final formatted = "'$activeKey': [\n$pointsStr\n],";
+                                          Clipboard.setData(ClipboardData(text: formatted));
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text("Trasa neobsahuje žádné body k zkopírování.")),
+                                            SnackBar(content: Text("Souřadnice segmentu $activeKey zkopírovány do schránky!")),
                                           );
-                                          return;
+                                        } else {
+                                          // Copy all main locations coordinates
+                                          final formatted = _debugNodePositions.entries.map((entry) {
+                                            return "'${entry.key}': const Offset(${entry.value.dx.toStringAsFixed(4)}, ${entry.value.dy.toStringAsFixed(4)}),";
+                                          }).join("\n");
+                                          
+                                          Clipboard.setData(ClipboardData(text: formatted));
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text("Všechny pozice hlavních lokací zkopírovány do schránky!")),
+                                          );
                                         }
-                                        final pointsStr = points.map((p) => "const Offset(${p.dx.toStringAsFixed(4)}, ${p.dy.toStringAsFixed(4)})").join(",\n");
-                                        final formatted = "'$activeKey': [\n$pointsStr\n],";
-                                        Clipboard.setData(ClipboardData(text: formatted));
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text("Souřadnice segmentu $activeKey zkopírovány do schránky!")),
-                                        );
                                       },
                                     ),
                                   ],
@@ -1310,17 +1416,17 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
   Widget _buildNodeMarker(QuestNode node, bool isUnlocked, bool isCompleted) {
     Color ringColor = Colors.grey;
     Color bgColor = Colors.grey.shade300;
-    Widget icon = const Icon(Icons.lock, color: Colors.grey, size: 20);
+    Widget icon = const Icon(Icons.lock, color: Colors.grey, size: 24);
 
     if (isUnlocked) {
       if (isCompleted) {
         ringColor = Colors.lime.shade600;
         bgColor = Colors.lime.shade100;
-        icon = const Icon(Icons.check, color: Colors.green, size: 24);
+        icon = const Icon(Icons.check, color: Colors.green, size: 30);
       } else {
         ringColor = Colors.lightBlue;
         bgColor = Colors.white;
-        icon = const Icon(Icons.location_on, color: Colors.lightBlue, size: 24);
+        icon = const Icon(Icons.location_on, color: Colors.lightBlue, size: 30);
       }
     }
 
@@ -1330,12 +1436,12 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(
               color: bgColor,
               shape: BoxShape.circle,
-              border: Border.all(color: ringColor, width: 3),
+              border: Border.all(color: ringColor, width: 3.5),
               boxShadow: const [
                 BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
               ],
@@ -1344,14 +1450,14 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
           ),
           const SizedBox(height: 4),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: Colors.black54,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               node.name,
-              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+              style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
             ),
           )
         ],
@@ -1401,6 +1507,7 @@ class _MapPathPainter extends CustomPainter {
   final bool showDebugCoords;
   final Map<String, List<Offset>> debugDraftPaths;
   final int selectedDebugSegment;
+  final Map<String, Offset> debugNodePositions;
 
   _MapPathPainter({
     required this.nodes,
@@ -1410,6 +1517,7 @@ class _MapPathPainter extends CustomPainter {
     required this.showDebugCoords,
     required this.debugDraftPaths,
     required this.selectedDebugSegment,
+    required this.debugNodePositions,
   });
 
   @override
@@ -1445,6 +1553,15 @@ class _MapPathPainter extends CustomPainter {
 
       final pathPoints = service.getFullSegmentPath(nodeA, nodeB);
       final pixelPoints = pathPoints.map((p) => Offset(p.dx * size.width, p.dy * size.height)).toList();
+      
+      // Override endpoints with debug positions if active
+      if (showDebugCoords && pixelPoints.isNotEmpty) {
+        final nodeAPos = debugNodePositions[nodeA.id] ?? nodeA.mapPosition;
+        final nodeBPos = debugNodePositions[nodeB.id] ?? nodeB.mapPosition;
+        pixelPoints[0] = Offset(nodeAPos.dx * size.width, nodeAPos.dy * size.height);
+        pixelPoints[pixelPoints.length - 1] = Offset(nodeBPos.dx * size.width, nodeBPos.dy * size.height);
+      }
+      
       final isSegmentCompleted = unlockedNodes.contains(nodeB.id);
 
       if (isSegmentCompleted) {
@@ -1476,10 +1593,12 @@ class _MapPathPainter extends CustomPainter {
                   ..style = PaintingStyle.stroke)
               : paintDebugPath;
 
+          final nodeAPos = debugNodePositions[nodeA.id] ?? nodeA.mapPosition;
+          final nodeBPos = debugNodePositions[nodeB.id] ?? nodeB.mapPosition;
           final pixelPoints = [
-            nodeA.mapPosition, 
+            nodeAPos, 
             ...draftPoints, 
-            nodeB.mapPosition
+            nodeBPos
           ].map((p) => Offset(p.dx * size.width, p.dy * size.height)).toList();
 
           // Draw connections
@@ -1538,6 +1657,7 @@ class _MapPathPainter extends CustomPainter {
         oldDelegate.unlockedNodes.length != unlockedNodes.length ||
         oldDelegate.showDebugCoords != showDebugCoords ||
         oldDelegate.selectedDebugSegment != selectedDebugSegment ||
-        oldDelegate.debugDraftPaths != debugDraftPaths;
+        oldDelegate.debugDraftPaths != debugDraftPaths ||
+        !mapEquals(oldDelegate.debugNodePositions, debugNodePositions);
   }
 }
