@@ -1786,6 +1786,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
                           setState(() {
                             _showHints = !_showHints;
                           });
+                          _showHintDialog(state);
                         },
                         tooltip: 'Ukázat nápovědu',
                       ),
@@ -2398,6 +2399,86 @@ class InventoryItemIcon extends StatelessWidget {
             ),
           ),
         ),
+      ),
+  void _showHintDialog(QuestState state) {
+    String hintText = "";
+    
+    if (widget.nodeId == 'node1') {
+      final gateOpen = state.roomStates['node1_gate_open'] == true;
+      if (!gateOpen) {
+        hintText = "Prozkoumej kmen stromu vpravo (x: 0.79, y: 0.56) – najdeš tam rezavý klíč a odrezovač. V inventáři přetáhni odrezovač na rezavý klíč, čímž ho očistíš. Pak očistěný klíč přetáhni na lesní bránu, abys ji otevřel.";
+      } else {
+        hintText = "Lesní brána je již otevřená! Můžeš pokračovat k další lokaci na mapě.";
+      }
+    } else if (widget.nodeId == 'node2') {
+      final hasCloth = state.inventory.contains('cloth');
+      if (!hasCloth) {
+        hintText = "Podívej se na vyrytou kresbu na kmeni dubu (x: 0.33, y: 0.23). Všimni si počtu větví směřujících nahoru zleva doprava (3 číslice: 6, 7, 4). Zadej tento kód (674) do poštovní schránky a získej hadr. Také seber klacek na zemi a nasbírej modré houby v trávě.";
+      } else {
+        hintText = "Už máš hadr, klacek i houby! Můžeš pokračovat k zřícenině chýše na mapě.";
+      }
+    } else if (widget.nodeId == 'node3') {
+      if (_currentSubroom == 'exterior') {
+        final trniCleared = state.roomStates['node3_trni_cleared'] == true;
+        if (!trniCleared) {
+          hintText = "Cestu do chýše blokuje trní. Použij klacek z inventáře a přetáhni ho na trní, abys ho prosekal. Nezapomeň sebrat mech pod chýší.";
+        } else {
+          hintText = "Cesta je volná! Klikni na dveře chýše, abys vstoupil dovnitř.";
+        }
+      } else {
+        // interior
+        final truhlaOpen = state.roomStates['node3_chest_open'] == true;
+        if (!truhlaOpen) {
+          hintText = "Uvnitř chýše se podívej na špinavý obraz vlevo. Použij hadr z inventáře na obraz, abys ho očistil. Na obraze uvidíš symboly. Poté použij měděný klíč z inventáře na truhlu vpravo, abys ji odemkl.";
+        } else {
+          hintText = "Truhlu jsi již otevřel a získal potřebné předměty! Můžeš jít ven a pokračovat na mapě.";
+        }
+      }
+    } else if (widget.nodeId == 'node4') {
+      if (_currentSubroom == 'exterior') {
+        hintText = "Prozkoumej studnu (nasbírej vodu do hrnce), stodolu (najdi držadlo studny a ozubené kolo) a jeskyni, kde leží nemocný poustevník.";
+      } else if (_currentSubroom == 'cave') {
+        final hermitHealed = state.roomStates['node4_hermit_healed'] == true;
+        if (!hermitHealed) {
+          hintText = "Nemocný poustevník potřebuje léčivý lektvar. Uvař ho u studny a lektvar mu přines. Potřebuješ vodu, hrnec, modré houby a oheň.";
+        } else {
+          hintText = "Poustevník je uzdraven! Dal ti amulet. Můžeš pokračovat k pevnosti.";
+        }
+      } else {
+        hintText = "Prohledej stodolu. Najdeš zde držadlo ke studni a ozubené kolo k opravě mechanismu.";
+      }
+    } else if (widget.nodeId == 'node5') {
+      hintText = "Hvězdopravec potřebuje pomoc s dalekohledem. Očisti čočku hadrem, vlož ji do dalekohledu a vyřeš puzzle se souhvězdími.";
+    } else if (widget.nodeId == 'node6') {
+      hintText = "Vlož správné elementy do slotů na kamenném oltáři (voda, oheň, země, vzduch).";
+    }
+
+    if (hintText.isEmpty) {
+      hintText = "Prozkoumej okolí, hledej aktivní místa a zkus kombinovat předměty v inventáři.";
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.lightbulb, color: Colors.yellow),
+            SizedBox(width: 8),
+            Text('Nápověda', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          hintText,
+          style: const TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Rozumím', style: TextStyle(color: Colors.cyanAccent)),
+          ),
+        ],
       ),
     );
   }

@@ -4,7 +4,7 @@ class QuestNode {
   final String id;
   final String name;
   final String description;
-  final int requiredDistance; // Cumulative meters from start to unlock
+  int requiredDistance; // Cumulative meters from start to unlock
   final Offset mapPosition; // Coordinate on the 2D canvas map (0-1 range for responsive drawing)
 
   QuestNode({

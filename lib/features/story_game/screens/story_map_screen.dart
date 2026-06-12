@@ -799,8 +799,8 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                     final posY = pos.dy * 3234;
 
                                     return Positioned(
-                                      left: posX - 34,
-                                      top: posY - 34,
+                                      left: posX - 40,
+                                      top: posY - 40,
                                       child: IgnorePointer(
                                         ignoring: _showDebugCoords,
                                         child: GestureDetector(
@@ -897,7 +897,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                       const Icon(Icons.directions_walk, color: Colors.cyanAccent, size: 20),
                                       const SizedBox(width: 8),
                                       Text(
-                                        '${(state.currentDistanceWalked / 1000).toStringAsFixed(2)} km / 6.00 km',
+                                        '${(state.currentDistanceWalked / 1000).toStringAsFixed(2)} km / ${(_service.nodes.last.requiredDistance / 1000).toStringAsFixed(2)} km',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 13.5,
@@ -1343,6 +1343,15 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                       ],
                     ),
                   ),
+
+                  // Difficulty Selection Overlay (if not chosen yet)
+                  if (_service.currentDifficulty == null)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.black.withOpacity(0.92),
+                        child: _buildDifficultySelector(state),
+                      ),
+                    ),
                 ],
               );
             },
@@ -1419,51 +1428,38 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
   Widget _buildNodeMarker(QuestNode node, bool isUnlocked, bool isCompleted) {
     Color ringColor = Colors.grey;
     Color bgColor = Colors.grey.shade300;
-    Widget icon = const Icon(Icons.lock, color: Colors.grey, size: 24);
+    Widget icon = const Icon(Icons.lock, color: Colors.grey, size: 36);
 
     if (isUnlocked) {
       if (isCompleted) {
         ringColor = Colors.lime.shade600;
         bgColor = Colors.lime.shade100;
-        icon = const Icon(Icons.check, color: Colors.green, size: 30);
+        icon = const Icon(Icons.check, color: Colors.green, size: 46);
       } else {
         ringColor = Colors.lightBlue;
         bgColor = Colors.white;
-        icon = const Icon(Icons.location_on, color: Colors.lightBlue, size: 30);
+        icon = const Icon(Icons.location_on, color: Colors.lightBlue, size: 46);
       }
     }
 
     return Tooltip(
       message: '${node.name}\n${node.requiredDistance}m',
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: bgColor,
-              shape: BoxShape.circle,
-              border: Border.all(color: ringColor, width: 3.5),
-              boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-              ],
+      child: Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          color: bgColor,
+          shape: BoxShape.circle,
+          border: Border.all(color: ringColor, width: 4.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
             ),
-            child: Center(child: icon),
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              node.name,
-              style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
-            ),
-          )
-        ],
+          ],
+        ),
+        child: Center(child: icon),
       ),
     );
   }
@@ -1500,6 +1496,168 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
       ),
     );
   }
+
+  Widget _buildDifficultySelector(QuestState state) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(
+              Icons.explore,
+              color: Colors.cyanAccent,
+              size: 64,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'ZVOLTE OBTÍŽNOST TRASY',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Vyberte si, jak dlouhou trasu chcete ujít pro dokončení této výpravy. Obtížnost změní potřebné vzdálenosti pro odemčení lokací (lze změnit při restartu příběhu).',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
+            _buildDifficultyCard(
+              title: 'Lehká',
+              distanceText: '6 km',
+              desc: 'Pohodová trasa. Lokace jsou od sebe vzdálené přesně 1 km.',
+              color: Colors.greenAccent,
+              onTap: () => _selectDifficulty('easy'),
+            ),
+            const SizedBox(height: 16),
+            _buildDifficultyCard(
+              title: 'Střední',
+              distanceText: '10 km',
+              desc: 'Optimální výzva. Vzdálenosti mezi lokacemi jsou rozloženy náhodně.',
+              color: Colors.cyanAccent,
+              onTap: () => _selectDifficulty('medium'),
+            ),
+            const SizedBox(height: 16),
+            _buildDifficultyCard(
+              title: 'Těžká',
+              distanceText: '15 km',
+              desc: 'Solidní zátěž pro aktivní den. Trasa vyžaduje 15 km chůze.',
+              color: Colors.orangeAccent,
+              onTap: () => _selectDifficulty('hard'),
+            ),
+            const SizedBox(height: 16),
+            _buildDifficultyCard(
+              title: 'Hardcore',
+              distanceText: '20 km',
+              desc: 'Ultimátní výzva pro nejvytrvalejší. Trasa dlouhá 20 km.',
+              color: Colors.redAccent,
+              onTap: () => _selectDifficulty('hardcore'),
+            ),
+            const SizedBox(height: 24),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Zpět do aplikace',
+                style: TextStyle(color: Colors.white54, fontSize: 13, decoration: TextDecoration.underline),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDifficultyCard({
+    required String title,
+    required String distanceText,
+    required String desc,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.35), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    desc,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12.5,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color.withOpacity(0.4), width: 1),
+              ),
+              child: Text(
+                distanceText,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _selectDifficulty(String difficulty) async {
+    await _service.setDifficulty(difficulty);
+    // Refresh temporary node positions in screen state
+    setState(() {
+      _debugNodePositions = {
+        for (var node in _service.nodes) node.id: node.mapPosition
+      };
+    });
+  }
 }
 
 class _MapPathPainter extends CustomPainter {
@@ -1527,14 +1685,32 @@ class _MapPathPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (nodes.length < 2) return;
 
-    final paintCompleted = Paint()
-      ..color = Colors.lime.shade600
-      ..strokeWidth = 5.0
+    final paintCompletedGlow = Paint()
+      ..color = Colors.limeAccent.withOpacity(0.25)
+      ..strokeWidth = 10.0
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
-    final paintLocked = Paint()
-      ..color = Colors.grey.shade400
+    final paintCompletedSolid = Paint()
+      ..color = Colors.lime.shade600
+      ..strokeWidth = 4.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final paintCompletedCore = Paint()
+      ..color = Colors.white.withOpacity(0.8)
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final paintLockedGlow = Paint()
+      ..color = Colors.amber.withOpacity(0.08)
+      ..strokeWidth = 6.0
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final paintLockedDashed = Paint()
+      ..color = Colors.amber.shade300.withOpacity(0.65)
       ..strokeWidth = 3.0
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
@@ -1569,11 +1745,14 @@ class _MapPathPainter extends CustomPainter {
 
       if (isSegmentCompleted) {
         for (int j = 0; j < pixelPoints.length - 1; j++) {
-          canvas.drawLine(pixelPoints[j], pixelPoints[j + 1], paintCompleted);
+          canvas.drawLine(pixelPoints[j], pixelPoints[j + 1], paintCompletedGlow);
+          canvas.drawLine(pixelPoints[j], pixelPoints[j + 1], paintCompletedSolid);
+          canvas.drawLine(pixelPoints[j], pixelPoints[j + 1], paintCompletedCore);
         }
       } else {
         for (int j = 0; j < pixelPoints.length - 1; j++) {
-          _drawDashedLine(canvas, pixelPoints[j], pixelPoints[j + 1], paintLocked);
+          canvas.drawLine(pixelPoints[j], pixelPoints[j + 1], paintLockedGlow);
+          _drawDashedLine(canvas, pixelPoints[j], pixelPoints[j + 1], paintLockedDashed);
         }
       }
     }

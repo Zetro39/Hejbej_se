@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -14,6 +15,7 @@ class StoryGameService {
 
   final ValueNotifier<QuestState> stateNotifier = ValueNotifier<QuestState>(QuestState.initial());
   bool _isInitialized = false;
+  String? currentDifficulty;
 
   final List<QuestNode> nodes = [
     QuestNode(
@@ -246,10 +248,71 @@ class StoryGameService {
     }
   }
 
+  Future<void> setDifficulty(String difficulty) async {
+    currentDifficulty = difficulty;
+    
+    // Generate distances based on difficulty
+    List<int> distances;
+    if (difficulty == 'easy') {
+      distances = [0, 1000, 2000, 3000, 4000, 6000];
+    } else {
+      int totalKm = difficulty == 'medium' ? 10 : (difficulty == 'hard' ? 15 : 20);
+      final totalMeters = totalKm * 1000;
+      final rand = Random();
+      
+      // Let's divide totalMeters into 5 segments.
+      // Minimum segment length is 10% of total
+      final minSegment = (totalMeters / 10).round();
+      int remaining = totalMeters - (5 * minSegment);
+      List<int> segments = List.filled(5, minSegment);
+      
+      for (int i = 0; i < 5; i++) {
+        if (remaining <= 0) break;
+        int share = i == 4 ? remaining : rand.nextInt(remaining ~/ 2 + 1);
+        segments[i] += share;
+        remaining -= share;
+      }
+      segments.shuffle(rand);
+      
+      distances = [0];
+      int current = 0;
+      for (var seg in segments) {
+        current += seg;
+        distances.add(current);
+      }
+    }
+
+    // Apply to nodes
+    for (int i = 0; i < nodes.length; i++) {
+      nodes[i].requiredDistance = distances[i];
+    }
+
+    // Save to SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('story_difficulty', difficulty);
+    await prefs.setStringList('story_node_distances', distances.map((d) => d.toString()).toList());
+    
+    _checkUnlockConditions();
+    await saveState();
+  }
+
   Future<void> loadState() async {
     final prefs = await SharedPreferences.getInstance();
-    final stateJson = prefs.getString('story_quest_state');
     
+    // Load difficulty and distances first
+    final savedDifficulty = prefs.getString('story_difficulty');
+    final savedDistances = prefs.getStringList('story_node_distances');
+    
+    if (savedDifficulty != null && savedDistances != null && savedDistances.length == nodes.length) {
+      currentDifficulty = savedDifficulty;
+      for (int i = 0; i < nodes.length; i++) {
+        nodes[i].requiredDistance = int.parse(savedDistances[i]);
+      }
+    } else {
+      currentDifficulty = null; // Needs choice
+    }
+
+    final stateJson = prefs.getString('story_quest_state');
     if (stateJson != null) {
       try {
         stateNotifier.value = QuestState.fromJson(jsonDecode(stateJson));
@@ -297,6 +360,18 @@ class StoryGameService {
   Future<void> resetQuest() async {
     stateNotifier.value = QuestState.initial();
     final prefs = await SharedPreferences.getInstance();
+    
+    // Clear difficulty and distances
+    await prefs.remove('story_difficulty');
+    await prefs.remove('story_node_distances');
+    currentDifficulty = null;
+    
+    // Reset nodes to default distances
+    final defaultDistances = [0, 1000, 2000, 3000, 4000, 6000];
+    for (int i = 0; i < nodes.length; i++) {
+      nodes[i].requiredDistance = defaultDistances[i];
+    }
+
     final steps = StepTrackerService().stepsNotifier.value;
     final todayStr = DateTime.now().toIso8601String().substring(0, 10);
     await prefs.setInt('quest_last_seen_steps', steps);
