@@ -478,6 +478,12 @@ class StoryGameService {
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       final data = doc.data() ?? {};
       final alreadyCompleted = data['achievement_hero_lost_amulet'] as bool? ?? false;
+      
+      final diff = currentDifficulty ?? 'easy';
+
+      // Always save the difficulty completion locally
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('achievement_story_difficulty_$diff', true);
 
       if (!alreadyCompleted) {
         final currentLimetky = data['limetky'] as int? ?? 0;
@@ -486,6 +492,7 @@ class StoryGameService {
         await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
           'limetky': newLimetky,
           'achievement_hero_lost_amulet': true,
+          'achievement_story_difficulty_$diff': true,
         });
 
         // Write to activities feed
@@ -498,13 +505,18 @@ class StoryGameService {
           'details': {
             'storyId': 'lost_amulet',
             'storyName': 'Ztracený amulet',
+            'difficulty': diff,
           },
         });
 
         // Also set locally
-        final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('limetky', newLimetky);
         await prefs.setBool('achievement_hero_lost_amulet', true);
+      } else {
+        // If already completed on another difficulty, we still sync the new difficulty achievement to Firestore
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'achievement_story_difficulty_$diff': true,
+        });
       }
     } catch (_) {}
   }

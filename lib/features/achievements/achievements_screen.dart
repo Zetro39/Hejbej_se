@@ -86,6 +86,10 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
   final List<bool> _loyaltyAchievements = [false, false, false];
   final List<bool> _stepsAchievements = List.filled(6, false);
   bool _storyAmuletCompleted = false;
+  bool _storyDifficultyEasy = false;
+  bool _storyDifficultyMedium = false;
+  bool _storyDifficultyHard = false;
+  bool _storyDifficultyHardcore = false;
   final Map<String, bool> _checkpointAchievements = {};
 
   @override
@@ -108,6 +112,10 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
       }
 
       _storyAmuletCompleted = prefs.getBool('achievement_hero_lost_amulet') ?? false;
+      _storyDifficultyEasy = prefs.getBool('achievement_story_difficulty_easy') ?? false;
+      _storyDifficultyMedium = prefs.getBool('achievement_story_difficulty_medium') ?? false;
+      _storyDifficultyHard = prefs.getBool('achievement_story_difficulty_hard') ?? false;
+      _storyDifficultyHardcore = prefs.getBool('achievement_story_difficulty_hardcore') ?? false;
 
       for (int i = 1; i <= 5; i++) {
         _checkpointAchievements['checkpoint_$i'] = prefs.getBool('achievement_checkpoint_${i}_reached') ?? false;
@@ -214,8 +222,33 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                     children: [
                       _buildStoryTile(
                         'Ztracený amulet',
-                        'Dokonči celou příběhovou linku Ztracený amulet a získej odměnu.',
+                        'Dokonči celou příběhovou linku Ztracený amulet.',
                         _storyAmuletCompleted,
+                      ),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      _buildStoryDifficultyTile(
+                        'Pohodový poutník (Lehká)',
+                        'Dokonči příběh na lehkou obtížnost (6 km).',
+                        _storyDifficultyEasy,
+                        Colors.green,
+                      ),
+                      _buildStoryDifficultyTile(
+                        'Zkušený dobrodruh (Střední)',
+                        'Dokonči příběh na střední obtížnost (10 km).',
+                        _storyDifficultyMedium,
+                        Colors.cyan,
+                      ),
+                      _buildStoryDifficultyTile(
+                        'Vytrvalý hrdina (Těžká)',
+                        'Dokonči příběh na těžkou obtížnost (15 km).',
+                        _storyDifficultyHard,
+                        Colors.orange,
+                      ),
+                      _buildStoryDifficultyTile(
+                        'Legenda z bažin (Hardcore)',
+                        'Dokonči příběh na hardcore obtížnost (20 km)!',
+                        _storyDifficultyHardcore,
+                        Colors.redAccent,
                       ),
                     ],
                   ),
@@ -256,6 +289,28 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
         unlocked ? '100%' : '0%',
         style: TextStyle(
           color: unlocked ? Colors.deepPurple.shade900 : Colors.black54,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+  Widget _buildStoryDifficultyTile(String title, String description, bool unlocked, Color activeColor) {
+    return ListTile(
+      leading: Icon(
+        unlocked ? Icons.emoji_events : Icons.lock_outline,
+        color: unlocked ? activeColor : Colors.grey,
+        size: 24,
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: unlocked ? Colors.black87 : Colors.black54,
+        ),
+      ),
+      subtitle: Text(description),
+      trailing: Text(
+        unlocked ? '100%' : '0%',
+        style: TextStyle(
+          color: unlocked ? activeColor : Colors.black54,
           fontWeight: FontWeight.bold,
         ),
       ),

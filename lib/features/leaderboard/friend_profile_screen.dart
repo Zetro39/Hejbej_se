@@ -110,6 +110,36 @@ class FriendProfileScreen extends StatelessWidget {
             'icon': Icons.auto_stories,
           });
 
+          final completedEasy = data['achievement_story_difficulty_easy'] as bool? ?? false;
+          final completedMedium = data['achievement_story_difficulty_medium'] as bool? ?? false;
+          final completedHard = data['achievement_story_difficulty_hard'] as bool? ?? false;
+          final completedHardcore = data['achievement_story_difficulty_hardcore'] as bool? ?? false;
+
+          achievements.add({
+            'title': 'Lehká trasa',
+            'subtitle': 'Příběh na lehkou obtížnost',
+            'unlocked': completedEasy,
+            'icon': Icons.explore,
+          });
+          achievements.add({
+            'title': 'Střední trasa',
+            'subtitle': 'Příběh na střední obtížnost',
+            'unlocked': completedMedium,
+            'icon': Icons.explore,
+          });
+          achievements.add({
+            'title': 'Těžká trasa',
+            'subtitle': 'Příběh na těžkou obtížnost',
+            'unlocked': completedHard,
+            'icon': Icons.explore,
+          });
+          achievements.add({
+            'title': 'Hardcore trasa',
+            'subtitle': 'Příběh na hardcore obtížnost',
+            'unlocked': completedHardcore,
+            'icon': Icons.explore,
+          });
+
           return SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.all(24.0),

@@ -31,6 +31,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<bool> loyaltyAchievements = List.filled(3, false); // 10,50,250 days
   bool isStreakFrozen = false;
   bool _storyAmuletCompleted = false;
+  bool _storyDifficultyEasy = false;
+  bool _storyDifficultyMedium = false;
+  bool _storyDifficultyHard = false;
+  bool _storyDifficultyHardcore = false;
 
   String _firstName = '';
   String _lastName = '';
@@ -96,6 +100,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _stepsGoalHistory = prefs.getStringList('steps_goal_history') ?? [];
       _stepsStreak = prefs.getInt('steps_streak') ?? 0;
       _storyAmuletCompleted = prefs.getBool('achievement_hero_lost_amulet') ?? false;
+      _storyDifficultyEasy = prefs.getBool('achievement_story_difficulty_easy') ?? false;
+      _storyDifficultyMedium = prefs.getBool('achievement_story_difficulty_medium') ?? false;
+      _storyDifficultyHard = prefs.getBool('achievement_story_difficulty_hard') ?? false;
+      _storyDifficultyHardcore = prefs.getBool('achievement_story_difficulty_hardcore') ?? false;
     });
     _updateAchievements();
   }
@@ -619,6 +627,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'type': 'story',
       'value': 99999.0,
       'icon': Icons.auto_stories,
+    });
+    achievementItems.add({
+      'title': 'Lehká trasa',
+      'unlocked': _storyDifficultyEasy,
+      'type': 'story_difficulty',
+      'value': 99998.0,
+      'icon': Icons.explore,
+    });
+    achievementItems.add({
+      'title': 'Střední trasa',
+      'unlocked': _storyDifficultyMedium,
+      'type': 'story_difficulty',
+      'value': 99997.0,
+      'icon': Icons.explore,
+    });
+    achievementItems.add({
+      'title': 'Těžká trasa',
+      'unlocked': _storyDifficultyHard,
+      'type': 'story_difficulty',
+      'value': 99996.0,
+      'icon': Icons.explore,
+    });
+    achievementItems.add({
+      'title': 'Hardcore trasa',
+      'unlocked': _storyDifficultyHardcore,
+      'type': 'story_difficulty',
+      'value': 99995.0,
+      'icon': Icons.explore,
     });
 
     final visibleAchievements = List<Map<String, dynamic>>.from(achievementItems)
