@@ -60,18 +60,24 @@ class StepTrackerService {
   Future<bool> checkPermissionAndStart() async {
     if (kIsWeb) return false;
 
-    // Check permission using permission_handler
-    var status = await Permission.activityRecognition.status;
-    if (!status.isGranted) {
-      status = await Permission.activityRecognition.request();
-    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // Check permission using permission_handler on Android
+      var status = await Permission.activityRecognition.status;
+      if (!status.isGranted) {
+        status = await Permission.activityRecognition.request();
+      }
 
-    if (status.isGranted) {
+      if (status.isGranted) {
+        _startPedometer();
+        return true;
+      } else {
+        debugPrint('Activity recognition permission denied');
+        return false;
+      }
+    } else {
+      // On iOS, Pedometer package manages permission implicitly when listening.
       _startPedometer();
       return true;
-    } else {
-      debugPrint('Activity recognition permission denied');
-      return false;
     }
   }
 

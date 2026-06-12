@@ -1,7 +1,7 @@
 name: hejbej_se
 description: Hejbej se – trasy v ČR s gamifikací.
 publish_to: "none"
-version: 1.2.3+121
+version: 1.2.3+122
 
 environment:
   sdk: ">=3.3.0 <4.0.0"

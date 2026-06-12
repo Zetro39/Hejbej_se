@@ -20,6 +20,7 @@ class _GameScreenState extends State<GameScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   int? _userAge;
   String? _selectedAvatar;
+  String? _selectedCompanion;
   late ConfettiController _confettiController;
 
   @override
@@ -46,6 +47,7 @@ class _GameScreenState extends State<GameScreen> {
     if (mounted) {
       setState(() {
         _selectedAvatar = prefs.getString('selected_avatar');
+        _selectedCompanion = prefs.getString('selected_companion');
       });
     }
   }
@@ -643,14 +645,9 @@ class _GameScreenState extends State<GameScreen> {
                             ),
                           ],
                         ),
-                        if (_selectedAvatar != null)
+                        if (_selectedCompanion != null)
                           MascotWidget(
-                            avatar: _selectedAvatar!,
-                            progress: progress,
-                          )
-                        else
-                          MascotWidget(
-                            avatar: 'boy',
+                            avatar: _selectedCompanion!,
                             progress: progress,
                           ),
                       ],
