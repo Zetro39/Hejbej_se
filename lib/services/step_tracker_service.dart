@@ -134,6 +134,7 @@ class StepTrackerService {
 
     stepsNotifier.value = todaySteps;
     await prefs.setInt('pedometer_today_steps', todaySteps);
+    await prefs.setInt('daily_steps_$todayStr', todaySteps);
 
     // Sync to HomeWidget
     try {
@@ -235,6 +236,7 @@ class StepTrackerService {
 
       if (streak >= milestones[i] && !isUnlocked) {
         await prefs.setBool(key, true);
+        await logAchievementUnlock('${milestones[i]} dní plnění cíle');
         
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
@@ -247,6 +249,19 @@ class StepTrackerService {
         }
       }
     }
+  }
+
+  Future<void> logAchievementUnlock(String achievementTitle) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+      final key = 'daily_achievements_$todayStr';
+      List<String> list = prefs.getStringList(key) ?? [];
+      if (!list.contains(achievementTitle)) {
+        list.add(achievementTitle);
+        await prefs.setStringList(key, list);
+      }
+    } catch (_) {}
   }
 
   void dispose() {

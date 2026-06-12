@@ -485,6 +485,23 @@ class StoryGameService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('achievement_story_difficulty_$diff', true);
 
+      final names = {
+        'easy': 'Lehká trasa',
+        'medium': 'Střední trasa',
+        'hard': 'Těžká trasa',
+        'hardcore': 'Hardcore trasa',
+      };
+      final title = names[diff] ?? 'Trasa';
+      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+      List<String> list = prefs.getStringList('daily_achievements_$todayStr') ?? [];
+      if (!list.contains(title)) {
+        list.add(title);
+      }
+      if (!list.contains('Ztracený amulet')) {
+        list.add('Ztracený amulet');
+      }
+      await prefs.setStringList('daily_achievements_$todayStr', list);
+
       if (!alreadyCompleted) {
         final currentLimetky = data['limetky'] as int? ?? 0;
         final newLimetky = currentLimetky + 50;

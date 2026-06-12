@@ -70,8 +70,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _dailyStepsGoal = data['daily_steps_goal'] as int? ?? 10000;
         _lastUsernameChange = data['last_username_change'] as Timestamp?;
         _usernameGracePeriodEnd = data['username_grace_period_end'] as Timestamp?;
-        _stepsGoalHistory = List<String>.from(data['steps_goal_history'] ?? []);
-        _stepsStreak = data['steps_streak'] as int? ?? 0;
+        final firestoreHistory = List<String>.from(data['steps_goal_history'] ?? []);
+        _stepsGoalHistory = {..._stepsGoalHistory, ...firestoreHistory}.toList();
+        
+        final firestoreStreak = data['steps_streak'] as int? ?? 0;
+        if (firestoreStreak > _stepsStreak) {
+          _stepsStreak = firestoreStreak;
+        }
+
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setStringList('steps_goal_history', _stepsGoalHistory);
+          prefs.setInt('steps_streak', _stepsStreak);
+        });
 
         if (data['first_name'] != null || data['last_name'] != null) {
           final fn = data['first_name'] as String? ?? '';
@@ -556,16 +566,128 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 return GestureDetector(
                   onTap: () {
-                    ScaffoldMessenger.of(context).clearSnackBars();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${dayDate.day}. ${dayDate.month}.: ' +
-                          (isAchieved ? 'Cíl splněn! 🎉' : isToday ? 'Dnes se snažíš! 🏃‍♂️' : 'Nesplněno 💤')
+                    SharedPreferences.getInstance().then((prefs) {
+                      final steps = prefs.getInt('daily_steps_$dateStr') ?? (isToday ? (prefs.getInt('pedometer_today_steps') ?? 0) : 0);
+                      final gpsDistance = prefs.getDouble('daily_distance_$dateStr') ?? 0.0;
+                      final stepDistance = steps * 0.00075;
+                      final displayDistance = gpsDistance > stepDistance ? gpsDistance : stepDistance;
+
+                      final dailyAchievements = prefs.getStringList('daily_achievements_$dateStr') ?? [];
+
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          backgroundColor: const Color(0xFF1E1E24),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          title: Text(
+                            '${dayDate.day}. ${dayDate.month}. ${dayDate.year}',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isAchieved
+                                      ? Colors.lime.shade800.withOpacity(0.3)
+                                      : isToday
+                                          ? Colors.lightBlue.shade800.withOpacity(0.3)
+                                          : Colors.grey.shade800.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isAchieved
+                                        ? Colors.lime
+                                        : isToday
+                                            ? Colors.lightBlue
+                                            : Colors.grey,
+                                  ),
+                                ),
+                                child: Text(
+                                  isAchieved
+                                      ? 'Cíl splněn! 🎉'
+                                      : isToday
+                                          ? 'Dnes se snažíš! 🏃‍♂️'
+                                          : 'Cíl nesplněn 💤',
+                                  style: TextStyle(
+                                    color: isAchieved
+                                        ? Colors.limeAccent
+                                        : isToday
+                                            ? Colors.lightBlueAccent
+                                            : Colors.grey.shade400,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  const Icon(Icons.directions_walk, color: Colors.lightBlueAccent),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Kroky: ',
+                                    style: TextStyle(color: Colors.white70),
+                                  ),
+                                  Text(
+                                    steps.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} "),
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Icon(Icons.linear_scale, color: Colors.limeAccent),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Vzdálenost: ',
+                                    style: TextStyle(color: Colors.white70),
+                                  ),
+                                  Text(
+                                    '${displayDistance.toStringAsFixed(2)} km',
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Získané odznaky:',
+                                style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 6),
+                              if (dailyAchievements.isEmpty)
+                                const Text(
+                                  'Žádné odznaky ten den',
+                                  style: TextStyle(color: Colors.white38, fontSize: 13, fontStyle: FontStyle.italic),
+                                )
+                              else
+                                ...dailyAchievements.map((ach) => Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 2.0),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.emoji_events, color: Colors.amber, size: 16),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              ach,
+                                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )),
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Zavřít', style: TextStyle(color: Colors.cyanAccent)),
+                            ),
+                          ],
                         ),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
+                      );
+                    });
                   },
                   child: Container(
                     decoration: BoxDecoration(

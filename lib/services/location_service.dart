@@ -78,6 +78,11 @@ class DistanceManager {
     _monthlyDistance += kilometers;
     _lastDistanceUpdateStr = now.toIso8601String();
     
+    final todayStr = now.toIso8601String().substring(0, 10);
+    double todayDist = prefs.getDouble('daily_distance_$todayStr') ?? 0.0;
+    todayDist += kilometers;
+    await prefs.setDouble('daily_distance_$todayStr', todayDist);
+
     await prefs.setDouble(_distanceKey, _totalDistance);
     await prefs.setDouble('weeklyDistance', _weeklyDistance);
     await prefs.setDouble('monthlyDistance', _monthlyDistance);

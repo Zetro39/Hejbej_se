@@ -1100,6 +1100,21 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   Future<void> _saveCheckpointAchievement(String id) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('achievement_${id}_reached', true);
+
+    final names = {
+      'checkpoint_1': 'Severovýchodní checkpoint',
+      'checkpoint_2': 'Jihovýchodní checkpoint',
+      'checkpoint_3': 'Jihozápadní checkpoint',
+      'checkpoint_4': 'Severozápadní checkpoint',
+      'checkpoint_5': 'Východní checkpoint',
+    };
+    final title = names[id] ?? 'Checkpoint';
+    final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+    List<String> list = prefs.getStringList('daily_achievements_$todayStr') ?? [];
+    if (!list.contains(title)) {
+      list.add(title);
+      await prefs.setStringList('daily_achievements_$todayStr', list);
+    }
   }
 
 
