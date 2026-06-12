@@ -58,6 +58,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
     });
   }
   bool _showHints = false;
+  Offset? _debugTapOffset;
   String _dialogText = "";
   String _currentSubroom = "exterior"; // Used for sub-rooms (interior vs exterior)
 
@@ -1784,7 +1785,31 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
                     children: [
                       IconButton(
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () {
+                          if (widget.nodeId == 'node3' && _currentSubroom == 'interior') {
+                            setState(() {
+                              _currentSubroom = 'exterior';
+                              _dialogText = "Stojíš venku před chýší.";
+                            });
+                          } else if (widget.nodeId == 'node4' && _currentSubroom == 'scale_zoom') {
+                            setState(() {
+                              _currentSubroom = 'barn';
+                              _dialogText = "Uvnitř stodoly.";
+                            });
+                          } else if (widget.nodeId == 'node4' && (_currentSubroom == 'cave' || _currentSubroom == 'barn' || _currentSubroom == 'shrine')) {
+                            setState(() {
+                              _currentSubroom = 'exterior';
+                              _dialogText = "Stojíš u bažiny.";
+                            });
+                          } else if (widget.nodeId == 'node5' && (_currentSubroom == 'library' || _currentSubroom == 'armory')) {
+                            setState(() {
+                              _currentSubroom = 'exterior';
+                              _dialogText = "Nádvoří pevnosti.";
+                            });
+                          } else {
+                            Navigator.pop(context);
+                          }
+                        },
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -1814,13 +1839,6 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
                           setState(() {
                             _showHints = !_showHints;
                           });
-                          Future.delayed(const Duration(seconds: 3), () {
-                            if (mounted) {
-                              setState(() {
-                                _showHints = false;
-                              });
-                            }
-                          });
                         },
                         tooltip: 'Ukázat nápovědu',
                       ),
@@ -1835,8 +1853,20 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
                       final width = constraints.maxWidth;
                       final height = constraints.maxHeight;
 
-                      return Stack(
-                        children: [
+                      return GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTapDown: (details) {
+                          if (_showHints) {
+                            setState(() {
+                              _debugTapOffset = Offset(
+                                details.localPosition.dx / width,
+                                details.localPosition.dy / height,
+                              );
+                            });
+                          }
+                        },
+                        child: Stack(
+                          children: [
                           // Background Image
                           Positioned.fill(
                             child: ColorFiltered(
@@ -2087,8 +2117,45 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
                                 ),
                               ),
                             ),
+                          if (_showHints && _debugTapOffset != null) ...[
+                            Positioned(
+                              left: _debugTapOffset!.dx * width - 6,
+                              top: _debugTapOffset!.dy * height - 6,
+                              width: 12,
+                              height: 12,
+                              child: IgnorePointer(
+                                child: Container(
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 16,
+                              left: 16,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.85),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.cyanAccent, width: 1.5),
+                                ),
+                                child: Text(
+                                  "SOUŘADNICE: x: ${_debugTapOffset!.dx.toStringAsFixed(3)}, y: ${_debugTapOffset!.dy.toStringAsFixed(3)}",
+                                  style: const TextStyle(
+                                    color: Colors.cyanAccent,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
-                      );
+                      ),
+                    );
                     },
                   ),
                 ),
