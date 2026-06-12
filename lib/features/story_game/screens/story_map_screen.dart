@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/story_quest_model.dart';
 import '../services/story_game_service.dart';
@@ -21,6 +22,18 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
   int _introSlideIndex = 0;
   final AudioPlayer _musicPlayer = AudioPlayer();
   late ScrollController _scrollController;
+
+  // Debug coordinate panel and path drawing tool variables
+  bool _showDebugCoords = false;
+  Offset? _debugMapTap;
+  int _selectedDebugSegment = 0; // 0 to 4
+  final Map<String, List<Offset>> _debugDraftPaths = {
+    'node1_node2': [],
+    'node2_node3': [],
+    'node3_node4': [],
+    'node4_node5': [],
+    'node5_node6': [],
+  };
 
   @override
   void initState() {
@@ -352,14 +365,51 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
       }
     }
 
+    // Get segment path
+    final pathPoints = _service.getFullSegmentPath(nodeA, nodeB);
+
     // Interpolate
     double segmentTotal = (nodeB.requiredDistance - nodeA.requiredDistance).toDouble();
     double segmentProgress = (walkedMeters - nodeA.requiredDistance) / (segmentTotal > 0 ? segmentTotal : 1.0);
 
-    double x = nodeA.mapPosition.dx + (nodeB.mapPosition.dx - nodeA.mapPosition.dx) * segmentProgress;
-    double y = nodeA.mapPosition.dy + (nodeB.mapPosition.dy - nodeA.mapPosition.dy) * segmentProgress;
+    return _interpolatePositionAlongPath(pathPoints, segmentProgress);
+  }
 
-    return Offset(x, y);
+  Offset _interpolatePositionAlongPath(List<Offset> points, double progress) {
+    if (points.isEmpty) return const Offset(0.5, 0.5);
+    if (points.length == 1) return points.first;
+    if (progress <= 0.0) return points.first;
+    if (progress >= 1.0) return points.last;
+
+    // 1. Calculate lengths of all sub-segments
+    List<double> subLengths = [];
+    double totalLength = 0.0;
+    for (int i = 0; i < points.length - 1; i++) {
+      final length = (points[i+1] - points[i]).distance;
+      subLengths.add(length);
+      totalLength += length;
+    }
+
+    if (totalLength == 0) return points.first;
+
+    // 2. Find target length along the polyline
+    double targetLength = progress * totalLength;
+
+    // 3. Find which sub-segment targetLength falls into
+    double accumulatedLength = 0.0;
+    for (int i = 0; i < points.length - 1; i++) {
+      final length = subLengths[i];
+      if (targetLength <= accumulatedLength + length) {
+        double localProgress = (targetLength - accumulatedLength) / (length > 0 ? length : 1.0);
+        return Offset(
+          points[i].dx + (points[i+1].dx - points[i].dx) * localProgress,
+          points[i].dy + (points[i+1].dy - points[i].dy) * localProgress,
+        );
+      }
+      accumulatedLength += length;
+    }
+
+    return points.last;
   }
 
   void _showLockedProgressAlert(String message) {
@@ -387,41 +437,27 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
     if (nextNodeIndex < _service.nodes.length) {
       final nextNode = _service.nodes[nextNodeIndex];
       final latestState = _service.stateNotifier.value;
-      if (latestState.unlockedNodes.contains(nextNode.id)) {
-        Future.delayed(const Duration(milliseconds: 600), () {
-          if (mounted) {
-            _onNodeTap(nextNode, _service.stateNotifier.value);
-          }
-        });
-      }
+      
+      // Delay to allow the screen transition back to map to finish
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted) {
+          _showNextNodePreviewDialog(nextNode, latestState);
+        }
+      });
     }
   }
 
   void _onNodeTap(QuestNode node, QuestState state) {
-
-    final isUnlocked = state.unlockedNodes.contains(node.id);
-    if (!isUnlocked) {
-      final needed = node.requiredDistance - state.currentDistanceWalked;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('🔒 Lokace uzamčena', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Text(
-            'Tato část stezky je zahalená hustou mlhou. Abys sem mohl vstoupit, musíš ujít ještě ${needed.toInt()} metrů.',
-            style: const TextStyle(fontSize: 15),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Rozumím'),
-            ),
-          ],
-        ),
-      );
+    // If it's already completed, let them enter directly
+    if (state.completedNodes.contains(node.id)) {
+      _enterNode(node, state);
       return;
     }
+    // Show preview/unlock dialog
+    _showNextNodePreviewDialog(node, state);
+  }
 
+  void _enterNode(QuestNode node, QuestState state) {
     // Striktní sekvenční průchod hrou
     if (node.id == 'node2' && !state.completedNodes.contains('node1')) {
       _showLockedProgressAlert("Musíš nejprve otevřít Lesní bránu (Lokace 1) a projít skrz ni.");
@@ -443,6 +479,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
       _showLockedProgressAlert("Musíš nejprve seřídit dalekohled v pevnosti (Lokace 5).");
       return;
     }
+
     // Navigate to location screen
     if (node.id == 'node1' || node.id == 'node2' || node.id == 'node3') {
       Navigator.push(
@@ -459,7 +496,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => PointAndClickScreen(nodeId: node.id), // Point and click for swamp exterior/interior
+          builder: (context) => PointAndClickScreen(nodeId: node.id),
         ),
       ).then((didSolve) {
         if (didSolve == true) {
@@ -470,7 +507,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => PointAndClickScreen(nodeId: node.id), // Point and click for castle courtyard
+          builder: (context) => PointAndClickScreen(nodeId: node.id),
         ),
       ).then((didSolve) {
         if (didSolve == true) {
@@ -481,7 +518,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => PointAndClickScreen(nodeId: node.id), // Altar
+          builder: (context) => PointAndClickScreen(nodeId: node.id),
         ),
       ).then((didSolve) {
         if (didSolve == true) {
@@ -489,6 +526,108 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
         }
       });
     }
+  }
+
+  void _showNextNodePreviewDialog(QuestNode node, QuestState state) {
+    final nextNodeImg = {
+      'node1': 'assets/images/story_room_gate_closed.png',
+      'node2': 'assets/images/story_room_oak.png',
+      'node3': 'assets/images/story_room_cabin_exterior.png',
+      'node4': 'assets/images/story_room_swamp.png',
+      'node5': 'assets/images/story_room_fortress_exterior.png',
+      'node6': 'assets/images/story_room_altar.png',
+    }[node.id] ?? 'assets/images/story_room_gate_closed.png';
+
+    final isUnlocked = state.unlockedNodes.contains(node.id);
+    final neededDistance = node.requiredDistance - state.currentDistanceWalked;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: EdgeInsets.zero,
+        title: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 20, left: 24, right: 50, bottom: 10),
+              child: Text(
+                node.name,
+                style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 20),
+              ),
+            ),
+            Positioned(
+              right: 12,
+              top: 12,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white70),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                nextNodeImg,
+                height: 180,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (isUnlocked) ...[
+              const Text(
+                "Tato lokace je odemčená! Můžeš vstoupit a začít hrát.",
+                style: TextStyle(color: Colors.white, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ] else ...[
+              const Text(
+                "Tato lokace je prozatím uzamčena.",
+                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 15),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Musíš ujít ještě: ${neededDistance.toInt()} metrů.",
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
+        ),
+        actionsPadding: const EdgeInsets.only(bottom: 16, right: 24, left: 24),
+        actions: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Zavřít', style: TextStyle(color: Colors.white70)),
+              ),
+              if (isUnlocked)
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.cyanAccent.shade700,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _enterNode(node, state);
+                  },
+                  child: const Text('Pokračovat', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+            ],
+          )
+        ],
+      ),
+    );
   }
 
   @override
@@ -529,11 +668,32 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                               height: 3234,
                               child: Stack(
                                 children: [
-                                  // Map Background Image
+                                  // Map Background Image with coordinate debug detector
                                   Positioned.fill(
-                                    child: Image.asset(
-                                      'assets/images/story_map.png',
-                                      fit: BoxFit.fill,
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.translucent,
+                                      onTapUp: (details) {
+                                        if (_showDebugCoords) {
+                                          final double tapX = details.localPosition.dx / 1080;
+                                          final double tapY = details.localPosition.dy / 3234;
+                                          setState(() {
+                                            _debugMapTap = Offset(tapX, tapY);
+                                            // Add to active draft path
+                                            final key = [
+                                              'node1_node2',
+                                              'node2_node3',
+                                              'node3_node4',
+                                              'node4_node5',
+                                              'node5_node6',
+                                            ][_selectedDebugSegment];
+                                            _debugDraftPaths[key]?.add(Offset(tapX, tapY));
+                                          });
+                                        }
+                                      },
+                                      child: Image.asset(
+                                        'assets/images/story_map.png',
+                                        fit: BoxFit.fill,
+                                      ),
                                     ),
                                   ),
 
@@ -551,6 +711,10 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                         nodes: _service.nodes,
                                         walkedDistance: state.currentDistanceWalked,
                                         unlockedNodes: state.unlockedNodes,
+                                        service: _service,
+                                        showDebugCoords: _showDebugCoords,
+                                        debugDraftPaths: _debugDraftPaths,
+                                        selectedDebugSegment: _selectedDebugSegment,
                                       ),
                                     ),
                                   ),
@@ -582,6 +746,30 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                       ),
                                     ),
                                   ),
+
+                                  // Debug tap red dot (last tapped)
+                                  if (_showDebugCoords && _debugMapTap != null)
+                                    Positioned(
+                                      left: (_debugMapTap!.dx * 1080) - 12,
+                                      top: (_debugMapTap!.dy * 3234) - 12,
+                                      child: IgnorePointer(
+                                        child: Container(
+                                          width: 24,
+                                          height: 24,
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.withOpacity(0.9),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: Colors.white, width: 2.5),
+                                            boxShadow: const [
+                                              BoxShadow(color: Colors.black45, blurRadius: 4)
+                                            ],
+                                          ),
+                                          child: const Center(
+                                            child: Icon(Icons.location_searching, color: Colors.white, size: 12),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -658,6 +846,19 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 _buildFloatingRoundButton(
+                                  icon: _showDebugCoords ? Icons.location_searching : Icons.location_disabled,
+                                  tooltip: 'Ladění souřadnic',
+                                  onTap: () {
+                                    setState(() {
+                                      _showDebugCoords = !_showDebugCoords;
+                                      if (!_showDebugCoords) {
+                                        _debugMapTap = null;
+                                      }
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 10),
+                                _buildFloatingRoundButton(
                                   icon: Icons.menu_book,
                                   tooltip: 'Zobrazit prolog',
                                   onTap: () {
@@ -680,6 +881,191 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                       ),
                     ),
                   ),
+
+                  // Floating Debug Coordinates Panel
+                  if (_showDebugCoords)
+                    Positioned(
+                      bottom: 24,
+                      left: 16,
+                      right: 80, // Leave space for simulation buttons on the right!
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E1E24).withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.cyanAccent.withOpacity(0.5), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            )
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  "🛠️ EDITOR TRAS",
+                                  style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.cyanAccent.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    "Bodů: ${_debugDraftPaths[['node1_node2', 'node2_node3', 'node3_node4', 'node4_node5', 'node5_node6'][_selectedDebugSegment]]?.length ?? 0}",
+                                    style: const TextStyle(color: Colors.cyanAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Segment selector dropdown
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.black38,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<int>(
+                                  value: _selectedDebugSegment,
+                                  dropdownColor: const Color(0xFF1E1E24),
+                                  icon: const Icon(Icons.arrow_drop_down, color: Colors.cyanAccent),
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                  items: const [
+                                    DropdownMenuItem(value: 0, child: Text("Segment 1: Brána ➔ Dub")),
+                                    DropdownMenuItem(value: 1, child: Text("Segment 2: Dub ➔ Chýše")),
+                                    DropdownMenuItem(value: 2, child: Text("Segment 3: Chýše ➔ Bažina")),
+                                    DropdownMenuItem(value: 3, child: Text("Segment 4: Bažina ➔ Pevnost")),
+                                    DropdownMenuItem(value: 4, child: Text("Segment 5: Pevnost ➔ Oltář")),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setState(() {
+                                        _selectedDebugSegment = val;
+                                        _debugMapTap = null;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (_debugMapTap != null) ...[
+                              Text(
+                                "Poslední bod: x: ${_debugMapTap!.dx.toStringAsFixed(4)}, y: ${_debugMapTap!.dy.toStringAsFixed(4)}",
+                                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontFamily: 'monospace'),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                            // Actions Row
+                            Row(
+                              children: [
+                                // Undo Button
+                                Expanded(
+                                  child: TextButton.icon(
+                                    style: TextButton.styleFrom(
+                                      backgroundColor: Colors.white10,
+                                      foregroundColor: Colors.white,
+                                      padding: EdgeInsets.zero,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    icon: const Icon(Icons.undo, size: 14),
+                                    label: const Text("Zpět", style: TextStyle(fontSize: 11)),
+                                    onPressed: () {
+                                      final key = [
+                                        'node1_node2',
+                                        'node2_node3',
+                                        'node3_node4',
+                                        'node4_node5',
+                                        'node5_node6',
+                                      ][_selectedDebugSegment];
+                                      final list = _debugDraftPaths[key];
+                                      if (list != null && list.isNotEmpty) {
+                                        setState(() {
+                                          list.removeLast();
+                                          _debugMapTap = list.isNotEmpty ? list.last : null;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                // Clear Button
+                                Expanded(
+                                  child: TextButton.icon(
+                                    style: TextButton.styleFrom(
+                                      backgroundColor: Colors.red.withOpacity(0.15),
+                                      foregroundColor: Colors.redAccent,
+                                      padding: EdgeInsets.zero,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    icon: const Icon(Icons.delete_outline, size: 14),
+                                    label: const Text("Smazat", style: TextStyle(fontSize: 11)),
+                                    onPressed: () {
+                                      final key = [
+                                        'node1_node2',
+                                        'node2_node3',
+                                        'node3_node4',
+                                        'node4_node5',
+                                        'node5_node6',
+                                      ][_selectedDebugSegment];
+                                      setState(() {
+                                        _debugDraftPaths[key]?.clear();
+                                        _debugMapTap = null;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            // Copy Button (primary action)
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.cyanAccent.shade700,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              icon: const Icon(Icons.copy, size: 14),
+                              label: const Text("KOPÍROVAT BODY", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              onPressed: () {
+                                final key = [
+                                  'node1_node2',
+                                  'node2_node3',
+                                  'node3_node4',
+                                  'node4_node5',
+                                  'node5_node6',
+                                ];
+                                final activeKey = key[_selectedDebugSegment];
+                                final points = _debugDraftPaths[activeKey] ?? [];
+                                if (points.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text("Trasa neobsahuje žádné body k zkopírování.")),
+                                  );
+                                  return;
+                                }
+                                final pointsStr = points.map((p) => "const Offset(${p.dx.toStringAsFixed(4)}, ${p.dy.toStringAsFixed(4)})").join(",\n");
+                                final formatted = "'$activeKey': [\n$pointsStr\n],";
+                                Clipboard.setData(ClipboardData(text: formatted));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text("Souřadnice segmentu $activeKey zkopírovány do schránky!")),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
                   // Helper test button to simulate walking (ONLY FOR CONVENIENCE FOR USER TESTING)
                   Positioned(
@@ -886,11 +1272,19 @@ class _MapPathPainter extends CustomPainter {
   final List<QuestNode> nodes;
   final int walkedDistance;
   final List<String> unlockedNodes;
+  final StoryGameService service;
+  final bool showDebugCoords;
+  final Map<String, List<Offset>> debugDraftPaths;
+  final int selectedDebugSegment;
 
   _MapPathPainter({
     required this.nodes,
     required this.walkedDistance,
     required this.unlockedNodes,
+    required this.service,
+    required this.showDebugCoords,
+    required this.debugDraftPaths,
+    required this.selectedDebugSegment,
   });
 
   @override
@@ -909,21 +1303,81 @@ class _MapPathPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
-    // Draw segment lines
+    final paintDebugPath = Paint()
+      ..color = Colors.orangeAccent
+      ..strokeWidth = 4.0
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final paintDebugPoint = Paint()
+      ..color = Colors.redAccent
+      ..style = PaintingStyle.fill;
+
+    // 1. Draw segment lines (using polyline paths from service)
     for (int i = 0; i < nodes.length - 1; i++) {
       final nodeA = nodes[i];
       final nodeB = nodes[i + 1];
 
-      final posA = Offset(nodeA.mapPosition.dx * size.width, nodeA.mapPosition.dy * size.height);
-      final posB = Offset(nodeB.mapPosition.dx * size.width, nodeB.mapPosition.dy * size.height);
-
+      final pathPoints = service.getFullSegmentPath(nodeA, nodeB);
+      final pixelPoints = pathPoints.map((p) => Offset(p.dx * size.width, p.dy * size.height)).toList();
       final isSegmentCompleted = unlockedNodes.contains(nodeB.id);
 
       if (isSegmentCompleted) {
-        canvas.drawLine(posA, posB, paintCompleted);
+        for (int j = 0; j < pixelPoints.length - 1; j++) {
+          canvas.drawLine(pixelPoints[j], pixelPoints[j + 1], paintCompleted);
+        }
       } else {
-        // Draw dashed line for locked segments
-        _drawDashedLine(canvas, posA, posB, paintLocked);
+        for (int j = 0; j < pixelPoints.length - 1; j++) {
+          _drawDashedLine(canvas, pixelPoints[j], pixelPoints[j + 1], paintLocked);
+        }
+      }
+    }
+
+    // 2. Draw debug draft paths if debug mode is active
+    if (showDebugCoords) {
+      for (int i = 0; i < nodes.length - 1; i++) {
+        final nodeA = nodes[i];
+        final nodeB = nodes[i + 1];
+        final key = "${nodeA.id}_${nodeB.id}";
+        final draftPoints = debugDraftPaths[key] ?? [];
+
+        if (draftPoints.isNotEmpty) {
+          final isSelected = selectedDebugSegment == i;
+          final draftPaint = isSelected 
+              ? (Paint()
+                  ..color = Colors.yellowAccent
+                  ..strokeWidth = 5.0
+                  ..strokeCap = StrokeCap.round
+                  ..style = PaintingStyle.stroke)
+              : paintDebugPath;
+
+          final pixelPoints = [
+            nodeA.mapPosition, 
+            ...draftPoints, 
+            nodeB.mapPosition
+          ].map((p) => Offset(p.dx * size.width, p.dy * size.height)).toList();
+
+          // Draw connections
+          for (int j = 0; j < pixelPoints.length - 1; j++) {
+            canvas.drawLine(pixelPoints[j], pixelPoints[j + 1], draftPaint);
+          }
+
+          // Draw circles for draft points
+          for (int j = 1; j < pixelPoints.length - 1; j++) {
+            canvas.drawCircle(pixelPoints[j], 6.0, paintDebugPoint);
+            
+            // Draw text index
+            final textPainter = TextPainter(
+              text: TextSpan(
+                text: "$j",
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+              textDirection: TextDirection.ltr,
+            );
+            textPainter.layout();
+            textPainter.paint(canvas, Offset(pixelPoints[j].dx - 3, pixelPoints[j].dy - 14));
+          }
+        }
       }
     }
   }
@@ -956,6 +1410,9 @@ class _MapPathPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MapPathPainter oldDelegate) {
     return oldDelegate.walkedDistance != walkedDistance ||
-        oldDelegate.unlockedNodes.length != unlockedNodes.length;
+        oldDelegate.unlockedNodes.length != unlockedNodes.length ||
+        oldDelegate.showDebugCoords != showDebugCoords ||
+        oldDelegate.selectedDebugSegment != selectedDebugSegment ||
+        oldDelegate.debugDraftPaths != debugDraftPaths;
   }
 }

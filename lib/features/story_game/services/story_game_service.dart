@@ -60,6 +60,23 @@ class StoryGameService {
     ),
   ];
 
+  final Map<String, List<Offset>> segmentPaths = {
+    'node1_node2': [],
+    'node2_node3': [],
+    'node3_node4': [],
+    'node4_node5': [],
+    'node5_node6': [],
+  };
+
+  List<Offset> getFullSegmentPath(QuestNode nodeA, QuestNode nodeB) {
+    final key = "${nodeA.id}_${nodeB.id}";
+    final intermediate = segmentPaths[key];
+    if (intermediate == null || intermediate.isEmpty) {
+      return [nodeA.mapPosition, nodeB.mapPosition];
+    }
+    return [nodeA.mapPosition, ...intermediate, nodeB.mapPosition];
+  }
+
   final Map<String, QuestItem> allItems = {
     'dirty_key': QuestItem(
       id: 'dirty_key',

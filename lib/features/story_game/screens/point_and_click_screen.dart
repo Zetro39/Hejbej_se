@@ -1040,18 +1040,6 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
           },
         ));
 
-        // Shrine transition
-        list.add(_Hotspot(
-          name: "Svatyně v bažinách",
-          x: 0.72, y: 0.22, w: 0.22, h: 0.32,
-          onTap: () {
-            setState(() {
-              _currentSubroom = "shrine";
-              _dialogText = "Stojíš u svatyně obklopené kamennými sochami lesní zvěře.";
-            });
-          },
-        ));
-
       } else if (_currentSubroom == "cave") {
         // Uvnitř jeskyně
         final caveLit = state.roomStates['node4_cave_lit'] == true;
@@ -1181,44 +1169,6 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
             setState(() {
               _currentSubroom = "barn";
               _dialogText = "Stojíš uvnitř stodoly.";
-            });
-          },
-        ));
-      } else if (_currentSubroom == "shrine") {
-        final hasHerbs = state.roomStates['node4_has_herbs'] == true;
-
-        list.add(_Hotspot(
-          name: "Kamenný oltář (Modré houby)",
-          x: 0.38, y: 0.35, w: 0.25, h: 0.35,
-          onTap: () {
-            if (hasHerbs) {
-              _showDialog("Svatyně je tichá, modré houby jsi již nasbíral.");
-              return;
-            }
-
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => CatchingGameScreen(
-                  onSolved: () {
-                    _service.updateRoomState('node4_has_herbs', true);
-                    _service.collectItem('blue_mushrooms');
-                    _showDialog("🦟 Pochytal jsi dotěrné světlušky, které chránily oltář, a bezpečně jsi nasbíral léčivé modré houby!");
-                  },
-                ),
-              ),
-            );
-          },
-        ));
-
-        // Return button
-        list.add(_Hotspot(
-          name: "Vchod ven",
-          x: 0.45, y: 0.85, w: 0.15, h: 0.1,
-          onTap: () {
-            setState(() {
-              _currentSubroom = "exterior";
-              _dialogText = "Stojíš venku v bažině.";
             });
           },
         ));

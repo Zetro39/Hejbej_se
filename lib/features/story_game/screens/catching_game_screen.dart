@@ -262,60 +262,73 @@ class _CatchingGameScreenState extends State<CatchingGameScreen> with SingleTick
                 ),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '🔋 NABÍJENÍ AMULETU',
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Nabití: $_score / $_targetScore',
-                        style: const TextStyle(
-                          color: Colors.cyanAccent,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          shadows: [
-                            Shadow(color: Colors.cyan, blurRadius: 4),
-                          ],
-                        ),
-                      ),
-                    ],
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      const Text(
-                        '⏳ ZBÝVAJÍCÍ ČAS',
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$_timeLeft s',
-                        style: TextStyle(
-                          color: _timeLeft <= 6 ? Colors.redAccent : Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          shadows: [
-                            if (_timeLeft <= 6)
-                              const Shadow(color: Colors.red, blurRadius: 8),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '🔋 NABÍJENÍ AMULETU',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Nabití: $_score / $_targetScore',
+                              style: const TextStyle(
+                                color: Colors.cyanAccent,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                shadows: [
+                                  Shadow(color: Colors.cyan, blurRadius: 4),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                    ],
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Text(
+                              '⏳ ZBÝVAJÍCÍ ČAS',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$_timeLeft s',
+                              style: TextStyle(
+                                color: _timeLeft <= 6 ? Colors.redAccent : Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                shadows: [
+                                  if (_timeLeft <= 6)
+                                    const Shadow(color: Colors.red, blurRadius: 8),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
