@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -13,7 +14,7 @@ import 'package:pedometer/pedometer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:mobile_scanner/mobile_scanner.dart' hide GeoPoint;
 
 import '../../services/location_service.dart';
 import '../../services/auth_service.dart';
@@ -1272,7 +1273,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       });
       _updatePartnerMarkers();
     } catch (_) {
-      final LatLng center = widget.startLocation;
+      final LatLng center = _lastPosition != null
+          ? LatLng(_lastPosition!.latitude, _lastPosition!.longitude)
+          : const LatLng(50.0755, 14.4378);
       setState(() {
         _partners = [
           {
@@ -1414,7 +1417,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                     const Text('KÓD KUPÓNU:', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold)),
                     Text(
                       partner['coupon_code'] as String? ?? '',
-                      style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.black, letterSpacing: 1.5),
+                      style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 1.5),
                     ),
                   ],
                 ),
