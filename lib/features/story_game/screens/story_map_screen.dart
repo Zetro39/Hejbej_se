@@ -520,13 +520,13 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                       controller: _scrollController,
                       child: Center(
                         child: SizedBox(
-                          width: mapWidth * 1.4,
-                          height: mapWidth * 1.4 * (1920 / 1080),
+                          width: mapWidth,
+                          height: mapWidth * (3234 / 1080),
                           child: FittedBox(
                             fit: BoxFit.fill,
                             child: SizedBox(
                               width: 1080,
-                              height: 1920,
+                              height: 3234,
                               child: Stack(
                                 children: [
                                   // Map Background Image
@@ -560,7 +560,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                     final isUnlocked = state.unlockedNodes.contains(node.id);
                                     final isCompleted = state.completedNodes.contains(node.id);
                                     final posX = node.mapPosition.dx * 1080;
-                                    final posY = node.mapPosition.dy * 1920;
+                                    final posY = node.mapPosition.dy * 3234;
 
                                     return Positioned(
                                       left: posX - 28,
@@ -575,7 +575,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                                   // User Avatar marker
                                   Positioned(
                                     left: (avatarPos.dx * 1080) - 20,
-                                    top: (avatarPos.dy * 1920) - 35,
+                                    top: (avatarPos.dy * 3234) - 35,
                                     child: IgnorePointer(
                                       child: AnimatedBobbingWidget(
                                         child: _buildAvatarMarker(),

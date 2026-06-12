@@ -398,7 +398,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -406,10 +406,10 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                 child: Center(
                   child: Card(
                     color: Colors.grey.shade800,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     elevation: 8,
                     child: Padding(
-                      padding: const EdgeInsets.all(24.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                       child: _isSolved
                           ? Column(
                               mainAxisSize: MainAxisSize.min,
@@ -427,11 +427,11 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               const Text(
                 'Přemýšlej a kombinuj indicie, které jsi získal z příběhu a zkoumání okolí.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54, fontSize: 13, fontStyle: FontStyle.italic),
+                style: TextStyle(color: Colors.white54, fontSize: 12, fontStyle: FontStyle.italic),
               ),
             ],
           ),
@@ -693,23 +693,23 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
     }
 
     // Determine positions of bucket and platform based on state
-    double bucketY = 130.0; // Idle position (bottom of well)
-    double platformY = 40.0; // Idle position (top of scale)
+    double bucketY = 100.0; // Idle position (bottom of well)
+    double platformY = 30.0; // Idle position (top of scale)
     double winchTurns = 0.0; // Winch rotation in turns
     double platformTilt = 0.0; // Winch platform tilt angle
     double brokenOpacity = 0.0; // Snap text opacity
     
     if (_winchState == 'too_light') {
-      bucketY = 130.0;
-      platformY = 45.0; // tiny dip
+      bucketY = 100.0;
+      platformY = 35.0; // tiny dip
       winchTurns = 0.05;
     } else if (_winchState == 'lifting') {
-      bucketY = 30.0; // Raised to the top
-      platformY = 130.0; // Dropped to the bottom
+      bucketY = 25.0; // Raised to the top
+      platformY = 95.0; // Dropped to the bottom
       winchTurns = 3.0; // Spun 3 times
     } else if (_winchState == 'snapped') {
-      bucketY = 150.0; // Plunged down
-      platformY = 170.0; // Dropped and fell
+      bucketY = 110.0; // Plunged down
+      platformY = 110.0; // Dropped and fell
       winchTurns = 1.5;
       platformTilt = 0.4; // Tilted (broken)
       brokenOpacity = 1.0;
@@ -731,7 +731,7 @@ class _LogicPuzzlesScreenState extends State<LogicPuzzlesScreen> {
         Transform.translate(
           offset: Offset(_shakeOffset, 0),
           child: Container(
-            height: 200,
+            height: 165,
             decoration: BoxDecoration(
               gradient: const RadialGradient(
                 center: Alignment.center,
