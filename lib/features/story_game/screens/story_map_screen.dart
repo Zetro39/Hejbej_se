@@ -696,7 +696,10 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                             fit: BoxFit.fill,
                             child: SizedBox(
                               width: 1080,
-                                   // Map Background Image with coordinate debug detector using custom tap Listener to prevent conflict with scrolling
+                              height: 3234,
+                              child: Stack(
+                                children: [
+                                  // Map Background Image with coordinate debug detector using custom tap Listener to prevent conflict with scrolling
                                   Positioned.fill(
                                     child: Listener(
                                       behavior: HitTestBehavior.translucent,
