@@ -21,50 +21,66 @@ class StoryGameService {
       name: 'Lesní brána',
       description: 'Vstup do hlubokého lesa chráněný starou bránou.',
       requiredDistance: 0,
-      mapPosition: const Offset(0.50, 0.90),
+      mapPosition: const Offset(0.4945, 0.9442),
     ),
     QuestNode(
       id: 'node2',
       name: 'Starý dub',
       description: 'Prastarý strom s vyřezanými magickými symboly.',
       requiredDistance: 400,
-      mapPosition: const Offset(0.416, 0.78),
+      mapPosition: const Offset(0.6353, 0.8153),
     ),
     QuestNode(
       id: 'node3',
       name: 'Zřícenina chýše',
       description: 'Zřícenina domku bývalého hajného.',
       requiredDistance: 1000,
-      mapPosition: const Offset(0.584, 0.66),
+      mapPosition: const Offset(0.4648, 0.6549),
     ),
     QuestNode(
       id: 'node4',
       name: 'Bažina & Studna',
       description: 'Svatyně skrytá v mlžném oparu bažin.',
       requiredDistance: 2500,
-      mapPosition: const Offset(0.466, 0.54),
+      mapPosition: const Offset(0.4131, 0.5005),
     ),
     QuestNode(
       id: 'node5',
       name: 'Zapomenutá pevnost',
       description: 'Opuštěná kamenná pevnost s vysokou věží.',
       requiredDistance: 4500,
-      mapPosition: const Offset(0.534, 0.42),
+      mapPosition: const Offset(0.5064, 0.3767),
     ),
     QuestNode(
       id: 'node6',
       name: 'Kamenný oltář',
       description: 'Vrcholek skály s rituálním kruhem.',
       requiredDistance: 6000,
-      mapPosition: const Offset(0.50, 0.30),
+      mapPosition: const Offset(0.5072, 0.2473),
     ),
   ];
 
   final Map<String, List<Offset>> segmentPaths = {
-    'node1_node2': [],
-    'node2_node3': [],
-    'node3_node4': [],
-    'node4_node5': [],
+    'node1_node2': [
+      const Offset(0.5148, 0.8890),
+      const Offset(0.5615, 0.8298),
+    ],
+    'node2_node3': [
+      const Offset(0.5174, 0.8238),
+      const Offset(0.3732, 0.7808),
+      const Offset(0.3045, 0.7386),
+      const Offset(0.3876, 0.6838),
+    ],
+    'node3_node4': [
+      const Offset(0.6565, 0.6043),
+      const Offset(0.6243, 0.5658),
+      const Offset(0.5488, 0.5336),
+    ],
+    'node4_node5': [
+      const Offset(0.5242, 0.4716),
+      const Offset(0.5869, 0.4490),
+      const Offset(0.5013, 0.4186),
+    ],
     'node5_node6': [],
   };
 
