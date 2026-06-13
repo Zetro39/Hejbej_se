@@ -165,25 +165,6 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
       apiKey = _geminiApiKey;
     }
 
-    if (apiKey.isEmpty) {
-      // Show warning about AI key and use fallback
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Generování AI vyžaduje Gemini API klíč. Nastav ho ikonou 🧠 vpravo nahoře.'),
-              action: SnackBarAction(
-                label: 'Zadat',
-                textColor: Colors.lime,
-                onPressed: _showApiKeyDialog,
-              ),
-              duration: const Duration(seconds: 6),
-            ),
-          );
-        }
-      });
-    }
-
     // 1. Try Gemini generation if API key is provided
     if (apiKey.isNotEmpty) {
       try {
