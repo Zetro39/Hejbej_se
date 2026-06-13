@@ -2968,7 +2968,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                               style: const TextStyle(
                                 color: Colors.white60,
                                 fontSize: 10,
-                                fontWeight: FontWeight.black,
+                                fontWeight: FontWeight.w900,
                                 letterSpacing: 1.2,
                               ),
                             ),

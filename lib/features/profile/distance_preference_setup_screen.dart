@@ -84,7 +84,7 @@ class _DistancePreferenceSetupScreenState extends State<DistancePreferenceSetupS
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 22,
-                            fontWeight: FontWeight.black,
+                            fontWeight: FontWeight.w900,
                             color: Color(0xFF263238),
                             letterSpacing: -0.5,
                           ),

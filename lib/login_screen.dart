@@ -244,17 +244,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const SizedBox(height: 40),
                     // Elegant Premium Logo
-                    const Center(
+                    Center(
                       child: Column(
                         children: [
-                          AppLogo(size: 110),
-                          SizedBox(height: 20),
-                          Text(
+                          const AppLogo(size: 110),
+                          const SizedBox(height: 20),
+                          const Text(
                             'Hejbej se',
                             style: TextStyle(
                               color: Color(0xFF263238),
                               fontSize: 36,
-                              fontWeight: FontWeight.black,
+                              fontWeight: FontWeight.w900,
                               letterSpacing: -1.0,
                             ),
                           ),

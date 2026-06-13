@@ -1013,7 +1013,7 @@ class _GameScreenState extends State<GameScreen> {
     return Theme(
       data: Theme.of(context).copyWith(
         scaffoldBackgroundColor: const Color(0xFF263238),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFF1E272C),
           elevation: 0,
           shape: RoundedRectangleBorder(
