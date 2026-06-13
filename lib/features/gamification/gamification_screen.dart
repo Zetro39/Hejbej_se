@@ -10,6 +10,7 @@ import '../story_game/screens/story_map_screen.dart';
 import 'models/wheel_of_fortune_model.dart';
 import 'services/wheel_of_fortune_service.dart';
 import 'wheel_editor_screen.dart';
+import '../../main_shell.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -444,7 +445,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildChallengesTab(User? currentUser) {
+  Widget _buildChallengesTab(User? currentUser, Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     if (currentUser == null) return const Center(child: Text('Uživatel není přihlášen'));
     return Stack(
       children: [
@@ -479,39 +480,37 @@ class _GameScreenState extends State<GameScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'Denní aktivita 🏃',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: textColor,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.2,
                 ),
               ),
               const SizedBox(height: 8),
-              _buildStepsCard(),
+              _buildStepsCard(cardColor, textColor, textSecondary, borderColor),
               const SizedBox(height: 24),
 
-              const Text(
+              Text(
                 'Speciální výpravy & Hry 🗺️',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: textColor,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.2,
                 ),
               ),
               const SizedBox(height: 12),
-              _buildSpecialGamesSectionBody(),
+              _buildSpecialGamesSectionBody(cardColor, textColor, textSecondary, borderColor),
               const SizedBox(height: 24),
 
               // 1v1 Challenges Card
               Card(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                color: Colors.white,
-                surfaceTintColor: Colors.white,
-                elevation: 4,
-                shadowColor: Colors.black.withOpacity(0.03),
+                color: cardColor,
+                elevation: 0,
                 child: Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: Column(
@@ -521,12 +520,12 @@ class _GameScreenState extends State<GameScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Row(
-                            children: const [
+                            children: [
                               const Icon(Icons.bolt_rounded, color: Colors.orange, size: 24),
                               const SizedBox(width: 8),
-                              const Text(
+                              Text(
                                 '1v1 Výzvy na míru',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
                               ),
                             ],
                           ),
@@ -545,7 +544,7 @@ class _GameScreenState extends State<GameScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      _buildChallengesList(currentUser.uid),
+                      _buildChallengesList(currentUser.uid, cardColor, textColor, textSecondary, borderColor),
                     ],
                   ),
                 ),
@@ -566,7 +565,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildChallengesList(String userId) {
+  Widget _buildChallengesList(String userId, Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
           .collection('challenges')
@@ -582,11 +581,11 @@ class _GameScreenState extends State<GameScreen> {
         if (docs.isEmpty) {
           return Container(
             padding: const EdgeInsets.all(16),
-            child: const Center(
+            child: Center(
               child: Text(
                 'Zatím nemáš žádné výzvy. Klikni na „Nová výzva“!',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.black54),
+                style: TextStyle(color: textSecondary),
               ),
             ),
           );
@@ -599,18 +598,18 @@ class _GameScreenState extends State<GameScreen> {
         List<Widget> challengeWidgets = [];
 
         if (active.isNotEmpty) {
-          challengeWidgets.add(_buildSectionTitle('Aktivní výzvy'));
-          challengeWidgets.addAll(active.map((doc) => _buildChallengeCard(doc, userId)));
+          challengeWidgets.add(_buildSectionTitle('Aktivní výzvy', textColor));
+          challengeWidgets.addAll(active.map((doc) => _buildChallengeCard(doc, userId, cardColor, textColor, textSecondary, borderColor)));
         }
 
         if (pending.isNotEmpty) {
-          challengeWidgets.add(_buildSectionTitle('Čekající žádosti'));
-          challengeWidgets.addAll(pending.map((doc) => _buildChallengeCard(doc, userId)));
+          challengeWidgets.add(_buildSectionTitle('Čekající žádosti', textColor));
+          challengeWidgets.addAll(pending.map((doc) => _buildChallengeCard(doc, userId, cardColor, textColor, textSecondary, borderColor)));
         }
 
         if (completed.isNotEmpty) {
-          challengeWidgets.add(_buildSectionTitle('Dokončené výzvy'));
-          challengeWidgets.addAll(completed.map((doc) => _buildChallengeCard(doc, userId)));
+          challengeWidgets.add(_buildSectionTitle('Dokončené výzvy', textColor));
+          challengeWidgets.addAll(completed.map((doc) => _buildChallengeCard(doc, userId, cardColor, textColor, textSecondary, borderColor)));
         }
 
         return Column(
@@ -621,7 +620,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildSpecialGamesSectionBody() {
+  Widget _buildSpecialGamesSectionBody(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     final show18Plus = _userAge != null && _userAge! >= 18;
     return SizedBox(
       height: 145,
@@ -635,6 +634,10 @@ class _GameScreenState extends State<GameScreen> {
             color: Colors.purple.shade50,
             iconColor: Colors.purple.shade700,
             is18Plus: false,
+            cardColor: cardColor,
+            textColor: textColor,
+            textSecondary: textSecondary,
+            borderColor: borderColor,
             onTap: () {
               Navigator.push(
                 context,
@@ -652,6 +655,10 @@ class _GameScreenState extends State<GameScreen> {
             color: Colors.amber.shade50,
             iconColor: Colors.amber.shade700,
             is18Plus: false,
+            cardColor: cardColor,
+            textColor: textColor,
+            textSecondary: textSecondary,
+            borderColor: borderColor,
           ),
           const SizedBox(width: 12),
           _buildSpecialGameCard(
@@ -661,6 +668,10 @@ class _GameScreenState extends State<GameScreen> {
             color: Colors.green.shade50,
             iconColor: Colors.green.shade700,
             is18Plus: false,
+            cardColor: cardColor,
+            textColor: textColor,
+            textSecondary: textSecondary,
+            borderColor: borderColor,
           ),
           if (show18Plus) ...[
             const SizedBox(width: 12),
@@ -671,6 +682,10 @@ class _GameScreenState extends State<GameScreen> {
               color: Colors.red.shade50,
               iconColor: Colors.red.shade700,
               is18Plus: true,
+              cardColor: cardColor,
+              textColor: textColor,
+              textSecondary: textSecondary,
+              borderColor: borderColor,
             ),
           ],
         ],
@@ -678,7 +693,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildGameCreatorTab(User? currentUser) {
+  Widget _buildGameCreatorTab(User? currentUser, Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     if (currentUser == null) return const Center(child: Text('Uživatel není přihlášen'));
     
     return SingleChildScrollView(
@@ -694,9 +709,9 @@ class _GameScreenState extends State<GameScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
+                  Text(
                     'Stáhnout hru podle kódu',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
                   ),
                   const SizedBox(height: 10),
                   Row(
@@ -704,11 +719,20 @@ class _GameScreenState extends State<GameScreen> {
                       Expanded(
                         child: TextField(
                           controller: _searchCodeController,
+                          style: TextStyle(color: textColor),
                           decoration: InputDecoration(
                             hintText: 'Např. #K15746',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            hintStyle: TextStyle(color: textSecondary),
+                            prefixIcon: Icon(Icons.tag, color: textSecondary),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: borderColor),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: borderColor),
+                            ),
                             isDense: true,
-                            prefixIcon: const Icon(Icons.tag),
                           ),
                           textCapitalization: TextCapitalization.characters,
                         ),
@@ -779,13 +803,15 @@ class _GameScreenState extends State<GameScreen> {
             clipBehavior: Clip.antiAlias,
             elevation: 2,
             child: ExpansionTile(
-              title: const Text('Od HEJBEJ 🍋', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              title: Text('Od HEJBEJ 🍋', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: textColor)),
               leading: const Icon(Icons.verified, color: Colors.amber),
+              collapsedIconColor: textSecondary,
+              iconColor: textColor,
               initiallyExpanded: true,
               children: [
                 Column(
                   children: WheelOfFortuneService().getOfficialWheels().map((wheel) {
-                    return _buildWheelListTile(wheel, isOfficial: true, currentUser: currentUser);
+                    return _buildWheelListTile(wheel, isOfficial: true, currentUser: currentUser, cardColor: cardColor, textColor: textColor, textSecondary: textSecondary, borderColor: borderColor);
                   }).toList(),
                 ),
               ],
@@ -797,10 +823,12 @@ class _GameScreenState extends State<GameScreen> {
             clipBehavior: Clip.antiAlias,
             elevation: 2,
             child: ExpansionTile(
-              title: const Text('Od hráčů 👥', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              title: Text('Od hráčů 👥', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: textColor)),
               leading: const Icon(Icons.people, color: Colors.blue),
+              collapsedIconColor: textSecondary,
+              iconColor: textColor,
               children: [
-                _buildPlayersWheelsSubTab(currentUser),
+                _buildPlayersWheelsSubTab(currentUser, cardColor, textColor, textSecondary, borderColor),
               ],
             ),
           ),
@@ -809,7 +837,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildPlayersWheelsSubTab(User currentUser) {
+  Widget _buildPlayersWheelsSubTab(User currentUser, Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -819,8 +847,14 @@ class _GameScreenState extends State<GameScreen> {
             children: [
               Expanded(
                 child: ChoiceChip(
-                  label: const Center(child: Text('Moje a stažené')),
+                  label: Center(
+                    child: Text(
+                      'Moje a stažené',
+                      style: TextStyle(color: !_showCommunityWheels ? Colors.black : textColor, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                   selected: !_showCommunityWheels,
+                  selectedColor: const Color(0xFFBFFF00),
                   onSelected: (val) {
                     if (val) setState(() => _showCommunityWheels = false);
                   },
@@ -829,8 +863,14 @@ class _GameScreenState extends State<GameScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: ChoiceChip(
-                  label: const Center(child: Text('Top z komunity')),
+                  label: Center(
+                    child: Text(
+                      'Top z komunity',
+                      style: TextStyle(color: _showCommunityWheels ? Colors.black : textColor, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                   selected: _showCommunityWheels,
+                  selectedColor: const Color(0xFFBFFF00),
                   onSelected: (val) {
                     if (val) setState(() => _showCommunityWheels = true);
                   },
@@ -839,15 +879,15 @@ class _GameScreenState extends State<GameScreen> {
             ],
           ),
         ),
-        const Divider(height: 1),
+        Divider(height: 1, color: borderColor),
         _showCommunityWheels
-            ? _buildCommunityWheelsList(currentUser.uid)
-            : _buildLocalWheelsList(currentUser),
+            ? _buildCommunityWheelsList(currentUser.uid, cardColor, textColor, textSecondary, borderColor)
+            : _buildLocalWheelsList(currentUser, cardColor, textColor, textSecondary, borderColor),
       ],
     );
   }
 
-  Widget _buildLocalWheelsList(User currentUser) {
+  Widget _buildLocalWheelsList(User currentUser, Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     return FutureBuilder<List<WheelOfFortune>>(
       future: WheelOfFortuneService().getCustomWheels(),
       builder: (context, snapshot) {
@@ -860,24 +900,24 @@ class _GameScreenState extends State<GameScreen> {
 
         final wheels = snapshot.data ?? [];
         if (wheels.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(24.0),
+          return Padding(
+            padding: const EdgeInsets.all(24.0),
             child: Text(
               'Nemáš stažené ani vytvořené žádné automaty úkolů.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54),
+              style: TextStyle(color: textSecondary),
             ),
           );
         }
 
         return Column(
-          children: wheels.map((w) => _buildWheelListTile(w, isOfficial: false, currentUser: currentUser)).toList(),
+          children: wheels.map((w) => _buildWheelListTile(w, isOfficial: false, currentUser: currentUser, cardColor: cardColor, textColor: textColor, textSecondary: textSecondary, borderColor: borderColor)).toList(),
         );
       },
     );
   }
 
-  Widget _buildCommunityWheelsList(String currentUserId) {
+  Widget _buildCommunityWheelsList(String currentUserId, Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     return FutureBuilder<List<WheelOfFortune>>(
       future: WheelOfFortuneService().fetchTopRatedCommunityWheels(),
       builder: (context, snapshot) {
@@ -890,12 +930,12 @@ class _GameScreenState extends State<GameScreen> {
 
         final wheels = snapshot.data ?? [];
         if (wheels.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(24.0),
+          return Padding(
+            padding: const EdgeInsets.all(24.0),
             child: Text(
               'V komunitě zatím nejsou sdílené žádné automaty.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54),
+              style: TextStyle(color: textSecondary),
             ),
           );
         }
@@ -903,8 +943,8 @@ class _GameScreenState extends State<GameScreen> {
         return Column(
           children: wheels.map((w) {
             return ListTile(
-              title: Text(w.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('Autor: ${w.creatorName} • Kód: #${w.code}'),
+              title: Text(w.name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+              subtitle: Text('Autor: ${w.creatorName} • Kód: #${w.code}', style: TextStyle(color: textSecondary)),
               leading: const Icon(Icons.public, color: Colors.green),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -916,7 +956,7 @@ class _GameScreenState extends State<GameScreen> {
                       setState(() {});
                     },
                   ),
-                  Text('${w.likes}'),
+                  Text('${w.likes}', style: TextStyle(color: textColor)),
                   const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.download_for_offline_outlined, color: Colors.lightBlue),
@@ -937,18 +977,28 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildWheelListTile(WheelOfFortune w, {required bool isOfficial, required User currentUser}) {
+  Widget _buildWheelListTile(WheelOfFortune w, {
+    required bool isOfficial,
+    required User currentUser,
+    required Color cardColor,
+    required Color textColor,
+    required Color textSecondary,
+    required Color borderColor,
+  }) {
     return ListTile(
-      title: Text(w.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(isOfficial 
-          ? 'Oficiální • ${w.tasks.length} úkolů' 
-          : 'Kód: #${w.code.isNotEmpty ? w.code : "Není sdíleno"} • ${w.tasks.length} úkolů'),
+      title: Text(w.name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+      subtitle: Text(
+        isOfficial 
+            ? 'Oficiální • ${w.tasks.length} úkolů' 
+            : 'Kód: #${w.code.isNotEmpty ? w.code : "Není sdíleno"} • ${w.tasks.length} úkolů',
+        style: TextStyle(color: textSecondary),
+      ),
       leading: Icon(isOfficial ? Icons.verified : Icons.casino, color: isOfficial ? Colors.amber : Colors.blue),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: const Icon(Icons.visibility_outlined, color: Colors.black54),
+            icon: Icon(Icons.visibility_outlined, color: textSecondary),
             onPressed: () => _showWheelPreviewDialog(w),
           ),
           if (!isOfficial) ...[
@@ -1010,62 +1060,76 @@ class _GameScreenState extends State<GameScreen> {
   Widget build(BuildContext context) {
     final currentUser = _auth.currentUser;
 
-    return Theme(
-      data: Theme.of(context).copyWith(
-        scaffoldBackgroundColor: const Color(0xFF263238),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF1E272C),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Colors.white12, width: 1.5),
-          ),
-        ),
-        textTheme: Theme.of(context).textTheme.apply(
-          bodyColor: Colors.white,
-          displayColor: Colors.white,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1E272C),
-          foregroundColor: Colors.white,
-        ),
-      ),
-      child: DefaultTabController(
-        length: 2,
-        child: Scaffold(
-          backgroundColor: const Color(0xFF263238),
-          appBar: AppBar(
-            title: const Text(
-              'Hry & Výzvy',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: -0.5, color: Colors.white),
+    return ValueListenableBuilder<String>(
+      valueListenable: MainShell.themeNotifier,
+      builder: (context, theme, child) {
+        final isWhite = theme == 'white';
+        final bgColor = isWhite ? const Color(0xFFF9FBFC) : const Color(0xFF263238);
+        final cardColor = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final textColor = isWhite ? const Color(0xFF263238) : Colors.white;
+        final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+        final borderColor = isWhite ? Colors.grey.shade200 : Colors.white12;
+        final appBarBg = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final appBarFg = isWhite ? const Color(0xFF263238) : Colors.white;
+
+        return Theme(
+          data: Theme.of(context).copyWith(
+            scaffoldBackgroundColor: bgColor,
+            cardTheme: CardThemeData(
+              color: cardColor,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(color: borderColor, width: 1.5),
+              ),
             ),
-            centerTitle: true,
-            backgroundColor: const Color(0xFF1E272C),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            bottom: TabBar(
-              indicatorColor: const Color(0xFFBFFF00),
-              labelColor: const Color(0xFFBFFF00),
-              unselectedLabelColor: Colors.white38,
-              indicatorSize: TabBarIndicatorSize.tab,
-              tabs: const [
-                Tab(icon: Icon(Icons.star_rounded), text: 'Výzvy'),
-                Tab(icon: Icon(Icons.casino_rounded), text: 'Tvorba her'),
-              ],
+            textTheme: Theme.of(context).textTheme.apply(
+              bodyColor: textColor,
+              displayColor: textColor,
+            ),
+            appBarTheme: AppBarTheme(
+              backgroundColor: appBarBg,
+              foregroundColor: appBarFg,
             ),
           ),
-          body: SafeArea(
-            child: currentUser == null
-                ? const Center(child: Text('Uživatel není přihlášen'))
-                : TabBarView(
-                    children: [
-                      _buildChallengesTab(currentUser),
-                      _buildGameCreatorTab(currentUser),
-                    ],
-                  ),
+          child: DefaultTabController(
+            length: 2,
+            child: Scaffold(
+              backgroundColor: bgColor,
+              appBar: AppBar(
+                title: Text(
+                  'Hry & Výzvy',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: -0.5, color: appBarFg),
+                ),
+                centerTitle: true,
+                backgroundColor: appBarBg,
+                foregroundColor: appBarFg,
+                elevation: 0,
+                bottom: TabBar(
+                  indicatorColor: const Color(0xFFBFFF00),
+                  labelColor: const Color(0xFFBFFF00),
+                  unselectedLabelColor: appBarFg.withOpacity(0.6),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  tabs: const [
+                    Tab(icon: Icon(Icons.star_rounded), text: 'Výzvy'),
+                    Tab(icon: Icon(Icons.casino_rounded), text: 'Tvorba her'),
+                  ],
+                ),
+              ),
+              body: SafeArea(
+                child: currentUser == null
+                    ? const Center(child: Text('Uživatel není přihlášen'))
+                    : TabBarView(
+                        children: [
+                          _buildChallengesTab(currentUser, cardColor, textColor, textSecondary, borderColor),
+                          _buildGameCreatorTab(currentUser, cardColor, textColor, textSecondary, borderColor),
+                        ],
+                      ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -1080,7 +1144,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildStepsCard() {
+  Widget _buildStepsCard(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     return ValueListenableBuilder<int>(
       valueListenable: StepTrackerService().stepsNotifier,
       builder: (context, steps, _) {
@@ -1090,9 +1154,9 @@ class _GameScreenState extends State<GameScreen> {
             final progress = goal > 0 ? (steps / goal).clamp(0.0, 1.0) : 0.0;
             return Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF1E272C),
+                color: cardColor,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white12, width: 1.5),
+                border: Border.all(color: borderColor, width: 1.5),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
@@ -1117,10 +1181,10 @@ class _GameScreenState extends State<GameScreen> {
                             const SizedBox(height: 6),
                             Text(
                               steps.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} "),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 32,
-                                color: Colors.white,
+                                color: textColor,
                                 letterSpacing: -0.5,
                               ),
                             ),
@@ -1139,7 +1203,7 @@ class _GameScreenState extends State<GameScreen> {
                       children: [
                         Text(
                           'Cíl: ${goal.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} ")} kroků',
-                          style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.w600, fontSize: 13),
+                          style: TextStyle(color: textSecondary, fontWeight: FontWeight.w600, fontSize: 13),
                         ),
                         Text(
                           '${(progress * 100).toInt()}% splněno',
@@ -1153,7 +1217,7 @@ class _GameScreenState extends State<GameScreen> {
                       child: LinearProgressIndicator(
                         value: progress,
                         minHeight: 12,
-                        backgroundColor: Colors.white10,
+                        backgroundColor: cardColor == Colors.white ? Colors.grey.shade100 : Colors.white10,
                         valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFBFFF00)),
                       ),
                     ),
@@ -1167,7 +1231,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildChallengeCard(QueryDocumentSnapshot doc, String currentUid) {
+  Widget _buildChallengeCard(QueryDocumentSnapshot doc, String currentUid, Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     final data = doc.data() as Map<String, dynamic>;
     final creatorUid = data['creatorUid'] as String;
     final opponentUid = data['opponentUid'] as String;
@@ -1184,6 +1248,7 @@ class _GameScreenState extends State<GameScreen> {
     if (status == 'pending') {
       return Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: cardColor,
         elevation: 2,
         margin: const EdgeInsets.symmetric(vertical: 6),
         child: Padding(
@@ -1200,13 +1265,13 @@ class _GameScreenState extends State<GameScreen> {
                       isCreator
                           ? 'Vyzval jsi uživatele $otherPlayerName'
                           : 'Výzva od uživatele $otherPlayerName',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text('Cíl: $targetKm km  |  Trvání: $durationDays dní', style: const TextStyle(color: Colors.white70)),
+              Text('Cíl: $targetKm km  |  Trvání: $durationDays dní', style: TextStyle(color: textSecondary)),
               if (bet.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Container(
@@ -1314,6 +1379,7 @@ class _GameScreenState extends State<GameScreen> {
 
               return Card(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                color: cardColor,
                 elevation: 3,
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 child: Padding(
@@ -1326,7 +1392,7 @@ class _GameScreenState extends State<GameScreen> {
                         children: [
                           Text(
                             'Souboj s $otherPlayerName',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
                           ),
                           Text(
                             hoursLeft > 24
@@ -1369,7 +1435,7 @@ class _GameScreenState extends State<GameScreen> {
                       ],
                       
                       // Progress Player 1 (You)
-                      Text('Ty (progres)', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      Text('Ty (progres)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -1379,19 +1445,19 @@ class _GameScreenState extends State<GameScreen> {
                               child: LinearProgressIndicator(
                                 value: myProgress / targetKm,
                                 minHeight: 12,
-                                backgroundColor: Colors.lightBlue.shade50,
+                                backgroundColor: cardColor == Colors.white ? Colors.grey.shade200 : Colors.white10,
                                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.lime),
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text('${myProgress.toStringAsFixed(1)} / $targetKm km', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text('${myProgress.toStringAsFixed(1)} / $targetKm km', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
                         ],
                       ),
                       const SizedBox(height: 12),
 
                       // Progress Player 2 (Opponent)
-                      Text(otherPlayerName, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+                      Text(otherPlayerName, style: TextStyle(fontSize: 13, color: textSecondary)),
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -1401,13 +1467,13 @@ class _GameScreenState extends State<GameScreen> {
                               child: LinearProgressIndicator(
                                 value: opponentProgVal / targetKm,
                                 minHeight: 12,
-                                backgroundColor: Colors.grey.shade100,
+                                backgroundColor: cardColor == Colors.white ? Colors.grey.shade200 : Colors.white10,
                                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.lightBlue),
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text('${opponentProgVal.toStringAsFixed(1)} / $targetKm km', style: const TextStyle(fontSize: 12)),
+                          Text('${opponentProgVal.toStringAsFixed(1)} / $targetKm km', style: TextStyle(fontSize: 12, color: textColor)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -1423,7 +1489,7 @@ class _GameScreenState extends State<GameScreen> {
                           leadingText,
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.lightBlue.shade900,
+                            color: Colors.lightBlue.shade950,
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
@@ -1447,7 +1513,7 @@ class _GameScreenState extends State<GameScreen> {
       return Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 1,
-        color: Colors.grey.shade50,
+        color: cardColor,
         margin: const EdgeInsets.symmetric(vertical: 6),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -1475,13 +1541,17 @@ class _GameScreenState extends State<GameScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        color: isWinner ? Colors.green.shade800 : Colors.black87,
+                        color: isDraw 
+                            ? textColor 
+                            : isWinner 
+                                ? (cardColor == Colors.white ? Colors.green.shade800 : Colors.green.shade400) 
+                                : textColor,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Cíl: $targetKm km',
-                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                      style: TextStyle(fontSize: 12, color: textSecondary),
                     ),
                     if (bet.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -1493,7 +1563,7 @@ class _GameScreenState extends State<GameScreen> {
                                 : 'Musíš splnit sázku: $bet 😢',
                         style: TextStyle(
                           fontSize: 12, 
-                          color: isWinner ? Colors.orange.shade900 : Colors.red.shade900,
+                          color: isWinner ? Colors.orange.shade850 : Colors.red.shade650,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1504,7 +1574,7 @@ class _GameScreenState extends State<GameScreen> {
               IconButton(
                 icon: const Icon(Icons.delete_outline, color: Colors.grey),
                 onPressed: () => _firestore.collection('challenges').doc(doc.id).delete(),
-              )
+              ),
             ],
           ),
         ),
@@ -1721,6 +1791,10 @@ class _GameScreenState extends State<GameScreen> {
     required Color color,
     required Color iconColor,
     required bool is18Plus,
+    required Color cardColor,
+    required Color textColor,
+    required Color textSecondary,
+    required Color borderColor,
     VoidCallback? onTap,
   }) {
     return GestureDetector(
@@ -1729,12 +1803,12 @@ class _GameScreenState extends State<GameScreen> {
         width: 220,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E272C),
+          color: cardColor,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white12, width: 1.5),
+          border: Border.all(color: borderColor, width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1772,12 +1846,12 @@ class _GameScreenState extends State<GameScreen> {
             const Spacer(),
             Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
             ),
             const SizedBox(height: 4),
             Text(
               description,
-              style: const TextStyle(fontSize: 11, color: Colors.white70, height: 1.3),
+              style: TextStyle(fontSize: 11, color: textSecondary, height: 1.3),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
