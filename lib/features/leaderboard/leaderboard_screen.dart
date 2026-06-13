@@ -5,6 +5,7 @@ import '../../services/auth_service.dart';
 import 'add_friends_screen.dart';
 import 'friends_list_screen.dart';
 import 'friend_profile_screen.dart';
+import '../../main_shell.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -274,11 +275,161 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
         .map((snap) => snap.docs);
   }
 
-  Widget _buildMedal(int index) {
+  Widget _buildMedal(int index, Color textSecondary) {
     if (index == 0) return const Text('🥇', style: TextStyle(fontSize: 24));
     if (index == 1) return const Text('🥈', style: TextStyle(fontSize: 24));
     if (index == 2) return const Text('🥉', style: TextStyle(fontSize: 24));
-    return Text('${index + 1}.', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54));
+    return Text('${index + 1}.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textSecondary));
+  }
+
+  Widget _buildPodium(List<DocumentSnapshot> top3, String currentUid, Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
+    if (top3.isEmpty) return const SizedBox();
+
+    final List<DocumentSnapshot?> podiumList = List.filled(3, null);
+    if (top3.isNotEmpty) podiumList[1] = top3[0];
+    if (top3.length > 1) podiumList[0] = top3[1];
+    if (top3.length > 2) podiumList[2] = top3[2];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: borderColor, width: 1.5),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (podiumList[0] != null)
+            _buildPodiumCol(podiumList[0]!, 2, 60, Colors.grey.shade400, '🥈', currentUid, textColor, textSecondary)
+          else
+            const Expanded(child: SizedBox()),
+          if (podiumList[1] != null)
+            _buildPodiumCol(podiumList[1]!, 1, 85, const Color(0xFFFFD700), '👑', currentUid, textColor, textSecondary)
+          else
+            const Expanded(child: SizedBox()),
+          if (podiumList[2] != null)
+            _buildPodiumCol(podiumList[2]!, 3, 45, const Color(0xFFCD7F32), '🥉', currentUid, textColor, textSecondary)
+          else
+            const Expanded(child: SizedBox()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPodiumCol(
+    DocumentSnapshot doc,
+    int rank,
+    double height,
+    Color color,
+    String badge,
+    String currentUid,
+    Color textColor,
+    Color textSecondary,
+  ) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final username = data['username'] ?? 'Uživatel';
+    final firstName = data['first_name'] ?? '';
+    final lastName = data['last_name'] ?? '';
+    final fullName = '$firstName $lastName'.trim().isEmpty ? username : '$firstName $lastName';
+    final isMe = doc.id == currentUid;
+
+    double dist = 0.0;
+    if (_selectedTab == 0) {
+      dist = (data['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
+    } else if (_selectedTab == 1) {
+      dist = (data['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
+    } else {
+      dist = (data['totalDistance'] as num?)?.toDouble() ?? 0.0;
+    }
+
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              CircleAvatar(
+                radius: rank == 1 ? 28 : 22,
+                backgroundColor: isMe ? const Color(0xFFBFFF00) : color,
+                child: CircleAvatar(
+                  radius: rank == 1 ? 25 : 19,
+                  backgroundColor: const Color(0xFF263238),
+                  child: Text(
+                    fullName.substring(0, 1).toUpperCase(),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: rank == 1 ? 16 : 13,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: rank == 1 ? -16 : -10,
+                child: Text(
+                  badge,
+                  style: TextStyle(fontSize: rank == 1 ? 22 : 16),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isMe ? 'Ty' : fullName,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: rank == 1 ? 12 : 11,
+              color: textColor,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            '${dist.toStringAsFixed(1)} km',
+            style: TextStyle(
+              fontSize: rank == 1 ? 11 : 10,
+              color: isMe ? const Color(0xFFBFFF00) : textSecondary,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Container(
+            height: height,
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  color.withOpacity(0.8),
+                  color.withOpacity(0.3),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+              border: Border.all(color: color.withOpacity(0.5), width: 1),
+            ),
+            child: Center(
+              child: Text(
+                '$rank.',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -288,394 +439,413 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
       return const Scaffold(body: Center(child: Text('Uživatel není přihlášen')));
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF263238),
-      appBar: AppBar(
-        title: const Text(
-          'Žebříček a Přátelé',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: -0.5, color: Colors.white),
-        ),
-        centerTitle: true,
-        backgroundColor: const Color(0xFF1E272C),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.people_outline_rounded, color: Colors.white70),
-            tooltip: 'Moji přátelé',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const FriendsListScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_add_alt_rounded, color: Colors.white70),
-            tooltip: 'Přidat přátele',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
-              );
-            },
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Search Input Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E272C),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white12, width: 1.5),
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(color: Colors.white, fontSize: 15),
-                        decoration: InputDecoration(
-                          hintText: 'Zadej přezdívku nebo kód (např. #PEPA456)',
-                          hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
-                          filled: true,
-                          fillColor: const Color(0xFF1E272C),
-                          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFFBFFF00)),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFBFFF00).withOpacity(0.3),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFFD4FF00),
-                          Color(0xFFBFFF00),
-                        ],
-                      ),
-                    ),
-                    child: ElevatedButton(
-                      onPressed: _searchUser,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: const Text('Hledat', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
+    return ValueListenableBuilder<String>(
+      valueListenable: MainShell.themeNotifier,
+      builder: (context, theme, child) {
+        final isWhite = theme == 'white';
+        final bgColor = isWhite ? const Color(0xFFF9FBFC) : const Color(0xFF263238);
+        final cardColor = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final textColor = isWhite ? const Color(0xFF263238) : Colors.white;
+        final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+        final borderColor = isWhite ? Colors.grey.shade200 : Colors.white12;
+        final appBarBg = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final appBarFg = isWhite ? const Color(0xFF263238) : Colors.white;
+
+        return Scaffold(
+          backgroundColor: bgColor,
+          appBar: AppBar(
+            title: Text(
+              'Žebříček a Přátelé',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: -0.5, color: appBarFg),
             ),
-
-            // Search Result Panel
-            if (_isSearching)
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: CircularProgressIndicator(),
-              )
-            else if (_searchError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                child: Text(_searchError!, style: const TextStyle(color: Colors.red)),
-              )
-            else if (_searchResult != null)
-              StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _getFriendsListStream(),
-                builder: (context, snapshot) {
-                  final friends = snapshot.data ?? [];
-                  final relationship = friends.firstWhere(
-                    (f) => f['uid'] == _searchResult!['uid'],
-                    orElse: () => <String, dynamic>{},
-                  );
-                  final status = relationship['status'] as String?;
-
-                  Widget actionButton;
-                  if (status == null) {
-                    actionButton = ElevatedButton.icon(
-                      onPressed: () => _sendRequest(_searchResult!),
-                      icon: const Icon(Icons.person_add_alt_1, size: 18),
-                      label: const Text('Přidat'),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.lime, foregroundColor: Colors.black),
-                    );
-                  } else if (status == 'outgoing') {
-                    actionButton = OutlinedButton.icon(
-                      onPressed: () => _removeRelationship(_searchResult!['uid']),
-                      icon: const Icon(Icons.close, size: 18, color: Colors.red),
-                      label: const Text('Zrušit žádost', style: TextStyle(color: Colors.red)),
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
-                    );
-                  } else if (status == 'incoming') {
-                    actionButton = Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ElevatedButton(
-                          onPressed: () => _acceptRequest(_searchResult!['uid']),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.lime, foregroundColor: Colors.black),
-                          child: const Text('Přijmout'),
-                        ),
-                        const SizedBox(width: 4),
-                        OutlinedButton(
-                          onPressed: () => _removeRelationship(_searchResult!['uid']),
-                          style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
-                          child: const Icon(Icons.close, color: Colors.red, size: 16),
-                        ),
-                      ],
-                    );
-                  } else {
-                    actionButton = OutlinedButton.icon(
-                      onPressed: () => _removeRelationship(_searchResult!['uid']),
-                      icon: const Icon(Icons.person_remove, size: 18, color: Colors.grey),
-                      label: const Text('Přátelé', style: TextStyle(color: Colors.grey)),
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.grey)),
-                    );
-                  }
-
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                    padding: const EdgeInsets.all(16.0),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E272C),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFBFFF00).withOpacity(0.3), width: 1.5),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${_searchResult!['first_name']} ${_searchResult!['last_name']}'.trim().isEmpty
-                                  ? _searchResult!['username']
-                                  : '${_searchResult!['first_name']} ${_searchResult!['last_name']}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-                            ),
-                            Text(
-                              _searchResult!['friend_code'],
-                              style: const TextStyle(color: Colors.white54, fontSize: 13),
-                            ),
-                          ],
-                        ),
-                        actionButton,
-                      ],
-                    ),
+            centerTitle: true,
+            backgroundColor: appBarBg,
+            foregroundColor: appBarFg,
+            elevation: 0,
+            iconTheme: IconThemeData(color: appBarFg),
+            actions: [
+              IconButton(
+                icon: Icon(Icons.people_outline_rounded, color: appBarFg.withOpacity(0.7)),
+                tooltip: 'Moji přátelé',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const FriendsListScreen()),
                   );
                 },
               ),
-
-            const SizedBox(height: 8),
-
-            // Tab Selector [ Tento týden ] [ Tento měsíc ] [ Celkově ]
-            Padding(
-               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-               child: Container(
-                 decoration: BoxDecoration(
-                   color: const Color(0xFF1E272C),
-                   borderRadius: BorderRadius.circular(16),
-                 ),
-                 padding: const EdgeInsets.all(4),
-                 child: Row(
-                   children: [
-                     _buildTabButton(0, 'Tento týden'),
-                     _buildTabButton(1, 'Tento měsíc'),
-                     _buildTabButton(2, 'Celkově'),
-                   ],
-                 ),
-               ),
-             ),
-
-            const SizedBox(height: 16),
-
-            // Leaderboard List
-            Expanded(
-              child: StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _getFriendsListStream(),
-                builder: (context, friendsSnapshot) {
-                  if (!friendsSnapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final allConnections = friendsSnapshot.data ?? [];
-                  final friendUids = allConnections
-                      .where((f) => f['status'] == 'friends')
-                      .map((f) => f['uid'] as String)
-                      .toList();
-
-                  return StreamBuilder<List<DocumentSnapshot>>(
-                    stream: _getLeaderboardUsersStream(friendUids),
-                    builder: (context, usersSnapshot) {
-                      if (!usersSnapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      final userDocs = usersSnapshot.data ?? [];
-
-                      if (userDocs.isEmpty) {
-                        return const Center(child: Text('Chyba při načítání žebříčku.'));
-                      }
-
-                      // Dynamic Sorting
-                      userDocs.sort((a, b) {
-                        final dataA = a.data() as Map<String, dynamic>? ?? {};
-                        final dataB = b.data() as Map<String, dynamic>? ?? {};
-
-                        double valA = 0.0;
-                        double valB = 0.0;
-
-                        if (_selectedTab == 0) {
-                          valA = (dataA['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
-                          valB = (dataB['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
-                        } else if (_selectedTab == 1) {
-                          valA = (dataA['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
-                          valB = (dataB['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
-                        } else {
-                          valA = (dataA['totalDistance'] as num?)?.toDouble() ?? 0.0;
-                          valB = (dataB['totalDistance'] as num?)?.toDouble() ?? 0.0;
-                        }
-
-                        return valB.compareTo(valA);
-                      });
-
-                      return ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        itemCount: userDocs.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final doc = userDocs[index];
-                          final data = doc.data() as Map<String, dynamic>? ?? {};
-                          final isMe = doc.id == currentUser.uid;
-
-                          final username = data['username'] ?? 'Uživatel';
-                          final code = data['friend_code'] ?? '';
-                          final firstName = data['first_name'] ?? '';
-                          final lastName = data['last_name'] ?? '';
-                          final fullName = '$firstName $lastName'.trim().isEmpty ? username : '$firstName $lastName';
-
-                          double dist = 0.0;
-                          if (_selectedTab == 0) {
-                            dist = (data['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
-                          } else if (_selectedTab == 1) {
-                            dist = (data['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
-                          } else {
-                            dist = (data['totalDistance'] as num?)?.toDouble() ?? 0.0;
-                          }
-
-                          final itemContent = Container(
-                            decoration: BoxDecoration(
-                              color: isMe ? const Color(0xFF1B5E20).withOpacity(0.3) : const Color(0xFF1E272C),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isMe ? const Color(0xFFBFFF00).withOpacity(0.5) : Colors.white12,
-                                width: 1.5,
+              IconButton(
+                icon: Icon(Icons.person_add_alt_rounded, color: appBarFg.withOpacity(0.7)),
+                tooltip: 'Přidat přátele',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: Column(
+              children: [
+                // Search Input Section
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: borderColor, width: 1.5),
+                          ),
+                          child: TextField(
+                            controller: _searchController,
+                            style: TextStyle(color: textColor, fontSize: 15),
+                            decoration: InputDecoration(
+                              hintText: 'Zadej přezdívku nebo kód (např. #PEPA456)',
+                              hintStyle: TextStyle(color: textSecondary.withOpacity(0.5), fontSize: 14),
+                              filled: true,
+                              fillColor: cardColor,
+                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFFBFFF00)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
                               ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(vertical: 14),
                             ),
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                            child: Row(
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFBFFF00).withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFFD4FF00),
+                              Color(0xFFBFFF00),
+                            ],
+                          ),
+                        ),
+                        child: ElevatedButton(
+                          onPressed: _searchUser,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text('Hledat', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Search Result Panel
+                if (_isSearching)
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator(),
+                  )
+                else if (_searchError != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                    child: Text(_searchError!, style: const TextStyle(color: Colors.red)),
+                  )
+                else if (_searchResult != null)
+                  StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _getFriendsListStream(),
+                    builder: (context, snapshot) {
+                      final friends = snapshot.data ?? [];
+                      final relationship = friends.firstWhere(
+                        (f) => f['uid'] == _searchResult!['uid'],
+                        orElse: () => <String, dynamic>{},
+                      );
+                      final status = relationship['status'] as String?;
+
+                      Widget actionButton;
+                      if (status == null) {
+                        actionButton = ElevatedButton.icon(
+                          onPressed: () => _sendRequest(_searchResult!),
+                          icon: const Icon(Icons.person_add_alt_1, size: 18),
+                          label: const Text('Přidat'),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.lime, foregroundColor: Colors.black),
+                        );
+                      } else if (status == 'outgoing') {
+                        actionButton = OutlinedButton.icon(
+                          onPressed: () => _removeRelationship(_searchResult!['uid']),
+                          icon: const Icon(Icons.close, size: 18, color: Colors.red),
+                          label: const Text('Zrušit žádost', style: TextStyle(color: Colors.red)),
+                          style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+                        );
+                      } else if (status == 'incoming') {
+                        actionButton = Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ElevatedButton(
+                              onPressed: () => _acceptRequest(_searchResult!['uid']),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.lime, foregroundColor: Colors.black),
+                              child: const Text('Přijmout'),
+                            ),
+                            const SizedBox(width: 4),
+                            OutlinedButton(
+                              onPressed: () => _removeRelationship(_searchResult!['uid']),
+                              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+                              child: const Icon(Icons.close, color: Colors.red, size: 16),
+                            ),
+                          ],
+                        );
+                      } else {
+                        actionButton = OutlinedButton.icon(
+                          onPressed: () => _removeRelationship(_searchResult!['uid']),
+                          icon: const Icon(Icons.person_remove, size: 18, color: Colors.grey),
+                          label: const Text('Přátelé', style: TextStyle(color: Colors.grey)),
+                          style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.grey)),
+                        );
+                      }
+
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                        padding: const EdgeInsets.all(16.0),
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFBFFF00).withOpacity(0.3), width: 1.5),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                SizedBox(
-                                  width: 40,
-                                  child: Center(
-                                    child: _buildMedal(index),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                CircleAvatar(
-                                  backgroundColor: isMe ? const Color(0xFFBFFF00) : const Color(0xFF263238),
-                                  foregroundColor: isMe ? Colors.black : const Color(0xFFBFFF00),
-                                  child: Text(fullName.substring(0, 1).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        isMe ? '$fullName (Ty)' : fullName,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      if (code.isNotEmpty)
-                                        Text(
-                                          code,
-                                          style: const TextStyle(fontSize: 12, color: Colors.white54),
-                                        ),
-                                    ],
-                                  ),
+                                Text(
+                                  '${_searchResult!['first_name']} ${_searchResult!['last_name']}'.trim().isEmpty
+                                      ? _searchResult!['username']
+                                      : '${_searchResult!['first_name']} ${_searchResult!['last_name']}',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
                                 ),
                                 Text(
-                                  '${dist.toStringAsFixed(1)} km',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: isMe ? const Color(0xFFBFFF00) : Colors.white,
-                                  ),
+                                  _searchResult!['friend_code'],
+                                  style: TextStyle(color: textSecondary, fontSize: 13),
                                 ),
                               ],
                             ),
-                          );
+                            actionButton,
+                          ],
+                        ),
+                      );
+                    },
+                  ),
 
-                          if (isMe) {
-                            return itemContent;
+                const SizedBox(height: 8),
+
+                // Tab Selector [ Tento týden ] [ Tento měsíc ] [ Celkově ]
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: borderColor, width: 1.5),
+                    ),
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      children: [
+                        _buildTabButton(0, 'Tento týden', textSecondary),
+                        _buildTabButton(1, 'Tento měsíc', textSecondary),
+                        _buildTabButton(2, 'Celkově', textSecondary),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Leaderboard List
+                Expanded(
+                  child: StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _getFriendsListStream(),
+                    builder: (context, friendsSnapshot) {
+                      if (!friendsSnapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final allConnections = friendsSnapshot.data ?? [];
+                      final friendUids = allConnections
+                          .where((f) => f['status'] == 'friends')
+                          .map((f) => f['uid'] as String)
+                          .toList();
+
+                      return StreamBuilder<List<DocumentSnapshot>>(
+                        stream: _getLeaderboardUsersStream(friendUids),
+                        builder: (context, usersSnapshot) {
+                          if (!usersSnapshot.hasData) {
+                            return const Center(child: CircularProgressIndicator());
                           }
 
-                          return InkWell(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => FriendProfileScreen(friendUid: doc.id),
-                                ),
-                              );
-                            },
-                            child: itemContent,
+                          final userDocs = usersSnapshot.data ?? [];
+
+                          if (userDocs.isEmpty) {
+                            return const Center(child: Text('Chyba při načítání žebříčku.'));
+                          }
+
+                          // Dynamic Sorting
+                          userDocs.sort((a, b) {
+                            final dataA = a.data() as Map<String, dynamic>? ?? {};
+                            final dataB = b.data() as Map<String, dynamic>? ?? {};
+
+                            double valA = 0.0;
+                            double valB = 0.0;
+
+                            if (_selectedTab == 0) {
+                              valA = (dataA['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
+                              valB = (dataB['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
+                            } else if (_selectedTab == 1) {
+                              valA = (dataA['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
+                              valB = (dataB['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
+                            } else {
+                              valA = (dataA['totalDistance'] as num?)?.toDouble() ?? 0.0;
+                              valB = (dataB['totalDistance'] as num?)?.toDouble() ?? 0.0;
+                            }
+
+                            return valB.compareTo(valA);
+                          });
+
+                          final top3 = userDocs.take(3).toList();
+                          final restUsers = userDocs.skip(3).toList();
+
+                          return Column(
+                            children: [
+                              _buildPodium(top3, currentUser.uid, cardColor, textColor, textSecondary, borderColor),
+                              const SizedBox(height: 8),
+                              Expanded(
+                                child: restUsers.isEmpty
+                                    ? Center(
+                                        child: Text(
+                                          'Žádní další uživatelé',
+                                          style: TextStyle(color: textSecondary, fontSize: 14),
+                                        ),
+                                      )
+                                    : ListView.separated(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                        itemCount: restUsers.length,
+                                        separatorBuilder: (context, index) => const SizedBox(height: 10),
+                                        itemBuilder: (context, index) {
+                                          final doc = restUsers[index];
+                                          final actualRankIndex = index + 3;
+                                          final data = doc.data() as Map<String, dynamic>? ?? {};
+                                          final isMe = doc.id == currentUser.uid;
+
+                                          final username = data['username'] ?? 'Uživatel';
+                                          final code = data['friend_code'] ?? '';
+                                          final firstName = data['first_name'] ?? '';
+                                          final lastName = data['last_name'] ?? '';
+                                          final fullName = '$firstName $lastName'.trim().isEmpty ? username : '$firstName $lastName';
+
+                                          double dist = 0.0;
+                                          if (_selectedTab == 0) {
+                                            dist = (data['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
+                                          } else if (_selectedTab == 1) {
+                                            dist = (data['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
+                                          } else {
+                                            dist = (data['totalDistance'] as num?)?.toDouble() ?? 0.0;
+                                          }
+
+                                          return Container(
+                                            decoration: BoxDecoration(
+                                              color: isMe ? const Color(0xFF1B5E20).withOpacity(0.3) : cardColor,
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: isMe ? const Color(0xFFBFFF00).withOpacity(0.5) : borderColor,
+                                                width: 1.5,
+                                              ),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                                            child: Row(
+                                              children: [
+                                                SizedBox(
+                                                  width: 40,
+                                                  child: Center(
+                                                    child: _buildMedal(actualRankIndex, textSecondary),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                CircleAvatar(
+                                                  backgroundColor: isMe ? const Color(0xFFBFFF00) : (isWhite ? Colors.grey.shade100 : const Color(0xFF263238)),
+                                                  foregroundColor: isMe ? Colors.black : const Color(0xFFBFFF00),
+                                                  child: Text(fullName.substring(0, 1).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        isMe ? '$fullName (Ty)' : fullName,
+                                                        style: TextStyle(
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 15,
+                                                          color: textColor,
+                                                        ),
+                                                      ),
+                                                      if (code.isNotEmpty)
+                                                        Text(
+                                                          code,
+                                                          style: TextStyle(fontSize: 12, color: textSecondary),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                Text(
+                                                  '${dist.toStringAsFixed(1)} km',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 16,
+                                                    color: isMe ? const Color(0xFFBFFF00) : textColor,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                              ),
+                            ],
                           );
                         },
                       );
                     },
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildTabButton(int index, String title) {
+  Widget _buildTabButton(int index, String title, Color unselectedColor) {
     final isSelected = _selectedTab == index;
     return Expanded(
       child: GestureDetector(
@@ -695,7 +865,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
             title,
             style: TextStyle(
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-              color: isSelected ? Colors.black : Colors.white54,
+              color: isSelected ? Colors.black : unselectedColor,
               fontSize: 14,
             ),
           ),

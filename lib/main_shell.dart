@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:app_links/app_links.dart';
 import 'services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 import 'features/maps/maps_screen.dart';
@@ -16,6 +17,7 @@ class MainShell extends StatefulWidget {
   const MainShell({super.key, required this.userName});
 
   final String userName;
+  static final ValueNotifier<String> themeNotifier = ValueNotifier<String>('grey');
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -32,6 +34,10 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      final savedTheme = prefs.getString('design_theme') ?? 'grey';
+      MainShell.themeNotifier.value = savedTheme;
+    });
     _checkBlocked();
     _verifyTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
       await _checkBlocked();
@@ -228,108 +234,122 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> _screens = [
-      const GameScreen(),
-      ProfileScreen(userName: widget.userName),
-      const MapsScreen(),
-      const LeaderboardScreen(),
-      const ShopScreen(),
-    ];
+    return ValueListenableBuilder<String>(
+      valueListenable: MainShell.themeNotifier,
+      builder: (context, theme, child) {
+        final isWhiteTheme = theme == 'white';
+        final bgColor = isWhiteTheme ? const Color(0xFFF9FBFC) : const Color(0xFF263238);
+        final navBgColor = isWhiteTheme ? Colors.white : const Color(0xFF1E272C);
 
-    return Scaffold(
-      extendBody: true,
-      body: _blocked
-          ? _VerificationWall(
-              onSignOut: () async {
-                await AuthService().signOut();
-                if (!mounted) return;
-                Navigator.of(context).pushReplacementNamed('/');
-              },
-              onResend: () async {
-                final user = AuthService().currentUser;
-                try {
-                  await user?.sendEmailVerification();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Odeslán potvrzovací e-mail')));
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Chyba při odesílání: $e')));
-                }
-              },
-            )
-          : _screens[_index],
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(top: 8.0),
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFBFFF00).withOpacity(0.4),
-                blurRadius: 16,
-                spreadRadius: 1,
-                offset: const Offset(0, 4),
+        final List<Widget> _screens = [
+          const GameScreen(),
+          ProfileScreen(userName: widget.userName),
+          const MapsScreen(),
+          const LeaderboardScreen(),
+          const ShopScreen(),
+        ];
+
+        return Scaffold(
+          extendBody: true,
+          backgroundColor: bgColor,
+          body: _blocked
+              ? _VerificationWall(
+                  onSignOut: () async {
+                    await AuthService().signOut();
+                    if (!mounted) return;
+                    Navigator.of(context).pushReplacementNamed('/');
+                  },
+                  onResend: () async {
+                    final user = AuthService().currentUser;
+                    try {
+                      await user?.sendEmailVerification();
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Odeslán potvrzovací e-mail')));
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Chyba při odesílání: $e')));
+                    }
+                  },
+                )
+              : _screens[_index],
+          floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+          floatingActionButton: Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFBFFF00).withOpacity(0.4),
+                    blurRadius: 16,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: FloatingActionButton(
-            onPressed: () => setState(() => _index = 2),
-            backgroundColor: const Color(0xFFBFFF00),
-            elevation: 0,
-            shape: const CircleBorder(),
-            child: const Icon(Icons.map_rounded, size: 30, color: Color(0xFF1B5E20)),
-          ),
-        ),
-      ),
-      bottomNavigationBar: BottomAppBar(
-        elevation: 8,
-        color: const Color(0xFF1E272C),
-        surfaceTintColor: const Color(0xFF1E272C),
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        child: SafeArea(
-          child: SizedBox(
-            height: 72,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavButton(
-                  icon: Icons.emoji_events_outlined,
-                  activeIcon: Icons.emoji_events_rounded,
-                  label: 'Hry',
-                  index: 0,
-                  selected: _index == 0,
-                  onTap: () => setState(() => _index = 0),
-                ),
-                _NavButton(
-                  icon: Icons.leaderboard_outlined,
-                  activeIcon: Icons.leaderboard_rounded,
-                  label: 'Žebříček',
-                  index: 3,
-                  selected: _index == 3,
-                  onTap: () => setState(() => _index = 3),
-                ),
-                const SizedBox(width: 56), // space for FAB
-                _NavButton(
-                  icon: Icons.shopping_bag_outlined,
-                  activeIcon: Icons.shopping_bag_rounded,
-                  label: 'Obchod',
-                  index: 4,
-                  selected: _index == 4,
-                  onTap: () => setState(() => _index = 4),
-                ),
-                _NavButton(
-                  icon: Icons.person_outline_rounded,
-                  activeIcon: Icons.person_rounded,
-                  label: 'Profil',
-                  index: 1,
-                  selected: _index == 1,
-                  onTap: () => setState(() => _index = 1),
-                ),
-              ],
+              child: FloatingActionButton(
+                onPressed: () => setState(() => _index = 2),
+                backgroundColor: const Color(0xFFBFFF00),
+                elevation: 0,
+                shape: const CircleBorder(),
+                child: const Icon(Icons.map_rounded, size: 30, color: Color(0xFF1B5E20)),
+              ),
             ),
           ),
-        ),
-      ),
+          bottomNavigationBar: BottomAppBar(
+            elevation: 8,
+            color: navBgColor,
+            surfaceTintColor: navBgColor,
+            shape: const CircularNotchedRectangle(),
+            notchMargin: 8,
+            child: SafeArea(
+              child: SizedBox(
+                height: 72,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _NavButton(
+                      icon: Icons.emoji_events_outlined,
+                      activeIcon: Icons.emoji_events_rounded,
+                      label: 'Hry',
+                      index: 0,
+                      selected: _index == 0,
+                      onTap: () => setState(() => _index = 0),
+                      theme: theme,
+                    ),
+                    _NavButton(
+                      icon: Icons.leaderboard_outlined,
+                      activeIcon: Icons.leaderboard_rounded,
+                      label: 'Žebříček',
+                      index: 3,
+                      selected: _index == 3,
+                      onTap: () => setState(() => _index = 3),
+                      theme: theme,
+                    ),
+                    const SizedBox(width: 56), // space for FAB
+                    _NavButton(
+                      icon: Icons.shopping_bag_outlined,
+                      activeIcon: Icons.shopping_bag_rounded,
+                      label: 'Obchod',
+                      index: 4,
+                      selected: _index == 4,
+                      onTap: () => setState(() => _index = 4),
+                      theme: theme,
+                    ),
+                    _NavButton(
+                      icon: Icons.person_outline_rounded,
+                      activeIcon: Icons.person_rounded,
+                      label: 'Profil',
+                      index: 1,
+                      selected: _index == 1,
+                      onTap: () => setState(() => _index = 1),
+                      theme: theme,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -341,6 +361,7 @@ class _NavButton extends StatelessWidget {
   final int index;
   final bool selected;
   final VoidCallback onTap;
+  final String theme;
 
   const _NavButton({
     required this.icon,
@@ -349,12 +370,15 @@ class _NavButton extends StatelessWidget {
     required this.index,
     required this.selected,
     required this.onTap,
+    required this.theme,
   });
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = const Color(0xFFBFFF00);
-    final inactiveColor = Colors.white30;
+    final isWhiteTheme = theme == 'white';
+    final activeColor = isWhiteTheme ? const Color(0xFF1B5E20) : const Color(0xFFBFFF00);
+    final activeBg = isWhiteTheme ? const Color(0xFF5C9E00).withOpacity(0.12) : const Color(0xFFBFFF00).withOpacity(0.12);
+    final inactiveColor = isWhiteTheme ? Colors.black38 : Colors.white30;
 
     return GestureDetector(
       onTap: onTap,

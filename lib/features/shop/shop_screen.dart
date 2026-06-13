@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/app_logo.dart';
+import '../../main_shell.dart';
 
 /// Modul Obchod – Podpora a Limetkový obchod se společníky.
 class ShopScreen extends StatefulWidget {
@@ -39,6 +40,9 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
   // Premium State
   bool _isPremium = false;
   late AnimationController _sweepController;
+
+  Timer? _countdownTimer;
+  String _countdownText = '';
 
   final List<Map<String, dynamic>> _companions = [
     {
@@ -81,6 +85,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     )..repeat();
     _loadLimetkyAndCompanions();
     _initializePayClient();
+    _startCountdownTimer();
   }
 
   @override
@@ -88,7 +93,66 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     _tabController.dispose();
     _donationController.dispose();
     _sweepController.dispose();
+    _countdownTimer?.cancel();
     super.dispose();
+  }
+
+  void _startCountdownTimer() {
+    _countdownTimer?.cancel();
+    _updateRemainingTime();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        _updateRemainingTime();
+      }
+    });
+  }
+
+  void _updateRemainingTime() {
+    final now = DateTime.now();
+    final midnight = DateTime(now.year, now.month, now.day + 1);
+    final diff = midnight.difference(now);
+    
+    final hours = diff.inHours.toString().padLeft(2, '0');
+    final minutes = (diff.inMinutes % 60).toString().padLeft(2, '0');
+    final seconds = (diff.inSeconds % 60).toString().padLeft(2, '0');
+    
+    setState(() {
+      _countdownText = '${hours}h:${minutes}m:${seconds}s';
+    });
+  }
+
+  int _getCompanionCost(String id) {
+    if (id == 'deer') {
+      return 75; // Flash Sale discount
+    }
+    final comp = _companions.firstWhere((c) => c['id'] == id);
+    return comp['cost'] as int;
+  }
+
+  Widget _buildInstructionItem(IconData icon, String title, String desc, Color textColor, Color textSecondary) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: const Color(0xFFBFFF00), size: 22),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                desc,
+                style: TextStyle(fontSize: 11, color: textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _loadLimetkyAndCompanions() async {
@@ -138,7 +202,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
 
   Future<void> _handleCompanionAction(Map<String, dynamic> companion) async {
     final id = companion['id'] as String;
-    final cost = companion['cost'] as int;
+    final cost = _getCompanionCost(id);
     final name = companion['name'] as String;
 
     if (_unlockedCompanions.contains(id)) {
@@ -332,40 +396,51 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Text(
-          'Obchod',
-          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5),
-        ),
-        backgroundColor: const Color(0xFF263238),
-        foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: const Color(0xFFBFFF00),
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: const Color(0xFFBFFF00),
-          tabs: const [
-            Tab(text: 'Limetky & Companion', icon: Icon(Icons.pets_rounded, size: 20)),
-            Tab(text: 'Podpora & Premium', icon: Icon(Icons.favorite_rounded, size: 20)),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Tab 1: Limetky & Companion Shop
-          _buildLimetkyShopTab(),
+    return ValueListenableBuilder<String>(
+      valueListenable: MainShell.themeNotifier,
+      builder: (context, theme, child) {
+        final isWhite = theme == 'white';
+        final bgColor = isWhite ? const Color(0xFFF9FBFC) : const Color(0xFF263238);
+        final cardColor = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final textColor = isWhite ? const Color(0xFF263238) : Colors.white;
+        final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+        final borderColor = isWhite ? Colors.grey.shade200 : Colors.white12;
+        final appBarBg = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final appBarFg = isWhite ? const Color(0xFF263238) : Colors.white;
 
-          // Tab 2: Support & Premium Tab
-          _buildSupportTab(),
-        ],
-      ),
+        return Scaffold(
+          backgroundColor: bgColor,
+          appBar: AppBar(
+            title: Text(
+              'Obchod',
+              style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5, color: appBarFg),
+            ),
+            backgroundColor: appBarBg,
+            foregroundColor: appBarFg,
+            bottom: TabBar(
+              controller: _tabController,
+              labelColor: const Color(0xFFBFFF00),
+              unselectedLabelColor: appBarFg.withOpacity(0.6),
+              indicatorColor: const Color(0xFFBFFF00),
+              tabs: const [
+                Tab(text: 'Limetky & Companion', icon: Icon(Icons.pets_rounded, size: 20)),
+                Tab(text: 'Podpora & Premium', icon: Icon(Icons.favorite_rounded, size: 20)),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildLimetkyShopTab(cardColor, textColor, textSecondary, borderColor),
+              _buildSupportTab(cardColor, textColor, textSecondary, borderColor),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildLimetkyShopTab() {
+  Widget _buildLimetkyShopTab(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     if (_loadingLimetky) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF5C9E00)));
     }
@@ -422,10 +497,95 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
           ),
         ),
 
+        // Flash Sale Banner
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFF8F00), Color(0xFFFF5722)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.orange.withOpacity(0.4),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const Text('⚡', style: TextStyle(fontSize: 36)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'BLESKOVÁ NABÍDKA',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.black,
+                        fontSize: 14,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Jelen jen za 75 🍋 (běžně 100)',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.timer_outlined, color: Colors.white70, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Končí za: $_countdownText',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final deer = _companions.firstWhere((c) => c['id'] == 'deer');
+                  _handleCompanionAction(deer);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.orange.shade800,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                ),
+                child: const Text(
+                  'ZÍSKAT',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+        ),
+
         const SizedBox(height: 24),
-        const Text(
+        Text(
           'LESNÍ SPOLEČNÍCI NA MAPU',
-          style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.8, fontSize: 12),
+          style: TextStyle(fontWeight: FontWeight.w900, color: textColor, letterSpacing: 0.8, fontSize: 12),
         ),
         const SizedBox(height: 12),
 
@@ -438,7 +598,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
             crossAxisCount: 2,
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 0.76,
+            childAspectRatio: 0.68,
           ),
           itemBuilder: (context, idx) {
             final companion = _companions[idx];
@@ -446,87 +606,182 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
             final isUnlocked = _unlockedCompanions.contains(id);
             final isActive = _selectedCompanion == id;
 
-            return Card(
-              color: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          companion['id'] == 'bear' ? '🐻' : companion['id'] == 'fox' ? '🦊' : companion['id'] == 'wolf' ? '🐺' : '🦌',
-                          style: const TextStyle(fontSize: 48),
+            Color borderCardColor;
+            List<BoxShadow> glowShadows = [];
+            double opacity = 1.0;
+
+            if (isActive) {
+              borderCardColor = const Color(0xFFBFFF00);
+              glowShadows = [
+                BoxShadow(
+                  color: const Color(0xFFBFFF00).withOpacity(0.4),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+              ];
+            } else if (isUnlocked) {
+              borderCardColor = const Color(0xFF5C9E00);
+              glowShadows = [
+                BoxShadow(
+                  color: const Color(0xFF5C9E00).withOpacity(0.2),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ];
+            } else {
+              borderCardColor = Colors.transparent;
+              opacity = 0.65;
+            }
+
+            final cost = _getCompanionCost(id);
+
+            return Opacity(
+              opacity: opacity,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: cardColor,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: borderCardColor != Colors.transparent ? borderCardColor : borderColor,
+                    width: 2.5,
+                  ),
+                  boxShadow: glowShadows,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: Center(
+                                child: Text(
+                                  companion['id'] == 'bear' ? '🐻' : companion['id'] == 'fox' ? '🦊' : companion['id'] == 'wolf' ? '🐺' : '🦌',
+                                  style: const TextStyle(fontSize: 48),
+                                ),
+                              ),
+                            ),
+                            Text(
+                              companion['name'] as String,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              companion['description'] as String,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: textSecondary, fontSize: 10),
+                            ),
+                            const SizedBox(height: 8),
+                            ElevatedButton(
+                              onPressed: () => _handleCompanionAction(companion),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isActive
+                                    ? const Color(0xFF263238)
+                                    : isUnlocked
+                                        ? const Color(0xFF5C9E00)
+                                        : const Color(0xFFBFFF00),
+                                foregroundColor: isActive || isUnlocked ? Colors.white : Colors.black,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                elevation: 0,
+                              ),
+                              child: Text(
+                                isActive
+                                    ? 'Poslat domů'
+                                    : isUnlocked
+                                        ? 'Doprovázet'
+                                        : 'Koupit: $cost 🍋',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    Text(
-                      companion['name'] as String,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF263238)),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      companion['description'] as String,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.black45, fontSize: 10),
-                    ),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: () => _handleCompanionAction(companion),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isActive
-                            ? const Color(0xFF263238)
-                            : isUnlocked
-                                ? const Color(0xFF5C9E00)
-                                : const Color(0xFFBFFF00),
-                        foregroundColor: isActive || isUnlocked ? Colors.white : Colors.black,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        isActive
-                            ? 'Poslat domů'
-                            : isUnlocked
-                                ? 'Doprovázet'
-                                : 'Koupit: ${companion['cost']} 🍋',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
+                      if (!isUnlocked)
+                        const Positioned(
+                          top: 10,
+                          right: 10,
+                          child: Icon(Icons.lock_outline_rounded, color: Colors.grey, size: 20),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             );
           },
         ),
+
+        // Instruction Box
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: borderColor, width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '🍋 Jak získat limetky?',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
+              ),
+              const SizedBox(height: 16),
+              _buildInstructionItem(
+                Icons.directions_walk_rounded,
+                'Plň denní cíle kroků',
+                'Za každý splněný denní cíl získáš 5 limetek.',
+                textColor,
+                textSecondary,
+              ),
+              const SizedBox(height: 12),
+              _buildInstructionItem(
+                Icons.map_rounded,
+                'Dokonči outdoor trasy',
+                'Procházení a objevování nových tras ti přinese 10 limetek.',
+                textColor,
+                textSecondary,
+              ),
+              const SizedBox(height: 12),
+              _buildInstructionItem(
+                Icons.casino_outlined,
+                'Roztoč Kolo štěstí',
+                'Každý den máš jedno roztočení zdarma s možností vyhrát limetky.',
+                textColor,
+                textSecondary,
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildSupportTab() {
+  Widget _buildSupportTab(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
-        const Text(
+        Text(
           'Podpoř vývoj Hejbej se',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w900,
-            color: Color(0xFF263238),
+            color: textColor,
             letterSpacing: -0.5,
           ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Vývoj a provoz mapových služeb stojí nemalé finance. Podporou získáš exkluzivní výhody!',
-          style: TextStyle(fontSize: 13, color: Colors.black54),
+          style: TextStyle(fontSize: 13, color: textSecondary),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
@@ -658,15 +913,18 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
         ),
 
         const SizedBox(height: 32),
-        const Text(
+        Text(
           'Rychlý jednorázový dar',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF263238)),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
         ),
         const SizedBox(height: 12),
 
         Card(
-          color: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          color: cardColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: borderColor, width: 1.5),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -685,10 +943,19 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                 TextFormField(
                   controller: _donationController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: TextStyle(color: textColor),
                   decoration: InputDecoration(
                     labelText: 'Vlastní částka (Kč)',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    prefixIcon: const Icon(Icons.edit_rounded),
+                    labelStyle: TextStyle(color: textSecondary),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: borderColor),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: borderColor),
+                    ),
+                    prefixIcon: Icon(Icons.edit_rounded, color: textSecondary),
                   ),
                 ),
                 const SizedBox(height: 16),

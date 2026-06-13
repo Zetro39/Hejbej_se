@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/auth_service.dart';
 import '../profile/profile_creation_screen.dart';
 import '../../widgets/app_logo.dart';
+import '../../main_shell.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -30,6 +32,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   String? _error;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  String _selectedTheme = 'grey';
 
   @override
   void dispose() {
@@ -69,6 +72,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       'friend_code': friendCode,
       'friend_code_clean': _cleanStringForSearch(friendCode),
       'phone_number': _useSmsVerification ? _phone.text.trim().replaceAll(' ', '') : null,
+      'design_theme': _selectedTheme,
       'updated_at': FieldValue.serverTimestamp(),
     };
     
@@ -84,6 +88,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           .timeout(const Duration(seconds: 4));
     } catch (e) {
       debugPrint('Failed to save username to local storage: $e');
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('design_theme', _selectedTheme);
+      MainShell.themeNotifier.value = _selectedTheme;
+    } catch (e) {
+      debugPrint('Failed to save theme to SharedPreferences: $e');
     }
   }
 
@@ -617,6 +629,110 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                 if (v.trim().length < 3) return 'Přezdívka musí mít alespoň 3 znaky';
                                 return null;
                               },
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8.0),
+                              child: Divider(height: 24, thickness: 1, color: Color(0xFFF1F1F1)),
+                            ),
+                            const Text(
+                              'Vzhled aplikace',
+                              style: TextStyle(
+                                color: Color(0xFF263238),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedTheme = 'grey';
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF263238),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: _selectedTheme == 'grey' ? const Color(0xFFBFFF00) : Colors.transparent,
+                                          width: 2.5,
+                                        ),
+                                        boxShadow: _selectedTheme == 'grey'
+                                            ? [
+                                                BoxShadow(
+                                                  color: const Color(0xFFBFFF00).withOpacity(0.2),
+                                                  blurRadius: 10,
+                                                  spreadRadius: 1,
+                                                )
+                                              ]
+                                            : [],
+                                      ),
+                                      child: Column(
+                                        children: const [
+                                          Icon(Icons.dark_mode_rounded, color: Colors.white, size: 28),
+                                          SizedBox(height: 8),
+                                          Text(
+                                            'Prémiová Šedá',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedTheme = 'white';
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF9FBFC),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: _selectedTheme == 'white' ? const Color(0xFFBFFF00) : Colors.grey.shade300,
+                                          width: 2.5,
+                                        ),
+                                        boxShadow: _selectedTheme == 'white'
+                                            ? [
+                                                BoxShadow(
+                                                  color: const Color(0xFFBFFF00).withOpacity(0.2),
+                                                  blurRadius: 10,
+                                                  spreadRadius: 1,
+                                                )
+                                              ]
+                                            : [],
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Icon(Icons.light_mode_rounded, color: Colors.amber.shade700, size: 28),
+                                          const SizedBox(height: 8),
+                                          const Text(
+                                            'Prémiová Bílá',
+                                            style: TextStyle(
+                                              color: Color(0xFF263238),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),

@@ -10,6 +10,8 @@ import '../achievements/achievements_screen.dart';
 import '../../login_screen.dart';
 import '../../services/step_tracker_service.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../main_shell.dart';
+import '../../services/auth_service.dart';
 
 /// Modul Profil – uživatelské informace.
 class ProfileScreen extends StatefulWidget {
@@ -44,6 +46,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Timestamp? _usernameGracePeriodEnd;
   List<String> _stepsGoalHistory = [];
   int _stepsStreak = 0;
+
+  String? _activeCompanion;
+  List<int> last7DaysSteps = List.filled(7, 0);
+  static const List<String> _dayNames = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'];
+
+  String _getDayName(DateTime date) {
+    return _dayNames[date.weekday - 1];
+  }
+
+  String _companionName(String? id) {
+    switch (id) {
+      case 'bear': return 'Medvěd';
+      case 'fox': return 'Liška';
+      case 'wolf': return 'Vlk';
+      case 'deer': return 'Jelen';
+      default: return 'Žádný';
+    }
+  }
 
   final List<double> distanceMilestones = [1, 10, 100, 1000, 10000, 40000];
   final List<int> loyaltyMilestones = [10, 50, 250];
@@ -96,7 +116,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
+    final companion = await AuthService().getSelectedCompanion();
+
+    final today = DateTime.now();
+    final List<int> stepsList = [];
+    for (int i = 6; i >= 0; i--) {
+      final date = today.subtract(Duration(days: i));
+      final dateStr = date.toIso8601String().substring(0, 10);
+      int steps = prefs.getInt('daily_steps_$dateStr') ?? 0;
+      if (steps == 0 && i == 0) {
+        steps = prefs.getInt('pedometer_today_steps') ?? 0;
+      }
+      stepsList.add(steps);
+    }
+
     setState(() {
+      _activeCompanion = companion;
+      last7DaysSteps = stepsList;
       limetkyBalance = prefs.getInt('limetkyBalance') ?? 0;
       streak = prefs.getInt('streak') ?? 0;
       totalDistance = prefs.getDouble('totalDistance') ?? 0.0;
@@ -342,6 +378,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     int tempGoal = _dailyStepsGoal;
     bool isSaving = false;
     String? errorText;
+    String tempTheme = MainShell.themeNotifier.value;
 
     // Check if username change is locked
     final now = DateTime.now();
@@ -428,6 +465,85 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         });
                       },
                     ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '🌓 Vzhled aplikace',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setDialogState(() {
+                                tempTheme = 'grey';
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF263238),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: tempTheme == 'grey' ? const Color(0xFFBFFF00) : Colors.transparent,
+                                  width: 2.5,
+                                ),
+                              ),
+                              child: Column(
+                                children: const [
+                                  Icon(Icons.dark_mode_rounded, color: Colors.white, size: 22),
+                                  SizedBox(height: 6),
+                                  Text(
+                                    'Šedá',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setDialogState(() {
+                                tempTheme = 'white';
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9FBFC),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: tempTheme == 'white' ? const Color(0xFFBFFF00) : Colors.grey.shade300,
+                                  width: 2.5,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(Icons.light_mode_rounded, color: Colors.amber.shade700, size: 22),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'Bílá',
+                                    style: TextStyle(
+                                      color: Color(0xFF263238),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     if (isSaving) ...[
                       const SizedBox(height: 16),
                       const Center(child: CircularProgressIndicator(color: Colors.lightBlue)),
@@ -461,6 +577,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       final updates = <String, dynamic>{
                         'daily_steps_goal': tempGoal,
+                        'design_theme': tempTheme,
                         'updated_at': FieldValue.serverTimestamp(),
                       };
 
@@ -487,6 +604,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setInt('daily_steps_goal', tempGoal);
+                      await prefs.setString('design_theme', tempTheme);
+                      MainShell.themeNotifier.value = tempTheme;
+                      
                       if (usernameChanged) {
                         const storage = FlutterSecureStorage();
                         await storage.write(key: 'user_name', value: enteredUsername);
@@ -521,14 +641,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStepsGoalCalendar() {
+  Widget _buildStepsGoalCalendarColored(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     final todayStr = DateTime.now().toIso8601String().substring(0, 10);
     return Card(
       elevation: 0,
-      color: const Color(0xFF1E272C),
+      color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
-        side: const BorderSide(color: Colors.white12, width: 1.5),
+        side: BorderSide(color: borderColor, width: 1.5),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -538,9 +658,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   '📅 Kalendář plnění kroků',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textColor),
                 ),
                 Text(
                   'Série: 🔥 $_stepsStreak dnů',
@@ -564,7 +684,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 final isAchieved = _stepsGoalHistory.contains(dateStr);
                 final isToday = dateStr == todayStr;
 
-                Color color = Colors.white10;
+                Color color = textColor.withOpacity(0.08);
                 if (isAchieved) {
                   color = const Color(0xFF1B5E20); // Pine Green
                 } else if (isToday) {
@@ -584,11 +704,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
-                          backgroundColor: const Color(0xFF1E1E24),
+                          backgroundColor: cardColor,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                           title: Text(
                             '${dayDate.day}. ${dayDate.month}. ${dayDate.year}',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
                           ),
                           content: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -632,13 +752,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 children: [
                                   const Icon(Icons.directions_walk, color: Colors.lightBlueAccent),
                                   const SizedBox(width: 8),
-                                  const Text(
+                                  Text(
                                     'Kroky: ',
-                                    style: TextStyle(color: Colors.white70),
+                                    style: TextStyle(color: textSecondary),
                                   ),
                                   Text(
                                     steps.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} "),
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
@@ -647,26 +767,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 children: [
                                   const Icon(Icons.linear_scale, color: Colors.limeAccent),
                                   const SizedBox(width: 8),
-                                  const Text(
+                                  Text(
                                     'Vzdálenost: ',
-                                    style: TextStyle(color: Colors.white70),
+                                    style: TextStyle(color: textSecondary),
                                   ),
                                   Text(
                                     '${displayDistance.toStringAsFixed(2)} km',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 16),
-                              const Text(
+                              Text(
                                 'Získané odznaky:',
-                                style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold),
+                                style: TextStyle(color: textSecondary, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 6),
                               if (dailyAchievements.isEmpty)
-                                const Text(
+                                Text(
                                   'Žádné odznaky ten den',
-                                  style: TextStyle(color: Colors.white38, fontSize: 13, fontStyle: FontStyle.italic),
+                                  style: TextStyle(color: textSecondary.withOpacity(0.5), fontSize: 13, fontStyle: FontStyle.italic),
                                 )
                               else
                                 ...dailyAchievements.map((ach) => Padding(
@@ -678,7 +798,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           Expanded(
                                             child: Text(
                                               ach,
-                                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                                              style: TextStyle(color: textColor, fontSize: 13),
                                             ),
                                           ),
                                         ],
@@ -689,7 +809,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text('Zavřít', style: TextStyle(color: Colors.cyanAccent)),
+                              child: const Text('Zavřít', style: TextStyle(color: Color(0xFFBFFF00))),
                             ),
                           ],
                         ),
@@ -710,13 +830,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                const Text('Méně  ', style: TextStyle(fontSize: 11, color: Colors.white38)),
-                Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(3))),
+                Text('Méně  ', style: TextStyle(fontSize: 11, color: textSecondary.withOpacity(0.6))),
+                Container(width: 12, height: 12, decoration: BoxDecoration(color: textColor.withOpacity(0.08), borderRadius: BorderRadius.circular(3))),
                 const SizedBox(width: 4),
                 Container(width: 12, height: 12, decoration: BoxDecoration(color: const Color(0xFFBFFF00).withOpacity(0.25), borderRadius: BorderRadius.circular(3))),
                 const SizedBox(width: 4),
                 Container(width: 12, height: 12, decoration: BoxDecoration(color: const Color(0xFF1B5E20), borderRadius: BorderRadius.circular(3))),
-                const Text('  Více', style: TextStyle(fontSize: 11, color: Colors.white38)),
+                Text('  Více', style: TextStyle(fontSize: 11, color: textSecondary.withOpacity(0.6))),
               ],
             ),
           ],
@@ -727,6 +847,199 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _streakLabel(int days) {
     return days == 1 ? 'Denní série: 1 den' : 'Denní série: $days dnů';
+  }
+
+  Widget _buildWeeklyActivityChart(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
+    int maxSteps = last7DaysSteps.isEmpty ? 10000 : last7DaysSteps.reduce((curr, next) => curr > next ? curr : next);
+    if (maxSteps < 10000) maxSteps = 10000;
+
+    final today = DateTime.now();
+
+    return Card(
+      elevation: 0,
+      color: cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: borderColor, width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '📊 Aktivita za 7 dní',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textColor),
+                ),
+                Text(
+                  'Cíl: ${_dailyStepsGoal.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} ")}',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textSecondary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(7, (index) {
+                final date = today.subtract(Duration(days: 6 - index));
+                final dayName = _getDayName(date);
+                final steps = last7DaysSteps.length > index ? last7DaysSteps[index] : 0;
+                final isGoalMet = steps >= _dailyStepsGoal;
+                final ratio = steps / maxSteps;
+                final barHeight = (ratio * 100).clamp(6.0, 100.0);
+
+                return Column(
+                  children: [
+                    Text(
+                      steps >= 1000 ? '${(steps / 1000).toStringAsFixed(1)}k' : '$steps',
+                      style: TextStyle(fontSize: 10, color: textSecondary, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 16,
+                      height: barHeight,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        gradient: isGoalMet
+                            ? const LinearGradient(
+                                colors: [Color(0xFFD4FF00), Color(0xFFBFFF00)],
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                              )
+                            : LinearGradient(
+                                colors: [Colors.grey.withOpacity(0.4), Colors.grey.withOpacity(0.2)],
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                              ),
+                        boxShadow: isGoalMet
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFFBFFF00).withOpacity(0.4),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                )
+                              ]
+                            : [],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      dayName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: index == 6 ? const Color(0xFFBFFF00) : textSecondary,
+                        fontWeight: index == 6 ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGamingGrid(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
+    final stats = [
+      {
+        'title': 'Celková vzdálenost',
+        'value': '${totalDistance.toStringAsFixed(1)} km',
+        'icon': Icons.map_outlined,
+        'color': Colors.lightBlueAccent,
+      },
+      {
+        'title': 'Herní společník',
+        'value': _companionName(_activeCompanion),
+        'icon': Icons.pets_outlined,
+        'color': Colors.orangeAccent,
+      },
+      {
+        'title': 'Splněné cíle',
+        'value': '${_stepsGoalHistory.length}x',
+        'icon': Icons.stars_outlined,
+        'color': const Color(0xFFBFFF00),
+      },
+      {
+        'title': 'Série kroků',
+        'value': '🔥 $_stepsStreak dnů',
+        'icon': Icons.local_fire_department_outlined,
+        'color': Colors.redAccent,
+      },
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: 4,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.4,
+      ),
+      itemBuilder: (context, index) {
+        final stat = stats[index];
+        final statColor = stat['color'] as Color;
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor, width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Icon(stat['icon'] as IconData, color: statColor, size: 24),
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: statColor,
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    stat['value'] as String,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    stat['title'] as String,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -794,314 +1107,345 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return (b['value'] as double).compareTo(a['value'] as double);
       });
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF263238),
-      appBar: AppBar(
-        title: const Text(
-          'Profil',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: Colors.white),
-        ),
-        centerTitle: true,
-        backgroundColor: const Color(0xFF1E272C),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.white70),
-            tooltip: 'Upravit profil',
-            onPressed: _showEditProfileDialog,
+    return ValueListenableBuilder<String>(
+      valueListenable: MainShell.themeNotifier,
+      builder: (context, theme, child) {
+        final isWhite = theme == 'white';
+        final bgColor = isWhite ? const Color(0xFFF9FBFC) : const Color(0xFF263238);
+        final cardColor = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final textColor = isWhite ? const Color(0xFF263238) : Colors.white;
+        final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+        final textMuted = isWhite ? Colors.black38 : Colors.white54;
+        final borderColor = isWhite ? Colors.grey.shade200 : Colors.white12;
+        final appBarBg = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final appBarFg = isWhite ? const Color(0xFF263238) : Colors.white;
+
+        return Scaffold(
+          backgroundColor: bgColor,
+          appBar: AppBar(
+            title: Text(
+              'Profil',
+              style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: appBarFg),
+            ),
+            centerTitle: true,
+            backgroundColor: appBarBg,
+            foregroundColor: appBarFg,
+            elevation: 0,
+            iconTheme: IconThemeData(color: appBarFg),
+            actions: [
+              IconButton(
+                icon: Icon(Icons.settings_outlined, color: appBarFg.withOpacity(0.7)),
+                tooltip: 'Upravit profil',
+                onPressed: _showEditProfileDialog,
+              ),
+              IconButton(
+                icon: Icon(Icons.emoji_events_outlined, color: appBarFg.withOpacity(0.7)),
+                tooltip: 'Úspěchy',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const AchievementsScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.emoji_events_outlined, color: Colors.white70),
-            tooltip: 'Úspěchy',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const AchievementsScreen(),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              children: [
-                const SizedBox(height: 10),
-                GestureDetector(
-                  onTap: _changeAvatar,
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 70,
-                        backgroundColor: const Color(0xFF1E272C),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFBFFF00), width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFBFFF00).withOpacity(0.15),
-                                blurRadius: 16,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: ClipOval(
-                            child: _selectedAvatar != null
-                                ? (_selectedAvatar!.startsWith('base64:')
-                                    ? Image.memory(
-                                        base64Decode(_selectedAvatar!.substring(7)),
-                                        fit: BoxFit.cover,
-                                        width: 130,
-                                        height: 130,
-                                      )
-                                    : Image.asset(
-                                        'assets/images/$_selectedAvatar.png',
-                                        fit: BoxFit.cover,
-                                        width: 130,
-                                        height: 130,
-                                      ))
-                                : const Icon(
-                                    Icons.person,
-                                    size: 100,
-                                    color: Colors.grey,
+          body: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: _changeAvatar,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 70,
+                            backgroundColor: cardColor,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFFBFFF00), width: 3),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFBFFF00).withOpacity(0.15),
+                                    blurRadius: 16,
+                                    spreadRadius: 2,
                                   ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 4,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFBFFF00),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black12,
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
+                                ],
                               ),
-                            ],
+                              child: ClipOval(
+                                child: _selectedAvatar != null
+                                    ? (_selectedAvatar!.startsWith('base64:')
+                                        ? Image.memory(
+                                            base64Decode(_selectedAvatar!.substring(7)),
+                                            fit: BoxFit.cover,
+                                            width: 130,
+                                            height: 130,
+                                          )
+                                        : Image.asset(
+                                            'assets/images/$_selectedAvatar.png',
+                                            fit: BoxFit.cover,
+                                            width: 130,
+                                            height: 130,
+                                          ))
+                                    : const Icon(
+                                        Icons.person,
+                                        size: 100,
+                                        color: Colors.grey,
+                                      ),
+                              ),
+                            ),
                           ),
-                          child: const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF1B5E20)),
-                        ),
+                          Positioned(
+                            bottom: 0,
+                            right: 4,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFBFFF00),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 4,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF1B5E20)),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  _displayName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _streakLabel(streak),
-                  style: const TextStyle(
-                    color: Color(0xFFBFFF00),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // Limetky / Streak Card
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E272C),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white12, width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      _displayName,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
                       ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _streakLabel(streak),
+                      style: const TextStyle(
+                        color: Color(0xFFBFFF00),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // Limetky / Streak Card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: borderColor, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  'LIMETKY 🍋',
-                                  style: TextStyle(fontSize: 12, color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'LIMETKY 🍋',
+                                      style: TextStyle(fontSize: 12, color: textMuted, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '$limetkyBalance',
+                                      style: TextStyle(
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.bold,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '$limetkyBalance',
-                                  style: const TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'SÉRIE 🔥',
+                                      style: TextStyle(fontSize: 12, color: textMuted, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '$streak dnů',
+                                      style: TextStyle(
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.bold,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  'SÉRIE 🔥',
-                                  style: TextStyle(fontSize: 12, color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '$streak dnů',
-                                  style: const TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            if (isStreakFrozen) ...[
+                              const SizedBox(height: 12),
+                              Divider(height: 1, color: borderColor),
+                              const SizedBox(height: 12),
+                              const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.ac_unit_rounded, color: Colors.blueAccent, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Streak je momentálně zmrazený', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w600, fontSize: 13)),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
-                        if (isStreakFrozen) ...[
-                          const SizedBox(height: 12),
-                          const Divider(height: 1, color: Colors.white10),
-                          const SizedBox(height: 12),
-                          const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.ac_unit_rounded, color: Colors.blueAccent, size: 18),
-                              SizedBox(width: 8),
-                              Text('Streak je momentálně zmrazený', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w600, fontSize: 13)),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildWeeklyActivityChart(cardColor, textColor, textSecondary, borderColor),
+                    const SizedBox(height: 24),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Herní statistiky',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildGamingGrid(cardColor, textColor, textSecondary, borderColor),
+                    const SizedBox(height: 24),
+                    _buildStepsGoalCalendarColored(cardColor, textColor, textSecondary, borderColor),
+                    const SizedBox(height: 28),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Úspěchy',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 1.05,
+                      children: visibleAchievements
+                          .take(4)
+                          .map((item) => _AchievementCard(
+                                title: item['title'] as String,
+                                isUnlocked: item['unlocked'] as bool,
+                                icon: item['icon'] as IconData,
+                              ))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Show all achievements button
+                    SizedBox(
+                      width: double.infinity,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFBFFF00).withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFFD4FF00),
+                              Color(0xFFBFFF00),
                             ],
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _buildStepsGoalCalendar(),
-                const SizedBox(height: 28),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Úspěchy',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.05,
-                  children: visibleAchievements
-                      .take(4)
-                      .map((item) => _AchievementCard(
-                            title: item['title'] as String,
-                            isUnlocked: item['unlocked'] as bool,
-                            icon: item['icon'] as IconData,
-                          ))
-                      .toList(),
-                ),
-                const SizedBox(height: 20),
-                
-                // Show all achievements button
-                SizedBox(
-                  width: double.infinity,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFBFFF00).withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
                         ),
-                      ],
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFFD4FF00),
-                          Color(0xFFBFFF00),
-                        ],
-                      ),
-                    ),
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const AchievementsScreen(),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const AchievementsScreen(),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          child: const Text(
+                            'Zobrazit všechny úspěchy',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1B5E20),
+                            ),
+                          ),
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: const Text(
-                        'Zobrazit všechny úspěchy',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                
-                // Log out button
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 85.0),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: _logout,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red.shade800,
-                        side: BorderSide(color: Colors.red.shade100, width: 1.5),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                    const SizedBox(height: 28),
+                    
+                    // Log out button
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 85.0),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: _logout,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red.shade800,
+                            side: BorderSide(color: Colors.red.shade100, width: 1.5),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            backgroundColor: Colors.red.shade50.withOpacity(0.5),
+                          ),
+                          child: const Text(
+                            'Odhlásit se',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
                         ),
-                        backgroundColor: Colors.red.shade50.withOpacity(0.5),
-                      ),
-                      child: const Text(
-                        'Odhlásit se',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'v1.2.3+134',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  'v1.2.3+91',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                ),
-                const SizedBox(height: 20),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
