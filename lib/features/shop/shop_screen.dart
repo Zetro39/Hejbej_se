@@ -1004,8 +1004,8 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 const SizedBox(height: 16),
-                if (_paymentReady) ...[
-                  if (_applePayAvailable)
+                if (_paymentReady && (_applePayConfig != null || _googlePayConfig != null)) ...[
+                  if (_applePayAvailable && _applePayConfig != null)
                     ApplePayButton(
                       paymentConfiguration: _applePayConfig!,
                       paymentItems: _paymentItems,
@@ -1015,7 +1015,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                       type: ApplePayButtonType.donate,
                       onPaymentResult: _onApplePayResult,
                     )
-                  else
+                  else if (_googlePayConfig != null)
                     GooglePayButton(
                       paymentConfiguration: _googlePayConfig!,
                       paymentItems: _paymentItems,
@@ -1023,9 +1023,28 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                       width: double.infinity,
                       height: 50,
                       onPaymentResult: _onGooglePayResult,
+                    )
+                  else
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        child: Text(
+                          'Platební brána není momentálně k dispozici.',
+                          style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 13),
+                        ),
+                      ),
                     ),
-                ] else
-                  const Center(child: CircularProgressIndicator(color: Color(0xFF5C9E00))),
+                ] else ...[
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Text(
+                        'Platební brána není momentálně k dispozici.',
+                        style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
