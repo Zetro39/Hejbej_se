@@ -7,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:hejbej_se/services/route_elevation_service.dart';
 
 class RouteSelectionScreen extends StatefulWidget {
@@ -575,6 +576,89 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
     );
   }
 
+  void _showQrShareDialog(Map<String, dynamic> option) {
+    if (_currentRoutePoints.isEmpty) return;
+    
+    // Sample points if too many (limit to 30) to fit in QR payload
+    List<LatLng> sampled = [];
+    if (_currentRoutePoints.length <= 30) {
+      sampled = _currentRoutePoints;
+    } else {
+      final step = _currentRoutePoints.length / 30;
+      for (int i = 0; i < 30; i++) {
+        sampled.add(_currentRoutePoints[(i * step).toInt()]);
+      }
+      sampled.add(_currentRoutePoints.last);
+    }
+    
+    final coordinates = sampled.map((p) => [
+      double.parse(p.latitude.toStringAsFixed(5)),
+      double.parse(p.longitude.toStringAsFixed(5))
+    ]).toList();
+    
+    final title = option['title'] as String? ?? 'Okruh';
+        
+    final payload = jsonEncode({
+      't': title,
+      'p': coordinates,
+    });
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Pozvat kamaráda 🤝',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white70),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Nechte kamaráda naskenovat tento QR kód ve své aplikaci Hejbej Se pro okamžité offline sdílení trasy.',
+              style: TextStyle(fontSize: 13, color: Colors.white70),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: SizedBox(
+                width: 180,
+                height: 180,
+                child: QrImageView(
+                  data: payload,
+                  version: QrVersions.auto,
+                  size: 180.0,
+                  gapless: false,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showTriviaDialog(Map<String, dynamic> option) {
     showDialog(
       context: context,
@@ -990,40 +1074,69 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                                         ),
                                       ),
                                       const SizedBox(height: 12),
-                                      // Start Button
-                                      SizedBox(
-                                        width: double.infinity,
-                                        height: 44,
-                                        child: ElevatedButton(
-                                          onPressed: _isLoadingRouteGeometry || _currentRoutePoints.length < 2 || idx != _selectedOptionIndex
-                                              ? null
-                                              : () {
-                                                  final double dist = option['exactDistance'] as double;
-                                                  Navigator.pop(context, {
-                                                    'points': _currentRoutePoints,
-                                                    'title': option['title'] as String,
-                                                    'distance': dist,
-                                                    'eta': option['eta'] as int? ?? (dist * 12).round(),
-                                                    'kct_color': option['kct_color'] as String?,
-                                                    'cyklo_number': option['cyklo_number'] as String?,
-                                                    'trivia_question': option['trivia_question'] as String?,
-                                                    'trivia_answer': option['trivia_answer'] as String?,
-                                                  });
-                                                },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(0xFFBFFF00),
-                                            foregroundColor: Colors.black,
-                                            disabledBackgroundColor: Colors.grey.shade100,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                            elevation: 1,
+                                      // Start Button and Invite Friend QR Row
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: SizedBox(
+                                              height: 44,
+                                              child: ElevatedButton(
+                                                onPressed: _isLoadingRouteGeometry || _currentRoutePoints.length < 2 || idx != _selectedOptionIndex
+                                                    ? null
+                                                    : () {
+                                                        final double dist = option['exactDistance'] as double;
+                                                        Navigator.pop(context, {
+                                                          'points': _currentRoutePoints,
+                                                          'title': option['title'] as String,
+                                                          'distance': dist,
+                                                          'eta': option['eta'] as int? ?? (dist * 12).round(),
+                                                          'kct_color': option['kct_color'] as String?,
+                                                          'cyklo_number': option['cyklo_number'] as String?,
+                                                          'trivia_question': option['trivia_question'] as String?,
+                                                          'trivia_answer': option['trivia_answer'] as String?,
+                                                        });
+                                                      },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFFBFFF00),
+                                                  foregroundColor: Colors.black,
+                                                  disabledBackgroundColor: Colors.grey.shade100,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                                  elevation: 1,
+                                                ),
+                                                child: Text(
+                                                  _isLoadingRouteGeometry && idx == _selectedOptionIndex
+                                                      ? 'Načítání trasy...'
+                                                      : 'Vyrazit na trasu (${realKm.toStringAsFixed(1)} km)',
+                                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                          child: Text(
-                                            _isLoadingRouteGeometry && idx == _selectedOptionIndex
-                                                ? 'Načítání trasy...'
-                                                : 'Vyrazit na trasu (${realKm.toStringAsFixed(1)} km)',
-                                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                          const SizedBox(width: 8),
+                                          SizedBox(
+                                            height: 44,
+                                            width: 50,
+                                            child: ElevatedButton(
+                                              onPressed: _isLoadingRouteGeometry || _currentRoutePoints.length < 2 || idx != _selectedOptionIndex
+                                                  ? null
+                                                  : () {
+                                                      _showQrShareDialog(option);
+                                                    },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.white.withOpacity(0.9),
+                                                foregroundColor: Colors.black,
+                                                disabledBackgroundColor: Colors.grey.shade100,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  side: const BorderSide(color: Colors.black12),
+                                                ),
+                                                elevation: 1,
+                                                padding: EdgeInsets.zero,
+                                              ),
+                                              child: const Icon(Icons.qr_code, size: 22),
+                                            ),
                                           ),
-                                        ),
+                                        ],
                                       ),
                                     ],
                                   ),

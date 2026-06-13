@@ -76,6 +76,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   double _remainingDistance = 0.0;
   int _remainingEta = 0;
   int _closestWaypointIndex = 0;
+  String _navigationInstruction = 'Sledujte vyznačenou trasu';
+  IconData _navigationIcon = Icons.navigation;
   bool _isLoadingRoutes = false;
   bool _showRouteSuggestions = false;
   List<Map<String, dynamic>> _routeSuggestions = [];
@@ -742,6 +744,72 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     
     final radians = atan2(y, x);
     return (radians * 180.0 / pi + 360.0) % 360.0;
+  }
+
+  void _updateNavigationInstruction(LatLng currentPoint, int closestIndex) {
+    if (_activeRoutePoints.isEmpty || closestIndex >= _activeRoutePoints.length - 1) {
+      setState(() {
+        _navigationInstruction = 'Jste v cíli!';
+        _navigationIcon = Icons.stars;
+      });
+      return;
+    }
+
+    if (closestIndex + 2 >= _activeRoutePoints.length) {
+      setState(() {
+        _navigationInstruction = 'Cíl je blízko';
+        _navigationIcon = Icons.flag;
+      });
+      return;
+    }
+
+    final p1 = _activeRoutePoints[closestIndex];
+    final p2 = _activeRoutePoints[closestIndex + 1];
+    final p3 = _activeRoutePoints[closestIndex + 2];
+
+    final double b1 = _calculateBearing(p1, p2);
+    final double b2 = _calculateBearing(p2, p3);
+
+    double diff = b2 - b1;
+    while (diff < -180) {
+      diff += 360;
+    }
+    while (diff > 180) {
+      diff -= 360;
+    }
+
+    String instr = 'Jděte rovně';
+    IconData icon = Icons.arrow_upward;
+
+    if (diff > 25 && diff <= 75) {
+      instr = 'Zahněte mírně doprava';
+      icon = Icons.turn_slight_right;
+    } else if (diff > 75) {
+      instr = 'Zahněte doprava';
+      icon = Icons.turn_right;
+    } else if (diff < -25 && diff >= -75) {
+      instr = 'Zahněte mírně doleva';
+      icon = Icons.turn_slight_left;
+    } else if (diff < -75) {
+      instr = 'Zahněte doleva';
+      icon = Icons.turn_left;
+    }
+
+    final double distToTurn = Geolocator.distanceBetween(
+      currentPoint.latitude,
+      currentPoint.longitude,
+      p2.latitude,
+      p2.longitude,
+    );
+
+    if (distToTurn > 10) {
+      instr = 'Za ${(distToTurn.toInt())} m: $instr';
+    }
+
+    setState(() {
+      _navigationInstruction = instr;
+      _navigationIcon = icon;
+    });
   }
 
   int _findClosestRoutePointIndex(LatLng currentPos) {
@@ -1835,6 +1903,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     if (_lastPosition != null && _activeRoutePoints.isNotEmpty) {
       final currentPos = LatLng(_lastPosition!.latitude, _lastPosition!.longitude);
       final closestIndex = _findClosestRoutePointIndex(currentPos);
+      _updateNavigationInstruction(currentPos, closestIndex);
       final nextWp = _activeRoutePoints[min(closestIndex + 1, _activeRoutePoints.length - 1)];
       final bearing = _calculateBearing(currentPos, nextWp);
       
@@ -2340,6 +2409,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         closestIndex = _findClosestRoutePointIndex(newPoint);
         remainingD = _calculateRemainingDistance(newPoint, closestIndex);
         remainingE = _calculateRouteEta(remainingD);
+        _updateNavigationInstruction(newPoint, closestIndex);
 
         // Compute segment direction bearing if user is stationary or has invalid heading
         if (position.speed < 1.0 && closestIndex + 1 < _activeRoutePoints.length) {
@@ -2565,8 +2635,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
                     setState(() {
                       _activeRoutePoints = points;
-                      _routePlotted = true;
-                      _routeActive = false;
                       _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
                       _polylines.add(polyline);
                       _destinationPoint = points.last;
@@ -2586,7 +2654,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                       _taskCardExpanded = false;
                     });
 
-                    _fitMapBounds(points);
+                    _startRoute();
                   }
                 },
               ),
@@ -2807,9 +2875,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                           color: Colors.white.withOpacity(0.15),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
-                          Icons.navigation,
-                          color: Color(0xFFBFFF00),
+                        child: Icon(
+                          _navigationIcon,
+                          color: const Color(0xFFBFFF00),
                           size: 24,
                         ),
                       ),
@@ -2819,9 +2887,11 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text(
-                              'AKTIVNÍ NAVIGACE',
-                              style: TextStyle(
+                            Text(
+                              _routeSuggestions.isNotEmpty && _selectedRouteSuggestionIndex < _routeSuggestions.length
+                                  ? (_routeSuggestions[_selectedRouteSuggestionIndex]['title'] as String).toUpperCase()
+                                  : 'AKTIVNÍ NAVIGACE',
+                              style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w900,
@@ -2830,9 +2900,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              _routeSuggestions.isNotEmpty && _selectedRouteSuggestionIndex < _routeSuggestions.length
-                                  ? _routeSuggestions[_selectedRouteSuggestionIndex]['title'] as String
-                                  : 'Sledujte vyznačenou trasu',
+                              _navigationInstruction,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 14,
