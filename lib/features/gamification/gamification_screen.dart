@@ -1134,12 +1134,12 @@ class _GameScreenState extends State<GameScreen> {
   }
 
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(String title, Color textColor) {
     return Padding(
       padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
       child: Text(
         title,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black54),
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
       ),
     );
   }
@@ -1489,7 +1489,7 @@ class _GameScreenState extends State<GameScreen> {
                           leadingText,
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.lightBlue.shade950,
+                            color: Colors.lightBlue.shade900,
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
@@ -1563,7 +1563,7 @@ class _GameScreenState extends State<GameScreen> {
                                 : 'Musíš splnit sázku: $bet 😢',
                         style: TextStyle(
                           fontSize: 12, 
-                          color: isWinner ? Colors.orange.shade850 : Colors.red.shade650,
+                          color: isWinner ? Colors.orange.shade800 : Colors.red.shade700,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1711,78 +1711,6 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildSpecialGamesSection() {
-    final show18Plus = _userAge != null && _userAge! >= 18;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Speciální výpravy & hry',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 145,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              _buildSpecialGameCard(
-                title: 'Ztracený amulet 💎',
-                description: 'Příběhové RPG. Ujdi 6 km a vyřeš záhadu ztraceného amuletu.',
-                icon: Icons.auto_awesome,
-                color: Colors.purple.shade50,
-                iconColor: Colors.purple.shade700,
-                is18Plus: false,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const StoryMapScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 12),
-              _buildSpecialGameCard(
-                title: 'Zámecká stezka',
-                description: 'Objev historické zámky a parky ve svém okolí.',
-                icon: Icons.fort,
-                color: Colors.amber.shade50,
-                iconColor: Colors.amber.shade700,
-                is18Plus: false,
-              ),
-              const SizedBox(width: 12),
-              _buildSpecialGameCard(
-                title: 'Krakonošův okruh',
-                description: 'Náročný výšlap horskou přírodou za bájným pánem hor.',
-                icon: Icons.landscape,
-                color: Colors.green.shade50,
-                iconColor: Colors.green.shade700,
-                is18Plus: false,
-              ),
-              if (show18Plus) ...[
-                const SizedBox(width: 12),
-                _buildSpecialGameCard(
-                  title: 'Tour de Bear (18+)',
-                  description: 'Chmelový okruh po lokálních hospůdkách a pivovarech.',
-                  icon: Icons.sports_bar,
-                  color: Colors.red.shade50,
-                  iconColor: Colors.red.shade700,
-                  is18Plus: true,
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
 
   Widget _buildSpecialGameCard({
     required String title,

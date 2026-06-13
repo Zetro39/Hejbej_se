@@ -528,7 +528,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                       'BLESKOVÁ NABÍDKA',
                       style: TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.black,
+                        fontWeight: FontWeight.w900,
                         fontSize: 14,
                         letterSpacing: 1,
                       ),

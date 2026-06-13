@@ -136,7 +136,7 @@ class _EmailVerificationWaitingState extends State<EmailVerificationWaiting> wit
                               'Ověření e-mailu',
                               style: TextStyle(
                                 fontSize: 20,
-                                fontWeight: FontWeight.black,
+                                fontWeight: FontWeight.w900,
                                 color: Color(0xFF263238),
                               ),
                             ),
