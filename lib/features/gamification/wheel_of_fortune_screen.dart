@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'models/wheel_of_fortune_model.dart';
 import '../../services/auth_service.dart';
+import 'widgets/task_doodle_widget.dart';
 
 class WheelOfFortuneScreen extends StatefulWidget {
   final List<String> playerNames;
@@ -303,7 +304,7 @@ class _WheelOfFortuneScreenState extends State<WheelOfFortuneScreen> with Ticker
                               childDelegate: ListWheelChildLoopingListDelegate(
                                 children: _availableTasksForCurrentPlayer.map((task) {
                                   return Center(
-                                    child: _buildBadge(task.icon),
+                                    child: TaskDoodleWidget(iconCode: task.icon),
                                   );
                                 }).toList(),
                               ),
@@ -396,122 +397,6 @@ class _WheelOfFortuneScreenState extends State<WheelOfFortuneScreen> with Ticker
     );
   }
 
-  /// Builds a cartoon 2D badge for the slot reel item
-  Widget _buildBadge(String iconCode, {double size = 80}) {
-    final Map<String, IconData> iconMap = {
-      'pocket': Icons.mail_outline,
-      'hop': Icons.directions_run,
-      'backward': Icons.keyboard_double_arrow_left,
-      'backpack': Icons.backpack,
-      'silent': Icons.volume_mute,
-      'echo': Icons.record_voice_over,
-      'knight': Icons.gavel,
-      'squat': Icons.accessibility_new,
-      'sound': Icons.audiotrack,
-      'limp': Icons.accessible,
-      'forbidden': Icons.block,
-      'whisper': Icons.hearing,
-      'airplane': Icons.airplanemode_active,
-      'guide': Icons.menu_book,
-      'friends': Icons.people,
-      'mic': Icons.mic,
-      'poem': Icons.border_color,
-      'globe': Icons.public,
-      'stick': Icons.hardware,
-      'animal': Icons.pets,
-      'lock': Icons.lock_open,
-      'theater': Icons.theater_comedy,
-      'shield': Icons.shield,
-      'crown': Icons.workspace_premium,
-      'shadow': Icons.remove_red_eye,
-      'heart': Icons.favorite,
-      'pointer': Icons.pan_tool,
-      'question': Icons.help_outline,
-      'spy': Icons.visibility_off,
-      'book': Icons.book,
-      'stone': Icons.diamond,
-      'leaf': Icons.spa,
-      'robot': Icons.smart_toy,
-      'music': Icons.music_note,
-      'statue': Icons.emoji_people,
-      'clap': Icons.sign_language,
-      'service': Icons.done_all,
-      'pray': Icons.volunteer_activism,
-      'cross': Icons.airline_seat_flat,
-      'phone': Icons.phonelink_erase,
-      'slow': Icons.hourglass_bottom,
-      'fast': Icons.flash_on,
-      'cloud': Icons.wb_cloudy,
-      'luck': Icons.star,
-      
-      // group icons
-      'group_walk': Icons.groups_2,
-      'group_silent': Icons.volume_off,
-      'group_train': Icons.link,
-      'group_music': Icons.music_note,
-      'group_squat': Icons.accessibility_new,
-      'group_slow': Icons.hourglass_empty,
-      'group_hands': Icons.pan_tool_alt,
-      'group_stick': Icons.forest,
-      'group_sync': Icons.compare_arrows,
-      'group_stealth': Icons.visibility_off,
-      'group_chat': Icons.chat_bubble_outline,
-      'group_whisper': Icons.hearing,
-      'group_backward': Icons.rotate_left,
-      'group_balance': Icons.balance,
-      'group_camera': Icons.camera_alt,
-      'group_heart': Icons.favorite,
-      'group_animal': Icons.pets,
-      'group_plank': Icons.fitness_center,
-      'group_link': Icons.people,
-      'group_ear': Icons.hearing,
-      'group_laugh': Icons.mood,
-      'group_pirate': Icons.flag,
-      'group_fly': Icons.airplanemode_active,
-      'group_stretch': Icons.self_improvement,
-      'group_clap': Icons.sign_language,
-      'group_smile': Icons.sentiment_very_satisfied,
-      'group_trash': Icons.delete_outline,
-      'group_poem': Icons.mode_edit,
-      'group_luck': Icons.star,
-    };
-
-    final Map<String, Color> colorMap = {
-      'luck': Colors.green.shade400,
-      'group_luck': Colors.green.shade400,
-      'backpack': Colors.orange.shade400,
-      'silent': Colors.red.shade400,
-      'group_silent': Colors.red.shade400,
-      'backward': Colors.blue.shade400,
-      'group_backward': Colors.blue.shade400,
-    };
-
-    final icon = iconMap[iconCode] ?? Icons.games;
-    final color = colorMap[iconCode] ?? Colors.deepPurple.shade400;
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.black, width: 3.5),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black,
-            offset: Offset(4, 4),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Icon(
-          icon,
-          color: Colors.white,
-          size: size * 0.5,
-        ),
-      ),
-    );
-  }
 
   /// Overlay detail popup showing winning task description
   Widget _buildTaskDetailPopup(bool hasReroll) {
@@ -544,7 +429,7 @@ class _WheelOfFortuneScreenState extends State<WheelOfFortuneScreen> with Ticker
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Visual icon badge
-                    _buildBadge(task.icon, size: 100),
+                    TaskDoodleWidget(iconCode: task.icon, size: 100),
                     const SizedBox(height: 20),
 
                     // Winner details
