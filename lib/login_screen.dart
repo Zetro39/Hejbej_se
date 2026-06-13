@@ -138,7 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       debugPrint('Google sign-in failed: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Přihlášení přes Google selhalo')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Chyba Google: $e')));
     }
   }
 
@@ -182,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       debugPrint('Apple sign-in failed: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Přihlášení přes Apple selhalo')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Chyba Apple: $e')));
     }
   }
 
