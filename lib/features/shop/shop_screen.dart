@@ -33,7 +33,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
   int _limetkyBalance = 0;
   List<String> _unlockedCompanions = [];
   String? _selectedCompanion;
-  bool _loadingLimetky = true;
+  bool _loadingLimetky = false;
   int _pendingLimetkyPurchaseAmount = 0;
   double _pendingLimetkyPurchasePrice = 0.0;
 
@@ -156,36 +156,57 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadLimetkyAndCompanions() async {
-    if (!mounted) return;
-    setState(() => _loadingLimetky = true);
+    // 1. Load from local cache instantly
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await SharedPreferences.getInstance().timeout(
+        const Duration(seconds: 2),
+      );
       final balance = prefs.getInt('limetkyBalance') ?? 0;
       final isPrem = prefs.getBool('isPremium') ?? false;
+      final unlockedLocally = prefs.getStringList('unlocked_companions') ?? [];
+      final activeLocally = prefs.getString('selected_companion');
 
+      if (mounted) {
+        setState(() {
+          _limetkyBalance = balance;
+          _unlockedCompanions = unlockedLocally;
+          _selectedCompanion = activeLocally;
+          _isPremium = isPrem;
+        });
+      }
+    } catch (e) {
+      debugPrint('Local prefs load failed: $e');
+    }
+
+    // 2. Fetch from the server in the background
+    try {
       final unlocked = await AuthService().getUnlockedCompanions().timeout(
         const Duration(seconds: 4),
-        onTimeout: () => <String>[],
+        onTimeout: () => _unlockedCompanions,
       );
       final active = await AuthService().getSelectedCompanion().timeout(
         const Duration(seconds: 4),
-        onTimeout: () => null,
+        onTimeout: () => _selectedCompanion,
       );
+
+      // Save to local cache for next instant load
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList('unlocked_companions', unlocked);
+        if (active != null) {
+          await prefs.setString('selected_companion', active);
+        } else {
+          await prefs.remove('selected_companion');
+        }
+      } catch (_) {}
 
       if (!mounted) return;
       setState(() {
-        _limetkyBalance = balance;
         _unlockedCompanions = unlocked;
         _selectedCompanion = active;
-        _isPremium = isPrem;
-        _loadingLimetky = false;
       });
     } catch (e) {
-      debugPrint('Error loading limetky/companions: $e');
-      if (!mounted) return;
-      setState(() {
-        _loadingLimetky = false;
-      });
+      debugPrint('Server companions load failed: $e');
     }
   }
 
