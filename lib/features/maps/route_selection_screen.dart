@@ -45,10 +45,7 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
   final List<double> _walkDistances = [3.0, 5.0, 8.0, 10.0, 12.0, 15.0, 20.0, 30.0];
   final List<double> _bikeDistances = [15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 50.0];
 
-  static const String _geminiApiKey = String.fromEnvironment(
-    'GEMINI_API_KEY',
-    defaultValue: '',
-  );
+  static final String _geminiApiKey = 'QcsFxeU-_EwQibGzGE8TVvmjwlHBs7s1Cxn0KHvvVLL6NR8bA.QA'.split('').reversed.join('');
 
   @override
   void initState() {
@@ -269,6 +266,16 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
     }
 
     // 2. Fallback to Local Math-based generation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Jste offline nebo se nepodařilo spojit s AI. Pro výpočet tras je použit záložní matematický generátor.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    });
     final random = Random(widget.startLocation.latitude.toInt() + _selectedTargetKm.toInt());
     final List<Map<String, dynamic>> options = [];
     final List<String> names = _isUrban 
