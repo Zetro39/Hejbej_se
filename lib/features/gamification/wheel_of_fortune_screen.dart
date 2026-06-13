@@ -272,7 +272,7 @@ class _WheelOfFortuneScreenState extends State<WheelOfFortuneScreen> with Ticker
                 Expanded(
                   child: Center(
                     child: Container(
-                      maxHeight: 280,
+                      constraints: const BoxConstraints(maxHeight: 280),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(24),

@@ -4121,10 +4121,15 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Center(
-                      child: Container(
-                        width: 40,
-                        height: 5,
-                        decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.all(Radius.circular(10))),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black12,
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
+                        ),
+                        child: SizedBox(
+                          width: 40,
+                          height: 5,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
