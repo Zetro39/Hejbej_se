@@ -411,18 +411,6 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _onGooglePayResult(dynamic result) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Děkujeme za vaši podporu přes Google Pay!'), backgroundColor: Colors.green),
-    );
-  }
-
-  void _onApplePayResult(dynamic result) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Děkujeme za vaši podporu přes Apple Pay!'), backgroundColor: Colors.green),
-    );
-  }
-
   // Simulated checkout bottom sheet for Premium Subscription
   void _openSimulatedPaymentSheet() {
     showModalBottomSheet(
