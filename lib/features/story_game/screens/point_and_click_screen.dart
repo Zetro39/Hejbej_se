@@ -58,7 +58,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
     });
   }
   bool _showHints = false;
-  Offset? _debugTapOffset;
+
   String _dialogText = "";
   String _currentSubroom = "exterior"; // Used for sub-rooms (interior vs exterior)
 
@@ -1803,16 +1803,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
 
                       return GestureDetector(
                         behavior: HitTestBehavior.translucent,
-                        onTapDown: (details) {
-                          if (_showHints) {
-                            setState(() {
-                              _debugTapOffset = Offset(
-                                details.localPosition.dx / width,
-                                details.localPosition.dy / height,
-                              );
-                            });
-                          }
-                        },
+
                         child: Stack(
                           children: [
                           // Background Image
@@ -2065,42 +2056,7 @@ class _PointAndClickScreenState extends State<PointAndClickScreen> with SingleTi
                                 ),
                               ),
                             ),
-                          if (_showHints && _debugTapOffset != null) ...[
-                            Positioned(
-                              left: _debugTapOffset!.dx * width - 6,
-                              top: _debugTapOffset!.dy * height - 6,
-                              width: 12,
-                              height: 12,
-                              child: IgnorePointer(
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              top: 16,
-                              left: 16,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.85),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: Colors.cyanAccent, width: 1.5),
-                                ),
-                                child: Text(
-                                  "SOUŘADNICE: x: ${_debugTapOffset!.dx.toStringAsFixed(3)}, y: ${_debugTapOffset!.dy.toStringAsFixed(3)}",
-                                  style: const TextStyle(
-                                    color: Colors.cyanAccent,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+
                         ],
                       ),
                     );
