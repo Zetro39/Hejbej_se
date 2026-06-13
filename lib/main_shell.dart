@@ -238,33 +238,52 @@ class _MainShellState extends State<MainShell> {
 
     return Scaffold(
       extendBody: true,
-        body: _blocked
-          ? _VerificationWall(onSignOut: () async {
-              await AuthService().signOut();
-              if (!mounted) return;
-              Navigator.of(context).pushReplacementNamed('/');
-            }, onResend: () async {
-              final user = AuthService().currentUser;
-              try {
-                await user?.sendEmailVerification();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Odeslán potvrzovací e-mail')));
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Chyba při odesílání: $e')));
-              }
-            })
+      body: _blocked
+          ? _VerificationWall(
+              onSignOut: () async {
+                await AuthService().signOut();
+                if (!mounted) return;
+                Navigator.of(context).pushReplacementNamed('/');
+              },
+              onResend: () async {
+                final user = AuthService().currentUser;
+                try {
+                  await user?.sendEmailVerification();
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Odeslán potvrzovací e-mail')));
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Chyba při odesílání: $e')));
+                }
+              },
+            )
           : _screens[_index],
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(top: 8.0),
-        child: FloatingActionButton(
-          onPressed: () => setState(() => _index = 2),
-          backgroundColor: Colors.lime,
-          elevation: 6,
-          child: const Icon(Icons.map, size: 32, color: Colors.black),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFBFFF00).withOpacity(0.4),
+                blurRadius: 16,
+                spreadRadius: 1,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: FloatingActionButton(
+            onPressed: () => setState(() => _index = 2),
+            backgroundColor: const Color(0xFFBFFF00),
+            elevation: 0,
+            shape: const CircleBorder(),
+            child: const Icon(Icons.map_rounded, size: 30, color: Color(0xFF1B5E20)),
+          ),
         ),
       ),
       bottomNavigationBar: BottomAppBar(
         elevation: 8,
+        color: const Color(0xFF1E272C),
+        surfaceTintColor: const Color(0xFF1E272C),
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
         child: SafeArea(
@@ -273,11 +292,39 @@ class _MainShellState extends State<MainShell> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _NavButton(icon: Icons.emoji_events, label: 'Hry', index: 0, selected: _index == 0, onTap: () => setState(() => _index = 0)),
-                _NavButton(icon: Icons.leaderboard, label: 'Žebříček', index: 3, selected: _index == 3, onTap: () => setState(() => _index = 3)),
+                _NavButton(
+                  icon: Icons.emoji_events_outlined,
+                  activeIcon: Icons.emoji_events_rounded,
+                  label: 'Hry',
+                  index: 0,
+                  selected: _index == 0,
+                  onTap: () => setState(() => _index = 0),
+                ),
+                _NavButton(
+                  icon: Icons.leaderboard_outlined,
+                  activeIcon: Icons.leaderboard_rounded,
+                  label: 'Žebříček',
+                  index: 3,
+                  selected: _index == 3,
+                  onTap: () => setState(() => _index = 3),
+                ),
                 const SizedBox(width: 56), // space for FAB
-                _NavButton(icon: Icons.shopping_bag, label: 'Obchod', index: 4, selected: _index == 4, onTap: () => setState(() => _index = 4)),
-                _NavButton(icon: Icons.person, label: 'Profil', index: 1, selected: _index == 1, onTap: () => setState(() => _index = 1)),
+                _NavButton(
+                  icon: Icons.shopping_bag_outlined,
+                  activeIcon: Icons.shopping_bag_rounded,
+                  label: 'Obchod',
+                  index: 4,
+                  selected: _index == 4,
+                  onTap: () => setState(() => _index = 4),
+                ),
+                _NavButton(
+                  icon: Icons.person_outline_rounded,
+                  activeIcon: Icons.person_rounded,
+                  label: 'Profil',
+                  index: 1,
+                  selected: _index == 1,
+                  onTap: () => setState(() => _index = 1),
+                ),
               ],
             ),
           ),
@@ -289,15 +336,26 @@ class _MainShellState extends State<MainShell> {
 
 class _NavButton extends StatelessWidget {
   final IconData icon;
+  final IconData activeIcon;
   final String label;
   final int index;
   final bool selected;
   final VoidCallback onTap;
 
-  const _NavButton({required this.icon, required this.label, required this.index, required this.selected, required this.onTap});
+  const _NavButton({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.index,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final activeColor = const Color(0xFFBFFF00);
+    final inactiveColor = Colors.white30;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -305,9 +363,28 @@ class _NavButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: selected ? Colors.lightBlue : Colors.black54),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: selected ? activeColor.withOpacity(0.12) : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(
+              selected ? activeIcon : icon,
+              color: selected ? activeColor : inactiveColor,
+              size: 24,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(color: selected ? Colors.lightBlue : Colors.black54, fontSize: 12)),
+          Text(
+            label,
+            style: TextStyle(
+              color: selected ? activeColor : inactiveColor,
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
         ],
       ),
     );

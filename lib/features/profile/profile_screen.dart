@@ -128,32 +128,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _changeAvatar() async {
     showModalBottomSheet(
       context: context,
+      backgroundColor: const Color(0xFF1E272C),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(20.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
                   'Změnit profilový obrázek',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(Icons.photo_library, color: Colors.lightBlue),
-                  title: const Text('Vybrat z galerie'),
+                  leading: const Icon(Icons.photo_library, color: Color(0xFFBFFF00)),
+                  title: const Text('Vybrat z galerie', style: TextStyle(color: Colors.white70)),
                   onTap: () {
                     Navigator.pop(context);
                     _pickCustomAvatar();
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.face, color: Colors.lightBlue),
-                  title: const Text('Vybrat přednastaveného avatara'),
+                  leading: const Icon(Icons.face, color: Color(0xFFBFFF00)),
+                  title: const Text('Vybrat přednastaveného avatara', style: TextStyle(color: Colors.white70)),
                   onTap: () {
                     Navigator.pop(context);
                     _showPresetsDialog();
@@ -200,7 +201,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Přednastavení avataři'),
+          backgroundColor: const Color(0xFF37474F),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('Přednastavení avataři', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           content: SizedBox(
             width: double.maxFinite,
             child: GridView.builder(
@@ -235,7 +238,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 4),
                       Text(
                         preset['name']!,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white75),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -521,8 +524,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildStepsGoalCalendar() {
     final todayStr = DateTime.now().toIso8601String().substring(0, 10);
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 0,
+      color: const Color(0xFF1E272C),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: Colors.white12, width: 1.5),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -533,11 +540,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 const Text(
                   '📅 Kalendář plnění kroků',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 Text(
                   'Série: 🔥 $_stepsStreak dnů',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFBFFF00)),
                 ),
               ],
             ),
@@ -557,11 +564,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 final isAchieved = _stepsGoalHistory.contains(dateStr);
                 final isToday = dateStr == todayStr;
 
-                Color color = Colors.grey.shade200;
+                Color color = Colors.white10;
                 if (isAchieved) {
-                  color = Colors.lime.shade600;
+                  color = const Color(0xFF1B5E20); // Pine Green
                 } else if (isToday) {
-                  color = Colors.lightBlue.shade100;
+                  color = const Color(0xFFBFFF00).withOpacity(0.25);
                 }
 
                 return GestureDetector(
@@ -693,7 +700,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(
                       color: color,
                       borderRadius: BorderRadius.circular(4),
-                      border: isToday ? Border.all(color: Colors.lightBlue, width: 1.5) : null,
+                      border: isToday ? Border.all(color: const Color(0xFFBFFF00), width: 1.5) : null,
                     ),
                   ),
                 );
@@ -703,13 +710,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                const Text('Méně  ', style: TextStyle(fontSize: 11, color: Colors.black54)),
-                Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(2))),
+                const Text('Méně  ', style: TextStyle(fontSize: 11, color: Colors.white38)),
+                Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(3))),
                 const SizedBox(width: 4),
-                Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.lightBlue.shade100, borderRadius: BorderRadius.circular(2))),
+                Container(width: 12, height: 12, decoration: BoxDecoration(color: const Color(0xFFBFFF00).withOpacity(0.25), borderRadius: BorderRadius.circular(3))),
                 const SizedBox(width: 4),
-                Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.lime.shade600, borderRadius: BorderRadius.circular(2))),
-                const Text('  Více', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                Container(width: 12, height: 12, decoration: BoxDecoration(color: const Color(0xFF1B5E20), borderRadius: BorderRadius.circular(3))),
+                const Text('  Více', style: TextStyle(fontSize: 11, color: Colors.white38)),
               ],
             ),
           ],
@@ -788,18 +795,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
 
     return Scaffold(
+      backgroundColor: const Color(0xFF263238),
       appBar: AppBar(
-        title: const Text('Profil'),
-        backgroundColor: Colors.lightBlue,
+        title: const Text(
+          'Profil',
+          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: Colors.white),
+        ),
+        centerTitle: true,
+        backgroundColor: const Color(0xFF1E272C),
         foregroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_outlined, color: Colors.white70),
             tooltip: 'Upravit profil',
             onPressed: _showEditProfileDialog,
           ),
           IconButton(
-            icon: const Icon(Icons.emoji_events),
+            icon: const Icon(Icons.emoji_events_outlined, color: Colors.white70),
             tooltip: 'Úspěchy',
             onPressed: () {
               Navigator.of(context).push(
@@ -811,80 +825,115 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-      backgroundColor: Colors.white,
       body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
               children: [
-                const SizedBox(height: 20),
-                 GestureDetector(
+                const SizedBox(height: 10),
+                GestureDetector(
                   onTap: _changeAvatar,
                   child: Stack(
                     children: [
                       CircleAvatar(
                         radius: 70,
-                        backgroundColor: Colors.lightBlue.shade50,
-                        child: ClipOval(
-                          child: _selectedAvatar != null
-                              ? (_selectedAvatar!.startsWith('base64:')
-                                  ? Image.memory(
-                                      base64Decode(_selectedAvatar!.substring(7)),
-                                      fit: BoxFit.cover,
-                                      width: 130,
-                                      height: 130,
-                                    )
-                                  : Image.asset(
-                                      'assets/images/$_selectedAvatar.png',
-                                      fit: BoxFit.cover,
-                                      width: 130,
-                                      height: 130,
-                                    ))
-                              : const Icon(
-                                  Icons.person,
-                                  size: 100,
-                                  color: Colors.lightBlue,
-                                ),
+                        backgroundColor: const Color(0xFF1E272C),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFFBFFF00), width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFBFFF00).withOpacity(0.15),
+                                blurRadius: 16,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: _selectedAvatar != null
+                                ? (_selectedAvatar!.startsWith('base64:')
+                                    ? Image.memory(
+                                        base64Decode(_selectedAvatar!.substring(7)),
+                                        fit: BoxFit.cover,
+                                        width: 130,
+                                        height: 130,
+                                      )
+                                    : Image.asset(
+                                        'assets/images/$_selectedAvatar.png',
+                                        fit: BoxFit.cover,
+                                        width: 130,
+                                        height: 130,
+                                      ))
+                                : const Icon(
+                                    Icons.person,
+                                    size: 100,
+                                    color: Colors.grey,
+                                  ),
+                          ),
                         ),
                       ),
                       Positioned(
                         bottom: 0,
                         right: 4,
-                        child: CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Colors.lime,
-                          foregroundColor: Colors.black,
-                          child: const Icon(Icons.edit, size: 18),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFBFFF00),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF1B5E20)),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 Text(
                   _displayName,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   _streakLabel(streak),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.lightBlue.shade600,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  style: const TextStyle(
+                    color: Color(0xFFBFFF00),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
-                const SizedBox(height: 20),
-                Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 24),
+                
+                // Limetky / Streak Card
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E272C),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white12, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
                         Row(
@@ -893,16 +942,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Limetky',
-                                  style: TextStyle(fontSize: 14, color: Colors.black54),
+                                Text(
+                                  'LIMETKY 🍋',
+                                  style: TextStyle(fontSize: 12, color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
                                 Text(
                                   '$limetkyBalance',
                                   style: const TextStyle(
-                                    fontSize: 24,
+                                    fontSize: 26,
                                     fontWeight: FontWeight.bold,
+                                    color: Colors.white,
                                   ),
                                 ),
                               ],
@@ -910,16 +960,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text(
-                                  'Denní série',
-                                  style: TextStyle(fontSize: 14, color: Colors.black54),
+                                Text(
+                                  'SÉRIE 🔥',
+                                  style: TextStyle(fontSize: 12, color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
                                 Text(
                                   '$streak dnů',
                                   style: const TextStyle(
-                                    fontSize: 24,
+                                    fontSize: 26,
                                     fontWeight: FontWeight.bold,
+                                    color: Colors.white,
                                   ),
                                 ),
                               ],
@@ -928,23 +979,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         if (isStreakFrozen) ...[
                           const SizedBox(height: 12),
-                          const Text('Streak je momentálně zmrazený', style: TextStyle(color: Colors.blue)),
+                          const Divider(height: 1, color: Colors.white10),
+                          const SizedBox(height: 12),
+                          const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.ac_unit_rounded, color: Colors.blueAccent, size: 18),
+                              SizedBox(width: 8),
+                              Text('Streak je momentálně zmrazený', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w600, fontSize: 13)),
+                            ],
+                          ),
                         ],
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-                _buildStepsGoalCalendar(),
                 const SizedBox(height: 24),
+                _buildStepsGoalCalendar(),
+                const SizedBox(height: 28),
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Úspěchy',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 GridView.count(
                   crossAxisCount: 2,
                   shrinkWrap: true,
@@ -962,46 +1022,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       .toList(),
                 ),
                 const SizedBox(height: 20),
+                
+                // Show all achievements button
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const AchievementsScreen(),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFBFFF00).withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
-                      );
-                    },
-                    style: ButtonStyle(
-                      backgroundColor: WidgetStatePropertyAll(Colors.lightBlue),
-                      foregroundColor: WidgetStatePropertyAll(Colors.white),
-                      shape: WidgetStatePropertyAll(
-                        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ],
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFFD4FF00),
+                          Color(0xFFBFFF00),
+                        ],
                       ),
-                      padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(vertical: 16)),
                     ),
-                    child: const Text('Zobrazit všechny úspěchy'),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const AchievementsScreen(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text(
+                        'Zobrazit všechny úspěchy',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                const SizedBox(height: 12),
+                const SizedBox(height: 28),
+                
+                // Log out button
                 Padding(
                   padding: const EdgeInsets.only(bottom: 85.0),
                   child: SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
+                    child: OutlinedButton(
                       onPressed: _logout,
-                      style: ButtonStyle(
-                        backgroundColor: WidgetStatePropertyAll(Colors.red.shade600),
-                        foregroundColor: WidgetStatePropertyAll(Colors.white),
-                        shape: WidgetStatePropertyAll(
-                          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade800,
+                        side: BorderSide(color: Colors.red.shade100, width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(vertical: 18)),
+                        backgroundColor: Colors.red.shade50.withOpacity(0.5),
                       ),
                       child: const Text(
                         'Odhlásit se',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -1087,11 +1172,15 @@ class _AchievementCard extends StatelessWidget {
         }
       },
       child: Card(
-        elevation: 4,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isUnlocked ? const Color(0xFFBFFF00).withOpacity(0.4) : Colors.white12,
+            width: 1.5,
+          ),
         ),
-        color: isUnlocked ? Colors.lime.shade100 : Colors.grey.shade200,
+        color: isUnlocked ? const Color(0xFF1B5E20).withOpacity(0.3) : const Color(0xFF1E272C),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -1100,7 +1189,7 @@ class _AchievementCard extends StatelessWidget {
               Icon(
                 icon,
                 size: 40,
-                color: isUnlocked ? Colors.lime.shade700 : Colors.grey,
+                color: isUnlocked ? const Color(0xFFBFFF00) : Colors.white30,
               ),
               const SizedBox(height: 8),
               Text(
@@ -1108,7 +1197,7 @@ class _AchievementCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: isUnlocked ? Colors.black : Colors.grey,
+                  color: isUnlocked ? Colors.white : Colors.white30,
                 ),
                 textAlign: TextAlign.center,
               ),

@@ -448,79 +448,106 @@ class _GameScreenState extends State<GameScreen> {
     if (currentUser == null) return const Center(child: Text('Uživatel není přihlášen'));
     return Stack(
       children: [
+        // Background soft glowing gradients
+        Positioned(
+          top: 100,
+          right: -80,
+          child: Container(
+            width: 250,
+            height: 250,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFBFFF00).withOpacity(0.06),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 100,
+          left: -80,
+          child: Container(
+            width: 280,
+            height: 280,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFE8F5E9).withOpacity(0.4),
+            ),
+          ),
+        ),
         SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
+          physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                clipBehavior: Clip.antiAlias,
-                elevation: 2,
-                child: ExpansionTile(
-                  title: const Text('Denní cíle & Kroky', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  leading: const Icon(Icons.directions_run, color: Colors.lime),
-                  initiallyExpanded: true,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: _buildStepsCard(),
-                    ),
-                  ],
+              const Text(
+                'Denní aktivita 🏃',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.2,
                 ),
               ),
-              const SizedBox(height: 16),
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                clipBehavior: Clip.antiAlias,
-                elevation: 2,
-                child: ExpansionTile(
-                  title: const Text('Speciální výpravy & hry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  leading: const Icon(Icons.map, color: Colors.purple),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: _buildSpecialGamesSectionBody(),
-                    ),
-                  ],
+              const SizedBox(height: 8),
+              _buildStepsCard(),
+              const SizedBox(height: 24),
+
+              const Text(
+                'Speciální výpravy & Hry 🗺️',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.2,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+              _buildSpecialGamesSectionBody(),
+              const SizedBox(height: 24),
+
+              // 1v1 Challenges Card
               Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                clipBehavior: Clip.antiAlias,
-                elevation: 2,
-                child: ExpansionTile(
-                  title: const Text('1v1 Výzvy na míru', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  leading: const Icon(Icons.bolt, color: Colors.orange),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                color: Colors.white,
+                surfaceTintColor: Colors.white,
+                elevation: 4,
+                shadowColor: Colors.black.withOpacity(0.03),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Přehled výzev', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                              ElevatedButton.icon(
-                                onPressed: () => _showCreateChallengeDialog(context),
-                                icon: const Icon(Icons.add, size: 18),
-                                label: const Text('Nová výzva'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.lime,
-                                  foregroundColor: Colors.black,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
+                            children: const [
+                              const Icon(Icons.bolt_rounded, color: Colors.orange, size: 24),
+                              const SizedBox(width: 8),
+                              const Text(
+                                '1v1 Výzvy na míru',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          _buildChallengesList(currentUser.uid),
+                          ElevatedButton.icon(
+                            onPressed: () => _showCreateChallengeDialog(context),
+                            icon: const Icon(Icons.add_rounded, size: 18, color: Color(0xFF1B5E20)),
+                            label: const Text('Nová', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFBFFF00),
+                              shadowColor: const Color(0xFFBFFF00).withOpacity(0.3),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      _buildChallengesList(currentUser.uid),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -983,32 +1010,60 @@ class _GameScreenState extends State<GameScreen> {
   Widget build(BuildContext context) {
     final currentUser = _auth.currentUser;
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('HRY & VÝZVY'),
+    return Theme(
+      data: Theme.of(context).copyWith(
+        scaffoldBackgroundColor: const Color(0xFF263238),
+        cardTheme: CardTheme(
+          color: const Color(0xFF1E272C),
           elevation: 0,
-          bottom: const TabBar(
-            indicatorColor: Colors.lime,
-            labelColor: Colors.black87,
-            unselectedLabelColor: Colors.black54,
-            tabs: [
-              Tab(icon: Icon(Icons.star), text: 'Výzvy'),
-              Tab(icon: Icon(Icons.casino), text: 'Tvorba her'),
-            ],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Colors.white12, width: 1.5),
           ),
         ),
-        backgroundColor: Colors.white,
-        body: SafeArea(
-          child: currentUser == null
-              ? const Center(child: Text('Uživatel není přihlášen'))
-              : TabBarView(
-                  children: [
-                    _buildChallengesTab(currentUser),
-                    _buildGameCreatorTab(currentUser),
-                  ],
-                ),
+        textTheme: Theme.of(context).textTheme.apply(
+          bodyColor: Colors.white,
+          displayColor: Colors.white,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1E272C),
+          foregroundColor: Colors.white,
+        ),
+      ),
+      child: DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          backgroundColor: const Color(0xFF263238),
+          appBar: AppBar(
+            title: const Text(
+              'Hry & Výzvy',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: -0.5, color: Colors.white),
+            ),
+            centerTitle: true,
+            backgroundColor: const Color(0xFF1E272C),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            bottom: TabBar(
+              indicatorColor: const Color(0xFFBFFF00),
+              labelColor: const Color(0xFFBFFF00),
+              unselectedLabelColor: Colors.white38,
+              indicatorSize: TabBarIndicatorSize.tab,
+              tabs: const [
+                Tab(icon: Icon(Icons.star_rounded), text: 'Výzvy'),
+                Tab(icon: Icon(Icons.casino_rounded), text: 'Tvorba her'),
+              ],
+            ),
+          ),
+          body: SafeArea(
+            child: currentUser == null
+                ? const Center(child: Text('Uživatel není přihlášen'))
+                : TabBarView(
+                    children: [
+                      _buildChallengesTab(currentUser),
+                      _buildGameCreatorTab(currentUser),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
@@ -1033,15 +1088,14 @@ class _GameScreenState extends State<GameScreen> {
           valueListenable: StepTrackerService().goalNotifier,
           builder: (context, goal, _) {
             final progress = goal > 0 ? (steps / goal).clamp(0.0, 1.0) : 0.0;
-            return Card(
-              shape: RoundedRectangleBorder(
+            return Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E272C),
                 borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white12, width: 1.5),
               ),
-              color: Colors.white,
-              elevation: 4,
-              shadowColor: Colors.lightBlue.shade100,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1051,20 +1105,24 @@ class _GameScreenState extends State<GameScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Kroků dnes',
-                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                    color: Colors.lightBlue.shade700,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                            const Text(
+                              'KROKŮ DNES',
+                              style: TextStyle(
+                                color: Color(0xFFBFFF00),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                letterSpacing: 0.8,
+                              ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               steps.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} "),
-                              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.lightBlue,
-                                  ),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 32,
+                                color: Colors.white,
+                                letterSpacing: -0.5,
+                              ),
                             ),
                           ],
                         ),
@@ -1076,9 +1134,18 @@ class _GameScreenState extends State<GameScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      'Cíl: ${goal.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} ")} kroků',
-                      style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Cíl: ${goal.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} ")} kroků',
+                          style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                        Text(
+                          '${(progress * 100).toInt()}% splněno',
+                          style: const TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 10),
                     ClipRRect(
@@ -1086,8 +1153,8 @@ class _GameScreenState extends State<GameScreen> {
                       child: LinearProgressIndicator(
                         value: progress,
                         minHeight: 12,
-                        backgroundColor: Colors.lightBlue.shade100,
-                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.lime),
+                        backgroundColor: Colors.white10,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFBFFF00)),
                       ),
                     ),
                   ],
@@ -1139,7 +1206,7 @@ class _GameScreenState extends State<GameScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              Text('Cíl: $targetKm km  |  Trvání: $durationDays dní', style: const TextStyle(color: Colors.black54)),
+              Text('Cíl: $targetKm km  |  Trvání: $durationDays dní', style: const TextStyle(color: Colors.white70)),
               if (bet.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Container(
@@ -1659,17 +1726,17 @@ class _GameScreenState extends State<GameScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 210,
+        width: 220,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: iconColor.withOpacity(0.2), width: 1.5),
+          color: const Color(0xFF1E272C),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white12, width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -1679,17 +1746,25 @@ class _GameScreenState extends State<GameScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(icon, color: iconColor, size: 28),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 24),
+                ),
                 if (is18Plus)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.red.shade700,
+                      color: Colors.red.shade50,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade100),
                     ),
-                    child: const Text(
+                    child: Text(
                       '18+',
-                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Colors.red.shade800, fontSize: 10, fontWeight: FontWeight.bold),
                     ),
                   ),
               ],
@@ -1697,12 +1772,12 @@ class _GameScreenState extends State<GameScreen> {
             const Spacer(),
             Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
             Text(
               description,
-              style: const TextStyle(fontSize: 10, color: Colors.black54),
+              style: const TextStyle(fontSize: 11, color: Colors.white70, height: 1.3),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

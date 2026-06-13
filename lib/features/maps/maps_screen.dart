@@ -2820,10 +2820,20 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 onTap: () => setState(() => _taskCardExpanded = !_taskCardExpanded),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
-                  height: _taskCardExpanded ? 160 : 72,
-                  child: Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  height: _taskCardExpanded ? 170 : 72,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.06),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(12.0),
                       child: Column(
@@ -2831,21 +2841,28 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.directions_walk, color: Colors.lightBlue, size: 26),
+                              const Icon(Icons.directions_walk_rounded, color: Color(0xFF5C9E00), size: 26),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   'Úkol: Ujdi 1 km dnes',
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF263238),
+                                      ),
                                 ),
                               ),
                               CircleAvatar(
                                 radius: 18,
-                                backgroundColor: _todayDistance >= _dailyTargetKm * 1000 ? Colors.green : Colors.lightBlue.shade50,
-                                child: Icon(_todayDistance >= _dailyTargetKm * 1000 ? Icons.check : Icons.timer, color: _todayDistance >= _dailyTargetKm * 1000 ? Colors.white : Colors.lightBlue),
+                                backgroundColor: _todayDistance >= _dailyTargetKm * 1000 ? const Color(0xFF5C9E00) : const Color(0xFFE8F5E9),
+                                child: Icon(
+                                  _todayDistance >= _dailyTargetKm * 1000 ? Icons.check : Icons.timer_outlined,
+                                  color: _todayDistance >= _dailyTargetKm * 1000 ? Colors.white : const Color(0xFF5C9E00),
+                                  size: 20,
+                                ),
                               ),
                               const SizedBox(width: 8),
-                              Icon(_taskCardExpanded ? Icons.expand_less : Icons.expand_more),
+                              Icon(_taskCardExpanded ? Icons.expand_less : Icons.expand_more, color: Colors.grey.shade600),
                             ],
                           ),
                           if (_taskCardExpanded) ...[
@@ -2854,22 +2871,41 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                               borderRadius: BorderRadius.circular(12),
                               child: LinearProgressIndicator(
                                 value: min(_todayDistance / 1000.0 / _dailyTargetKm, 1.0),
-                                minHeight: 10,
-                                backgroundColor: Colors.lightBlue.shade50,
-                                valueColor: const AlwaysStoppedAnimation<Color>(Colors.lightBlue),
+                                minHeight: 8,
+                                backgroundColor: Colors.grey.shade100,
+                                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFBFFF00)),
                               ),
                             ),
                             const SizedBox(height: 12),
                             SizedBox(
                               width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _showNavigationMenu,
-                                icon: const Icon(Icons.menu),
-                                label: const Text('Výběr trasy'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFBFFF00),
-                                  foregroundColor: Colors.black,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFBFFF00).withOpacity(0.3),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFFD4FF00),
+                                      Color(0xFFBFFF00),
+                                    ],
+                                  ),
+                                ),
+                                child: ElevatedButton.icon(
+                                  onPressed: _showNavigationMenu,
+                                  icon: const Icon(Icons.menu_rounded, color: Color(0xFF1B5E20)),
+                                  label: const Text('Výběr trasy', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    shadowColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                  ),
                                 ),
                               ),
                             ),
@@ -2888,20 +2924,20 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               right: 80,
               child: Container(
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.lightBlue.shade800.withOpacity(0.95), Colors.lightBlue.shade900.withOpacity(0.95)],
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2E3D30), Color(0xFF1B261C)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
                     ),
                   ],
-                  border: Border.all(color: Colors.white24, width: 1),
+                  border: Border.all(color: Colors.white.withOpacity(0.12), width: 1.5),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -2910,7 +2946,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withOpacity(0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -2930,9 +2966,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                                   ? (_routeSuggestions[_selectedRouteSuggestionIndex]['title'] as String).toUpperCase()
                                   : 'AKTIVNÍ NAVIGACE',
                               style: const TextStyle(
-                                color: Colors.white70,
+                                color: Colors.white60,
                                 fontSize: 10,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.black,
                                 letterSpacing: 1.2,
                               ),
                             ),

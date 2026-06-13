@@ -18,7 +18,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   
-  // Keep track of when friends were last nudged
   Map<String, DateTime> _nudgeTimes = {};
   Timer? _nudgeRefreshTimer;
 
@@ -26,7 +25,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   void initState() {
     super.initState();
     _loadNudgeTimes();
-    // Refresh the UI periodically to count down seconds/minutes
     _nudgeRefreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {});
@@ -53,7 +51,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           final timestamp = prefs.getInt(key);
           if (timestamp != null) {
             final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-            // Only keep it if it's within the last hour (3600 seconds)
             if (now.difference(dateTime).inHours < 1) {
               loadedTimes[friendUid] = dateTime;
             } else {
@@ -109,17 +106,26 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           'Dneska spíš? Koukej hejbnout zadkem! 😜',
         ];
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('💬 Vtipné popíchnutí', style: TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: const Color(0xFF37474F),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text(
+            '💬 Vtipné popíchnutí',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: options.map((opt) {
               return Card(
-                elevation: 1,
-                margin: const EdgeInsets.symmetric(vertical: 4),
+                color: const Color(0xFF1E272C),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Colors.white10),
+                ),
+                margin: const EdgeInsets.symmetric(vertical: 6),
                 child: ListTile(
-                  title: Text(opt, style: const TextStyle(fontSize: 14)),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                  title: Text(opt, style: const TextStyle(fontSize: 14, color: Colors.white)),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFFBFFF00)),
                   onTap: () => Navigator.pop(context, opt),
                 ),
               );
@@ -128,7 +134,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, null),
-              child: const Text('Zrušit', style: TextStyle(color: Colors.grey)),
+              child: const Text('Zrušit', style: TextStyle(color: Colors.white38)),
             ),
           ],
         );
@@ -140,13 +146,11 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     final now = DateTime.now();
 
     try {
-      // 1. Fetch current user's username
       final myDoc = await _firestore.collection('users').doc(currentUser.uid).get();
       final myUsername = myDoc.data()?['username'] as String? ?? 'Uživatel';
 
-      // 2. Write nudge to the activities collection targeting the friend's feed
       await _firestore.collection('activities').add({
-        'uid': friendUid, // target friend's uid so it shows in their feed
+        'uid': friendUid,
         'username': friendName,
         'type': 'nudge',
         'timestamp': FieldValue.serverTimestamp(),
@@ -157,7 +161,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
         },
       });
 
-      // Save lock time in SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('last_nudge_$friendUid', now.millisecondsSinceEpoch);
 
@@ -171,29 +174,32 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Popíchl jsi uživatele $friendName: "$selectedMsg"'),
-          backgroundColor: Colors.lime.shade800,
+          backgroundColor: const Color(0xFF1B5E20),
         ),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Nepodařilo se popíchnout kamaráda: $e')),
+          SnackBar(
+            content: Text('Nepodařilo se popíchnout kamaráda: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
   }
 
-
   Future<void> _removeRelationship(String targetUid, String targetName) async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
 
-    // Show confirmation dialog first
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Odebrat z přátel?'),
-        content: Text('Opravdu chcete odebrat uživatele $targetName ze svých přátel?'),
+        backgroundColor: const Color(0xFF37474F),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Odebrat z přátel?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text('Opravdu chcete odebrat uživatele $targetName ze svých přátel?', style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -201,7 +207,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
             child: const Text('Odebrat'),
           ),
         ],
@@ -231,12 +237,18 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Uživatel $targetName byl odebrán z přátel.')),
+        SnackBar(
+          content: Text('Uživatel $targetName byl odebrán z přátel.'),
+          backgroundColor: const Color(0xFF263238),
+        ),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Chyba při rušení přátelství: $e')),
+          SnackBar(
+            content: Text('Chyba při rušení přátelství: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
@@ -257,19 +269,19 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF263238),
       appBar: AppBar(
         title: const Text(
           'MOJI PŘÁTELÉ',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: Colors.white),
         ),
         centerTitle: true,
-        backgroundColor: Colors.lightBlue,
-        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFF1E272C),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_add),
+            icon: const Icon(Icons.person_add, color: Color(0xFFBFFF00)),
             tooltip: 'Přidat přátele',
             onPressed: () {
               Navigator.of(context).push(
@@ -284,7 +296,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           stream: _getFriendsListStream(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: CircularProgressIndicator(color: Color(0xFFBFFF00)));
             }
 
             final friends = snapshot.data ?? [];
@@ -298,19 +310,19 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                   children: [
                     CircleAvatar(
                       radius: 50,
-                      backgroundColor: Colors.lightBlue.shade50,
-                      child: Icon(Icons.people_outline, size: 50, color: Colors.lightBlue.shade300),
+                      backgroundColor: const Color(0xFF1E272C),
+                      child: Icon(Icons.people_outline, size: 50, color: const Color(0xFFBFFF00).withOpacity(0.8)),
                     ),
                     const SizedBox(height: 24),
                     const Text(
                       'Zatím tu nikdo není',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 10),
-                    Text(
+                    const Text(
                       'Přidej si své kamarády pomocí jejich kódu nebo QR kódu, abys mohl sledovat jejich pokroky a popichovat je k pohybu!',
-                      style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.4),
+                      style: TextStyle(fontSize: 14, color: Colors.white70, height: 1.4),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 32),
@@ -323,10 +335,11 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                       icon: const Icon(Icons.person_add),
                       label: const Text('Přidat prvního přítele', style: TextStyle(fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.lime,
+                        backgroundColor: const Color(0xFFBFFF00),
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 2,
                       ),
                     ),
                   ],
@@ -337,7 +350,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
             return ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               itemCount: friends.length,
-              separatorBuilder: (context, index) => const Divider(height: 1, indent: 70, color: Colors.black12),
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final friend = friends[index];
                 final uid = friend['uid'] as String? ?? '';
@@ -346,69 +359,79 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                 final isLocked = _isNudgeLocked(uid);
                 final remainingTime = _getRemainingNudgeTimeText(uid);
 
-                return InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => FriendProfileScreen(friendUid: uid),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: Colors.lightBlue.shade100,
-                          foregroundColor: Colors.black87,
-                          child: Text(username.substring(0, 1).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                return Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E272C),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FriendProfileScreen(friendUid: uid),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                username,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
-                              ),
-                              if (code.isNotEmpty)
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: const Color(0xFF263238),
+                            foregroundColor: const Color(0xFFBFFF00),
+                            border: Border.all(color: Colors.white24),
+                            child: Text(
+                              username.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 Text(
-                                  code,
-                                  style: const TextStyle(fontSize: 13, color: Colors.black45),
+                                  username,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                                 ),
-                              if (isLocked && remainingTime.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2.0),
-                                  child: Text(
-                                    'Popíchnuto (znovu za $remainingTime)',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.orange.shade800,
-                                      fontWeight: FontWeight.w500,
+                                const SizedBox(height: 2),
+                                if (code.isNotEmpty)
+                                  Text(
+                                    code,
+                                    style: const TextStyle(fontSize: 13, color: Colors.white54),
+                                  ),
+                                if (isLocked && remainingTime.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4.0),
+                                    child: Text(
+                                      'Popíchnuto (znovu za $remainingTime)',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFFBFFF00),
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                        // Action: Nudge (Popíchnout)
-                        IconButton(
-                          icon: Icon(
-                            isLocked ? Icons.timer_outlined : Icons.notifications_active,
-                            color: isLocked ? Colors.grey : Colors.orangeAccent,
+                          IconButton(
+                            icon: Icon(
+                              isLocked ? Icons.timer_outlined : Icons.notifications_active,
+                              color: isLocked ? Colors.white24 : const Color(0xFFBFFF00),
+                            ),
+                            tooltip: isLocked ? 'Popíchnutí uzamčeno' : 'Popíchnout k pohybu',
+                            onPressed: isLocked ? null : () => _nudgeFriend(uid, username),
                           ),
-                          tooltip: isLocked ? 'Popíchnutí uzamčeno' : 'Popíchnout k pohybu',
-                          onPressed: isLocked ? null : () => _nudgeFriend(uid, username),
-                        ),
-                        // Action: Remove (Odebrat)
-                        IconButton(
-                          icon: const Icon(Icons.person_remove, color: Colors.redAccent),
-                          tooltip: 'Odebrat z přátel',
-                          onPressed: () => _removeRelationship(uid, username),
-                        ),
-                      ],
+                          IconButton(
+                            icon: const Icon(Icons.person_remove, color: Colors.redAccent),
+                            tooltip: 'Odebrat z přátel',
+                            onPressed: () => _removeRelationship(uid, username),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );

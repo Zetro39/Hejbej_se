@@ -24,22 +24,22 @@ class FriendProfileScreen extends StatelessWidget {
     final List<int> loyaltyMilestones = [10, 50, 250];
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF263238),
       appBar: AppBar(
         title: const Text(
           'PROFIL KAMARÁDA',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1, fontSize: 16),
+          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: Colors.white),
         ),
         centerTitle: true,
-        backgroundColor: Colors.lightBlue,
-        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFF1E272C),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: FutureBuilder<DocumentSnapshot>(
         future: firestore.collection('users').doc(friendUid).get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator(color: Color(0xFFBFFF00)));
           }
 
           if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
@@ -71,20 +71,6 @@ class FriendProfileScreen extends StatelessWidget {
           }
 
           // Compute achievements
-          final unlockedDistances = <double>[];
-          for (final milestone in distanceMilestones) {
-            if (totalDistance >= milestone) {
-              unlockedDistances.add(milestone);
-            }
-          }
-
-          final unlockedLoyalties = <int>[];
-          for (final milestone in loyaltyMilestones) {
-            if (streak >= milestone) {
-              unlockedLoyalties.add(milestone);
-            }
-          }
-
           final achievements = <Map<String, dynamic>>[];
           for (int i = 0; i < distanceMilestones.length; i++) {
             achievements.add({
@@ -142,22 +128,30 @@ class FriendProfileScreen extends StatelessWidget {
 
           return SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: 12),
-                // Avatar Card
+                
+                // Avatar container with Neon Lime glowing border
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.lightBlue.shade100, width: 3),
+                      border: Border.all(color: const Color(0xFFBFFF00), width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFBFFF00).withOpacity(0.15),
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                        ),
+                      ],
                     ),
                     child: CircleAvatar(
                       radius: 64,
-                      backgroundColor: Colors.lightBlue.shade50,
+                      backgroundColor: const Color(0xFF1E272C),
                       child: ClipOval(
                         child: avatar != null
                             ? (avatar.startsWith('base64:')
@@ -172,32 +166,40 @@ class FriendProfileScreen extends StatelessWidget {
                                     fit: BoxFit.cover,
                                     width: 128,
                                     height: 128,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Icon(
+                                        Icons.person,
+                                        size: 80,
+                                        color: Colors.white54,
+                                      );
+                                    },
                                   ))
                             : const Icon(
                                 Icons.person,
                                 size: 80,
-                                color: Colors.lightBlue,
+                                color: Colors.white54,
                               ),
                       ),
                     ),
                   ),
                 ),
+                
                 const SizedBox(height: 20),
                 Text(
                   fullName,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
                 if (code.isNotEmpty)
                   Text(
                     code,
-                    style: TextStyle(fontSize: 15, color: Colors.lightBlue.shade700, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 15, color: Color(0xFFBFFF00), fontWeight: FontWeight.bold),
                   ),
                 const SizedBox(height: 6),
                 Text(
                   ageText,
-                  style: const TextStyle(fontSize: 14, color: Colors.black54),
+                  style: const TextStyle(fontSize: 14, color: Colors.white70),
                 ),
                 const SizedBox(height: 28),
 
@@ -206,21 +208,21 @@ class FriendProfileScreen extends StatelessWidget {
                   children: [
                     _buildStatCard(
                       icon: Icons.offline_bolt_outlined,
-                      iconColor: Colors.amber,
+                      iconColor: const Color(0xFFBFFF00),
                       value: '$limetky',
                       label: 'Limetky',
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     _buildStatCard(
                       icon: Icons.calendar_today_outlined,
-                      iconColor: Colors.lightBlue,
-                      value: '$streak dnů',
+                      iconColor: Colors.white,
+                      value: '$streak dní',
                       label: 'Série',
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     _buildStatCard(
                       icon: Icons.directions_walk,
-                      iconColor: Colors.lime.shade700,
+                      iconColor: const Color(0xFF1B5E20),
                       value: '${totalDistance.toStringAsFixed(1)} km',
                       label: 'Celkem',
                     ),
@@ -232,7 +234,7 @@ class FriendProfileScreen extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Úspěchy kamaráda',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -251,15 +253,16 @@ class FriendProfileScreen extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final ach = achievements[index];
                     final isUnlocked = ach['unlocked'] as bool;
-                    return Card(
-                      elevation: 2,
-                      shadowColor: Colors.black12,
-                      color: isUnlocked ? Colors.lime.shade50.withOpacity(0.4) : Colors.grey.shade100,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(
-                          color: isUnlocked ? Colors.lime.withOpacity(0.5) : Colors.grey.shade200,
-                          width: 1,
+                    
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: isUnlocked 
+                            ? const Color(0xFF1B5E20).withOpacity(0.3)
+                            : const Color(0xFF1E272C),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: isUnlocked ? const Color(0xFFBFFF00).withOpacity(0.5) : Colors.white12,
+                          width: 1.5,
                         ),
                       ),
                       child: Padding(
@@ -270,7 +273,7 @@ class FriendProfileScreen extends StatelessWidget {
                             Icon(
                               ach['icon'] as IconData,
                               size: 32,
-                              color: isUnlocked ? Colors.lime.shade800 : Colors.grey.shade400,
+                              color: isUnlocked ? const Color(0xFFBFFF00) : Colors.white30,
                             ),
                             const SizedBox(height: 8),
                             Text(
@@ -278,7 +281,7 @@ class FriendProfileScreen extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
-                                color: isUnlocked ? Colors.black87 : Colors.grey.shade500,
+                                color: isUnlocked ? Colors.white : Colors.white30,
                               ),
                               textAlign: TextAlign.center,
                             ),
@@ -287,7 +290,7 @@ class FriendProfileScreen extends StatelessWidget {
                               ach['subtitle'] as String,
                               style: TextStyle(
                                 fontSize: 10,
-                                color: isUnlocked ? Colors.black54 : Colors.grey.shade400,
+                                color: isUnlocked ? Colors.white70 : Colors.white38,
                               ),
                               textAlign: TextAlign.center,
                               maxLines: 2,
@@ -318,9 +321,9 @@ class FriendProfileScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade100),
+          color: const Color(0xFF1E272C),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white12),
         ),
         child: Column(
           children: [
@@ -328,13 +331,13 @@ class FriendProfileScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               value,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 2),
             Text(
               label,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              style: const TextStyle(fontSize: 12, color: Colors.white54),
               textAlign: TextAlign.center,
             ),
           ],

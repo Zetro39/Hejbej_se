@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
 import '../profile/profile_creation_screen.dart';
+import '../../widgets/app_logo.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -304,7 +305,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withOpacity(0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -319,19 +320,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         decoration: InputDecoration(
           labelText: labelText,
           labelStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-          prefixIcon: Icon(prefixIcon, color: Colors.lightBlue.shade300, size: 22),
+          prefixIcon: Icon(prefixIcon, color: const Color(0xFF5C9E00), size: 22),
           suffixIcon: suffixIcon,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.grey.shade100, width: 1.5),
+            borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.grey.shade100, width: 1.5),
+            borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.lightBlue, width: 2),
+            borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
@@ -352,265 +353,351 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: const Color(0xFFF9FBFC),
       appBar: AppBar(
         title: const Text(
-          'REGISTRACE ÚČTU',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1, fontSize: 18),
+          'Vytvořit účet',
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: -0.5),
         ),
         centerTitle: true,
-        backgroundColor: Colors.lightBlue,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        foregroundColor: const Color(0xFF263238),
         elevation: 0,
       ),
-      body: SafeArea(
-        child: GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.all(24.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 8),
-                  Text(
-                    'Vytvoř si účet',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: Colors.black87,
-                          fontWeight: FontWeight.bold,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Připoj se a začni sledovat své trasy, odemykat společníky a sbírat limetky.',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 32),
-                  
-                  _buildTextField(
-                    controller: _email,
-                    labelText: 'E-mail',
-                    prefixIcon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Vyplňte e-mail';
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v.trim())) {
-                        return 'Neplatný formát e-mailu';
-                      }
-                      return null;
-                    },
-                  ),
-                  
-                  _buildTextField(
-                    controller: _password,
-                    labelText: 'Heslo',
-                    prefixIcon: Icons.lock_outlined,
-                    obscureText: _obscurePassword,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.grey,
-                      ),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.length < 6) return 'Heslo musí mít alespoň 6 znaků';
-                      return null;
-                    },
-                  ),
-                  
-                  _buildTextField(
-                    controller: _confirm,
-                    labelText: 'Potvrdit heslo',
-                    prefixIcon: Icons.lock_reset_outlined,
-                    obscureText: _obscureConfirm,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirm ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.grey,
-                      ),
-                      onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                    ),
-                    validator: (v) {
-                      if (v != _password.text) return 'Hesla se neshodují';
-                      return null;
-                    },
-                  ),
-                  
-                  const SizedBox(height: 8),
-                  Text(
-                    'Způsob ověření účtu',
-                    style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ChoiceChip(
-                          label: const Center(child: Text('Přes E-mail')),
-                          selected: !_useSmsVerification,
-                          onSelected: (selected) {
-                            if (selected) {
-                              setState(() {
-                                _useSmsVerification = false;
-                              });
-                            }
-                          },
-                          selectedColor: Colors.lightBlue.shade100,
-                          backgroundColor: Colors.white,
-                          labelStyle: TextStyle(
-                            color: !_useSmsVerification ? Colors.lightBlue.shade800 : Colors.grey,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: !_useSmsVerification ? Colors.lightBlue : Colors.grey.shade300),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ChoiceChip(
-                          label: const Center(child: Text('Přes SMS (číslo)')),
-                          selected: _useSmsVerification,
-                          onSelected: (selected) {
-                            if (selected) {
-                              setState(() {
-                                _useSmsVerification = true;
-                              });
-                            }
-                          },
-                          selectedColor: Colors.lightBlue.shade100,
-                          backgroundColor: Colors.white,
-                          labelStyle: TextStyle(
-                            color: _useSmsVerification ? Colors.lightBlue.shade800 : Colors.grey,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: _useSmsVerification ? Colors.lightBlue : Colors.grey.shade300),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  if (_useSmsVerification) ...[
-                    _buildTextField(
-                      controller: _phone,
-                      labelText: 'Telefonní číslo (např. +420 777 123 456)',
-                      prefixIcon: Icons.phone_outlined,
-                      keyboardType: TextInputType.phone,
-                      validator: (v) {
-                        if (_useSmsVerification) {
-                          if (v == null || v.trim().isEmpty) return 'Vyplňte telefonní číslo';
-                          final clean = v.trim().replaceAll(' ', '');
-                          if (!RegExp(r'^\+[1-9]\d{1,14}$').hasMatch(clean)) {
-                            return 'Neplatný formát. Použijte např. +420 777 123 456';
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
-
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8.0),
-                    child: Divider(height: 24, thickness: 1),
-                  ),
-
-                  _buildTextField(
-                    controller: _firstName,
-                    labelText: 'Jméno',
-                    prefixIcon: Icons.badge_outlined,
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Vyplňte jméno' : null,
-                  ),
-                  
-                  _buildTextField(
-                    controller: _lastName,
-                    labelText: 'Příjmení',
-                    prefixIcon: Icons.badge_outlined,
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Vyplňte příjmení' : null,
-                  ),
-                  
-                  _buildTextField(
-                    controller: _username,
-                    labelText: 'Herní přezdívka',
-                    prefixIcon: Icons.sports_esports_outlined,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Vyplňte přezdívku';
-                      if (v.trim().length < 3) return 'Přezdívka musí mít alespoň 3 znaky';
-                      return null;
-                    },
-                  ),
-                  
-                  const SizedBox(height: 12),
-                  if (_error != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.red.shade100),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_outline, color: Colors.red),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _error!,
-                              style: const TextStyle(color: Colors.red, fontSize: 14),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  
-                  if (_isSubmitting)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: CircularProgressIndicator(color: Colors.lightBlue),
-                      ),
-                    )
-                  else
-                    SizedBox(
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: _submit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.lime,
-                          foregroundColor: Colors.black,
-                          elevation: 2,
-                          shadowColor: Colors.lime.withOpacity(0.5),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          'Registrovat se',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 40),
-                ],
+      body: Stack(
+        children: [
+          Positioned(
+            top: -100,
+            right: -80,
+            child: Container(
+              width: 280,
+              height: 280,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFE8F5E9).withOpacity(0.5),
               ),
             ),
           ),
-        ),
+          Positioned(
+            bottom: -80,
+            left: -80,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFBFFF00).withOpacity(0.08),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.all(24.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Center(child: AppLogo(size: 80)),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Hejbej se s námi!',
+                        style: TextStyle(
+                          color: Color(0xFF263238),
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Připoj se a začni sledovat své trasy, odemykat společníky a sbírat limetky.',
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              blurRadius: 16,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'Přihlašovací údaje',
+                              style: TextStyle(
+                                color: Color(0xFF263238),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildTextField(
+                              controller: _email,
+                              labelText: 'E-mail',
+                              prefixIcon: Icons.email_outlined,
+                              keyboardType: TextInputType.emailAddress,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) return 'Vyplňte e-mail';
+                                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v.trim())) {
+                                  return 'Neplatný formát e-mailu';
+                                }
+                                return null;
+                              },
+                            ),
+                            _buildTextField(
+                              controller: _password,
+                              labelText: 'Heslo',
+                              prefixIcon: Icons.lock_outlined,
+                              obscureText: _obscurePassword,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                  color: Colors.grey.shade600,
+                                  size: 20,
+                                ),
+                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.length < 6) return 'Heslo musí mít alespoň 6 znaků';
+                                return null;
+                              },
+                            ),
+                            _buildTextField(
+                              controller: _confirm,
+                              labelText: 'Potvrdit heslo',
+                              prefixIcon: Icons.lock_reset_outlined,
+                              obscureText: _obscureConfirm,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                  color: Colors.grey.shade600,
+                                  size: 20,
+                                ),
+                                onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                              ),
+                              validator: (v) {
+                                if (v != _password.text) return 'Hesla se neshodují';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Způsob ověření účtu',
+                              style: TextStyle(
+                                color: Color(0xFF263238),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ChoiceChip(
+                                    label: const Center(child: Text('Přes E-mail')),
+                                    selected: !_useSmsVerification,
+                                    onSelected: (selected) {
+                                      if (selected) {
+                                        setState(() {
+                                          _useSmsVerification = false;
+                                        });
+                                      }
+                                    },
+                                    selectedColor: const Color(0xFFBFFF00).withOpacity(0.25),
+                                    backgroundColor: Colors.grey.shade50,
+                                    labelStyle: TextStyle(
+                                      color: !_useSmsVerification ? const Color(0xFF1B5E20) : Colors.grey.shade600,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(
+                                        color: !_useSmsVerification ? const Color(0xFFBFFF00) : Colors.grey.shade200,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ChoiceChip(
+                                    label: const Center(child: Text('Přes SMS (číslo)')),
+                                    selected: _useSmsVerification,
+                                    onSelected: (selected) {
+                                      if (selected) {
+                                        setState(() {
+                                          _useSmsVerification = true;
+                                        });
+                                      }
+                                    },
+                                    selectedColor: const Color(0xFFBFFF00).withOpacity(0.25),
+                                    backgroundColor: Colors.grey.shade50,
+                                    labelStyle: TextStyle(
+                                      color: _useSmsVerification ? const Color(0xFF1B5E20) : Colors.grey.shade600,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(
+                                        color: _useSmsVerification ? const Color(0xFFBFFF00) : Colors.grey.shade200,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            if (_useSmsVerification) ...[
+                              _buildTextField(
+                                controller: _phone,
+                                labelText: 'Telefonní číslo',
+                                prefixIcon: Icons.phone_outlined,
+                                keyboardType: TextInputType.phone,
+                                validator: (v) {
+                                  if (_useSmsVerification) {
+                                    if (v == null || v.trim().isEmpty) return 'Vyplňte telefonní číslo';
+                                    final clean = v.trim().replaceAll(' ', '');
+                                    if (!RegExp(r'^\+[1-9]\d{1,14}$').hasMatch(clean)) {
+                                      return 'Neplatný formát (např. +420777123456)';
+                                    }
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8.0),
+                              child: Divider(height: 24, thickness: 1, color: Color(0xFFF1F1F1)),
+                            ),
+                            const Text(
+                              'Osobní údaje',
+                              style: TextStyle(
+                                color: Color(0xFF263238),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildTextField(
+                              controller: _firstName,
+                              labelText: 'Jméno',
+                              prefixIcon: Icons.badge_outlined,
+                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Vyplňte jméno' : null,
+                            ),
+                            _buildTextField(
+                              controller: _lastName,
+                              labelText: 'Příjmení',
+                              prefixIcon: Icons.badge_outlined,
+                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Vyplňte příjmení' : null,
+                            ),
+                            _buildTextField(
+                              controller: _username,
+                              labelText: 'Herní přezdívka',
+                              prefixIcon: Icons.sports_esports_outlined,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) return 'Vyplňte přezdívku';
+                                if (v.trim().length < 3) return 'Přezdívka musí mít alespoň 3 znaky';
+                                return null;
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      if (_error != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.red.shade100),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.red),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _error!,
+                                  style: const TextStyle(color: Colors.red, fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                      if (_isSubmitting)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: CircularProgressIndicator(color: Color(0xFF5C9E00)),
+                          ),
+                        )
+                      else
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFBFFF00).withOpacity(0.3),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFFD4FF00),
+                                Color(0xFFBFFF00),
+                              ],
+                            ),
+                          ),
+                          child: ElevatedButton(
+                            onPressed: _submit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: const Text(
+                              'Registrovat se',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1B5E20),
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

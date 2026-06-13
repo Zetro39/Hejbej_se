@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../login_screen.dart';
+import '../../widgets/app_logo.dart';
 
 /// Screen for selecting user avatar
 class AvatarSelectionScreen extends StatefulWidget {
@@ -18,12 +18,14 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> {
     {
       'id': 'boy',
       'label': 'Chlapec',
-      'image': 'assets/images/boy.png',
+      'emoji': '👦',
+      'description': 'Mladý dobrodruh připravený pokořit stovky kilometrů.',
     },
     {
       'id': 'girl',
       'label': 'Dívka',
-      'image': 'assets/images/girl.png',
+      'emoji': '👧',
+      'description': 'Bystrá běžkyně odhodlaná projít celou přírodní říší.',
     },
   ];
 
@@ -46,6 +48,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> {
     setState(() {
       _selectedAvatar = avatarId;
     });
+    Feedback.forLongPress(context);
   }
 
   void _onContinue() {
@@ -61,128 +64,165 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Vyber svého hrdinu'),
-        backgroundColor: Colors.lightBlue,
+        title: const Text(
+          'Výběr hrdiny',
+          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5),
+        ),
+        backgroundColor: const Color(0xFF263238),
         foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
       ),
-      backgroundColor: Colors.white,
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            const Text(
-              'Vyber svého avatar',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.lightBlue,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Tento avatar bude reprezentovat tvůj pokrok v aplikaci',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.black54,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 40),
-            Row(
-              children: _avatars.map((avatar) {
-                final isSelected = _selectedAvatar == avatar['id'];
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => _saveSelectedAvatar(avatar['id']),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8.0),
-                      child: Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(
-                            color: isSelected ? Colors.lime : Colors.lightBlue.shade200,
-                            width: isSelected ? 3 : 1,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double height = constraints.maxHeight;
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: height - 32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Column(
+                      children: [
+                        const SizedBox(height: 10),
+                        const Center(child: AppLogo(size: 80)),
+                        const SizedBox(height: 18),
+                        const Text(
+                          'Kdo tě bude reprezentovat?',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.black,
+                            color: Color(0xFF263238),
+                            letterSpacing: -0.5,
                           ),
                         ),
-                        elevation: isSelected ? 8 : 2,
-                        color: isSelected ? Colors.lightBlue.shade50 : Colors.white,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            children: [
-                              CircleAvatar(
-                                radius: 60,
-                                backgroundColor: Colors.transparent,
-                                child: ClipOval(
-                                  child: Image.asset(
-                                    avatar['image'],
-                                    width: 120,
-                                    height: 120,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                avatar['label'],
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: isSelected ? Colors.lime.shade900 : Colors.black87,
-                                ),
-                              ),
-                            ],
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Vyber si svého avatar, který bude provázet tvůj pohyb a pokrok v aplikaci.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.black54,
                           ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 24),
+
+                    // Avatar Cards List
+                    Row(
+                      children: _avatars.map((avatar) {
+                        final isSelected = _selectedAvatar == avatar['id'];
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => _saveSelectedAvatar(avatar['id']),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeInOut,
+                              margin: const EdgeInsets.symmetric(horizontal: 8.0),
+                              transform: Matrix4.identity()..scale(isSelected ? 1.04 : 0.96),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF5C9E00) : Colors.transparent,
+                                  width: 2.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: isSelected 
+                                        ? const Color(0xFF5C9E00).withOpacity(0.15) 
+                                        : Colors.black.withOpacity(0.04),
+                                    blurRadius: isSelected ? 16 : 8,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      width: 84,
+                                      height: 84,
+                                      decoration: BoxDecoration(
+                                        color: isSelected 
+                                            ? const Color(0xFFBFFF00).withOpacity(0.2) 
+                                            : const Color(0xFFF1F5F9),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          avatar['emoji'] as String,
+                                          style: const TextStyle(fontSize: 40),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      avatar['label'] as String,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF263238),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      avatar['description'] as String,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        color: Colors.black54,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    ElevatedButton(
+                      onPressed: _selectedAvatar != null ? _onContinue : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFBFFF00),
+                        foregroundColor: Colors.black,
+                        disabledBackgroundColor: Colors.grey.shade300,
+                        disabledForegroundColor: Colors.grey.shade500,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: _selectedAvatar != null ? 3 : 0,
+                      ),
+                      child: const Text(
+                        'POKRAČOVAT',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 40),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _selectedAvatar != null ? _onContinue : null,
-                style: ButtonStyle(
-                  backgroundColor: WidgetStateProperty.resolveWith<Color>(
-                    (states) {
-                      if (states.contains(WidgetState.disabled)) {
-                        return Colors.grey.shade300;
-                      }
-                      return Colors.lime;
-                    },
-                  ),
-                  foregroundColor: WidgetStateProperty.resolveWith<Color>(
-                    (states) {
-                      if (states.contains(WidgetState.disabled)) {
-                        return Colors.grey.shade500;
-                      }
-                      return Colors.black;
-                    },
-                  ),
-                  shape: WidgetStateProperty.all(
-                    RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-                child: const Text(
-                  'POKRAČOVAT',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                    const SizedBox(height: 10),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-          ],
+            );
+          },
         ),
       ),
     );

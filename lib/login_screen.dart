@@ -14,6 +14,7 @@ import 'services/auth_service.dart';
 import 'features/profile/distance_preference_setup_screen.dart';
 import 'features/auth/registration_screen.dart';
 import 'features/profile/profile_creation_screen.dart';
+import 'widgets/app_logo.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   String? _errorText;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -141,8 +143,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String _generateNonce([int length = 32]) {
-    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
     final random = Random.secure();
+    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
     return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
   }
 
@@ -154,181 +156,334 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _signInWithApple() async {
     try {
-      // Only available on iOS/macOS; guard for other platforms
-      if (!Platform.isIOS && !Platform.isMacOS) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Apple Sign In není dostupné na tomto zařízení')));
-        return;
-      }
-
       final rawNonce = _generateNonce();
       final shaNonce = _sha256ofString(rawNonce);
 
       final credential = await SignInWithApple.getAppleIDCredential(
-        scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
         nonce: shaNonce,
       );
 
-      // Sign in to Firebase Auth with the generated rawNonce, auth code, and name fields!
       final cred = await AuthService().signInWithApple(
         idToken: credential.identityToken ?? '',
         rawNonce: rawNonce,
-        accessToken: credential.authorizationCode,
-        firstName: credential.givenName,
-        lastName: credential.familyName,
       );
       final user = cred.user;
-
-      final name = ([credential.givenName, credential.familyName].where((s) => s != null).join(' ').trim()).isEmpty
-          ? (user?.email ?? 'Apple User')
-          : '${credential.givenName ?? ''} ${credential.familyName ?? ''}'.trim();
+      final name = user?.displayName ?? user?.email ?? 'Uživatel';
 
       await AuthService().saveAuthCredentials('apple', {
         'identityToken': credential.identityToken,
-        'authorizationCode': credential.authorizationCode,
         'email': credential.email,
       });
-
       await _handleUserRouting(name);
     } catch (e) {
       debugPrint('Apple sign-in failed: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Přihlášení přes Apple selhalo: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Přihlášení přes Apple selhalo')));
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(height: 60),
-              Text(
-                'Hejbej se',
-                style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      color: Colors.lightBlue,
-                      fontWeight: FontWeight.bold,
-                    ),
+      backgroundColor: const Color(0xFFF9FBFC),
+      body: Stack(
+        children: [
+          // Background soft glowing gradients
+          Positioned(
+            top: -150,
+            left: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFE8F5E9).withOpacity(0.5),
               ),
-              const SizedBox(height: 60),
-              TextField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: 'E-mail',
-                  errorText: _errorText,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                keyboardType: TextInputType.emailAddress,
-                onChanged: (value) {
-                  if (_errorText != null) {
-                    setState(() {
-                      _errorText = null;
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _passwordController,
-                decoration: InputDecoration(
-                  labelText: 'Heslo',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 32),
-              // Email/password sign-in button
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _onLoginPressed,
-                  style: ButtonStyle(
-                    backgroundColor: WidgetStateProperty.all(Colors.lime),
-                    foregroundColor: WidgetStateProperty.all(Colors.black),
-                    shape: WidgetStateProperty.all(
-                      RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                  child: const Text(
-                    'Přihlásit se',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              // Social login buttons next to each other as rounded squares
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildSocialButton(
-                    child: const Text(
-                      'G',
-                      style: TextStyle(
-                        fontFamily: 'Roboto',
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.redAccent,
-                      ),
-                    ),
-                    onTap: _signInWithGoogle,
-                  ),
-                  const SizedBox(width: 20),
-                  _buildSocialButton(
-                    child: const Icon(
-                      Icons.apple,
-                      size: 28,
-                      color: Colors.black,
-                    ),
-                    onTap: _signInWithApple,
-                  ),
-                  const SizedBox(width: 20),
-                  _buildSocialButton(
-                    child: Icon(
-                      Icons.facebook,
-                      size: 28,
-                      color: Colors.blue.shade800,
-                    ),
-                    onTap: _showSocialLoginNotice,
-                  ),
-                ],
-              ),
-              const Spacer(),
-              // Flat borderless register button at the bottom
-              TextButton(
-                onPressed: _onRegisterPressed,
-                child: const Text(
-                  'Registrovat se',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.lightBlue,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
+            ),
           ),
-        ),
+          Positioned(
+            top: -50,
+            right: -100,
+            child: Container(
+              width: 350,
+              height: 350,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFBFFF00).withOpacity(0.12),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -100,
+            left: -50,
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFE1F5FE).withOpacity(0.4),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: MediaQuery.of(context).size.height - 
+                             MediaQuery.of(context).padding.top - 
+                             MediaQuery.of(context).padding.bottom - 64,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 40),
+                    // Elegant Premium Logo
+                    const Center(
+                      child: Column(
+                        children: [
+                          AppLogo(size: 110),
+                          SizedBox(height: 20),
+                          Text(
+                            'Hejbej se',
+                            style: TextStyle(
+                              color: Color(0xFF263238),
+                              fontSize: 36,
+                              fontWeight: FontWeight.black,
+                              letterSpacing: -1.0,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Pohyb, který tě baví',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 50),
+                    
+                    // Input Card with slight Glassmorphism feel
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: _emailController,
+                            decoration: InputDecoration(
+                              labelText: 'E-mail',
+                              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                              errorText: _errorText,
+                              prefixIcon: const Icon(Icons.email_outlined, size: 22),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            ),
+                            keyboardType: TextInputType.emailAddress,
+                            onChanged: (value) {
+                              if (_errorText != null) {
+                                setState(() {
+                                  _errorText = null;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            decoration: InputDecoration(
+                              labelText: 'Heslo',
+                              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                              prefixIcon: const Icon(Icons.lock_outline_rounded, size: 22),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                  color: Colors.grey.shade600,
+                                  size: 22,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+                          
+                          // Email/password sign-in button
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFBFFF00).withOpacity(0.3),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFFD4FF00),
+                                  Color(0xFFBFFF00),
+                                ],
+                              ),
+                            ),
+                            child: ElevatedButton(
+                              onPressed: _onLoginPressed,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                              child: const Text(
+                                'Přihlásit se',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1B5E20),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    
+                    // Social Sign-in section
+                    Center(
+                      child: Text(
+                        'Nebo se přihlásit přes',
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildSocialButton(
+                          child: CustomPaint(
+                            size: const Size(22, 22),
+                            painter: const GoogleLogoPainter(),
+                          ),
+                          onTap: _signInWithGoogle,
+                        ),
+                        const SizedBox(width: 16),
+                        _buildSocialButton(
+                          child: const Icon(
+                            Icons.apple,
+                            size: 26,
+                            color: Colors.black,
+                          ),
+                          onTap: _signInWithApple,
+                        ),
+                        const SizedBox(width: 16),
+                        _buildSocialButton(
+                          child: const Icon(
+                            Icons.facebook_rounded,
+                            size: 26,
+                            color: Color(0xFF1877F2),
+                          ),
+                          onTap: _showSocialLoginNotice,
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    const SizedBox(height: 20),
+                    
+                    // Register button
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Ještě nemáš účet?',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 15,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _onRegisterPressed,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: const Text(
+                            'Registrovat se',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Color(0xFF5C9E00),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -361,14 +516,14 @@ class _LoginScreenState extends State<LoginScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.grey.shade300,
+            color: Colors.grey.shade200,
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -376,4 +531,50 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+class GoogleLogoPainter extends CustomPainter {
+  const GoogleLogoPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double width = size.width;
+    final double r = width / 2;
+    
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = width * 0.24
+      ..strokeCap = StrokeCap.butt;
+
+    final center = Offset(r, r);
+    final rect = Rect.fromCircle(center: center, radius: r - paint.strokeWidth / 2);
+
+    // Red sector
+    paint.color = const Color(0xFFEA4335);
+    canvas.drawArc(rect, -2.5, 1.4, false, paint);
+
+    // Yellow sector
+    paint.color = const Color(0xFFFBBC05);
+    canvas.drawArc(rect, -1.1, 1.1, false, paint);
+
+    // Green sector
+    paint.color = const Color(0xFF34A853);
+    canvas.drawArc(rect, 0.0, 1.9, false, paint);
+
+    // Blue sector
+    paint.color = const Color(0xFF4285F4);
+    canvas.drawArc(rect, 1.9, 1.8, false, paint);
+
+    // Blue bar
+    final barPaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(
+      Rect.fromLTRB(r, r - paint.strokeWidth / 2, r + r, r + paint.strokeWidth / 2),
+      barPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

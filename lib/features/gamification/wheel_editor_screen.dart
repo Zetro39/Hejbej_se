@@ -81,10 +81,10 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
 
   Future<void> _saveWheel() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     if (_tasks.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Automat musí obsahovat alespoň 3 úkoly.')),
+        const SnackBar(content: Text('Kolo štěstí musí obsahovat alespoň 3 úkoly.')),
       );
       return;
     }
@@ -100,24 +100,39 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
       likes: widget.wheelToEdit?.likes ?? 0,
     );
 
-    await WheelOfFortuneService().saveCustomWheel(newWheel);
-    if (mounted) {
-      Navigator.pop(context, true);
+    try {
+      await WheelOfFortuneService().saveCustomWheel(newWheel);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Kolo štěstí bylo úspěšně uloženo!'), backgroundColor: Colors.green),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Uložení selhalo: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text(widget.wheelToEdit == null ? 'Vytvořit automat úkolů' : 'Upravit automat'),
-        backgroundColor: Colors.lightBlue,
+        title: Text(
+          widget.wheelToEdit == null ? 'Vytvořit Kolo štěstí' : 'Upravit Kolo štěstí',
+          style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5),
+        ),
+        backgroundColor: const Color(0xFF263238),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
             onPressed: _saveWheel,
-            icon: const Icon(Icons.check, size: 28),
+            icon: const Icon(Icons.check_rounded, size: 28, color: Color(0xFFBFFF00)),
+            tooltip: 'Uložit',
           ),
         ],
       ),
@@ -134,14 +149,18 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
                 child: TextFormField(
                   controller: _nameController,
                   decoration: InputDecoration(
-                    labelText: 'Název hry / automatu',
+                    labelText: 'Název Kola štěstí',
                     hintText: 'Např. Bláznivá výprava',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    prefixIcon: const Icon(Icons.casino),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFF5C9E00), width: 2),
+                    ),
+                    prefixIcon: const Icon(Icons.casino_outlined, color: Color(0xFF263238)),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Zadejte název hry.';
+                      return 'Zadejte název Kola štěstí.';
                     }
                     return null;
                   },
@@ -151,8 +170,8 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Text(
-                  'SEZNAM ÚKOLŮ',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54, letterSpacing: 0.5),
+                  'SEZNAM ÚKOLŮ KOLA',
+                  style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.8, fontSize: 11),
                 ),
               ),
 
@@ -164,7 +183,9 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
                   itemBuilder: (context, index) {
                     final task = _tasks[index];
                     return Card(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      color: Colors.white,
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       margin: const EdgeInsets.only(bottom: 16),
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
@@ -176,12 +197,12 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
                               children: [
                                 Text(
                                   'Úkol #${index + 1}',
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.lightBlue.shade800),
+                                  style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF5C9E00), fontSize: 15),
                                 ),
                                 if (_tasks.length > 3)
                                   IconButton(
                                     onPressed: () => _removeTask(index),
-                                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
                                   ),
                               ],
                             ),
@@ -193,7 +214,11 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
                               decoration: InputDecoration(
                                 labelText: 'Název úkolu',
                                 hintText: 'Např. Nosič batohů',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFF5C9E00), width: 2),
+                                ),
                                 isDense: true,
                               ),
                               onChanged: (val) {
@@ -214,7 +239,11 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
                               value: task.icon,
                               decoration: InputDecoration(
                                 labelText: 'Symbol / Ikona',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFF5C9E00), width: 2),
+                                ),
                                 isDense: true,
                               ),
                               items: _availableIcons.map((i) {
@@ -242,13 +271,17 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
                             // Task Description
                             TextFormField(
                               initialValue: task.description,
-                              maxLines: 2,
                               decoration: InputDecoration(
-                                labelText: 'Jak úkol plnit',
-                                hintText: 'Neseš batoh hráči {hráč} po celý úsek. (Použij {hráč} pro náhodné jméno)',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                labelText: 'Popis úkolu / Pravidla',
+                                hintText: 'Popište co přesně musí hráč dělat',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFF5C9E00), width: 2),
+                                ),
                                 isDense: true,
                               ),
+                              maxLines: 2,
                               onChanged: (val) {
                                 _tasks[index] = WheelTask(
                                   id: task.id,
@@ -260,27 +293,6 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
                               },
                               validator: (val) => val == null || val.trim().isEmpty ? 'Vyplňte popis úkolu.' : null,
                             ),
-                            const SizedBox(height: 12),
-
-                            // Exceptions
-                            TextFormField(
-                              initialValue: task.exceptions,
-                              decoration: InputDecoration(
-                                labelText: 'Výjimky / Omezení',
-                                hintText: 'Např. Pokud jdeš sám, úkol se ignoruje.',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                isDense: true,
-                              ),
-                              onChanged: (val) {
-                                _tasks[index] = WheelTask(
-                                  id: task.id,
-                                  title: task.title,
-                                  icon: task.icon,
-                                  description: task.description,
-                                  exceptions: val.isNotEmpty ? val : 'Žádné',
-                                );
-                              },
-                            ),
                           ],
                         ),
                       ),
@@ -288,21 +300,40 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
                   },
                 ),
               ),
-              
-              // Bottom Add Task Bar
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: Colors.white,
-                child: ElevatedButton.icon(
-                  onPressed: _addTask,
-                  icon: const Icon(Icons.add),
-                  label: const Text('PŘIDAT ÚKOL', style: TextStyle(fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.lightBlue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+
+              // Bottom Control Bar
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _addTask,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('PŘIDAT ÚKOL'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF263238),
+                          side: const BorderSide(color: Color(0xFF263238), width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _saveWheel,
+                        icon: const Icon(Icons.save_rounded, color: Colors.black),
+                        label: const Text('ULOŽIT KOLO', style: TextStyle(fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFBFFF00),
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

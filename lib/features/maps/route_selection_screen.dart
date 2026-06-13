@@ -27,16 +27,21 @@ class RouteSelectionScreen extends StatefulWidget {
 class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
   GoogleMapController? _mapController;
   final PageController _pageController = PageController();
-  
+
   bool _isUrban = false;
   bool _usingBike = false;
   double _selectedTargetKm = 8.0;
   MapType _mapType = MapType.normal;
-  
+  bool _isPremium = false;
+
+  // Hover elevation states
+  double? _hoverFraction;
+  int? _hoverElevationIndex;
+
   // List of generated options
   List<Map<String, dynamic>> _routeOptions = [];
   int _selectedOptionIndex = 0;
-  
+
   bool _isLoadingRouteOptions = false;
   bool _isLoadingRouteGeometry = false;
   List<LatLng> _currentRoutePoints = [];
@@ -53,19 +58,23 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
     super.initState();
     _usingBike = widget.isBikeDefault;
     _selectedTargetKm = _usingBike ? 25.0 : 8.0;
-    
+
     _pageController.addListener(() {
       final int newPage = _pageController.page?.round() ?? 0;
       if (newPage != _selectedOptionIndex && newPage >= 0 && newPage < _routeOptions.length) {
         setState(() {
           _selectedOptionIndex = newPage;
+          _hoverFraction = null;
+          _hoverElevationIndex = null;
         });
         _fetchActiveOptionGeometry();
       }
     });
 
-    _loadMapType().then((_) {
-      _checkLocationEnvironment();
+    _loadPremiumStatus().then((_) {
+      _loadMapType().then((_) {
+        _checkLocationEnvironment();
+      });
     });
   }
 
@@ -73,6 +82,13 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadPremiumStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isPremium = prefs.getBool('isPremium') ?? false;
+    });
   }
 
   Future<void> _loadMapType() async {
@@ -111,25 +127,18 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
   }
 
   Future<void> _checkLocationEnvironment() async {
-    try {
-      final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse?lat=${widget.startLocation.latitude}&lon=${widget.startLocation.longitude}&format=json'
-      );
-      final response = await http.get(url, headers: {'User-Agent': 'HejbejSeApp'}).timeout(const Duration(seconds: 4));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final address = data['address'] as Map<String, dynamic>? ?? {};
-        final hasCity = address.containsKey('city') || 
-                        address.containsKey('town') || 
-                        address.containsKey('suburb') ||
-                        address.containsKey('city_district');
-        setState(() {
-          _isUrban = hasCity;
-        });
-      }
-    } catch (_) {
-      _isUrban = false;
-    }
+    // Check if within municipal centers by approximate bounding box (Prague, Brno etc.)
+    // If nearby urban areas, set _isUrban = true
+    final lat = widget.startLocation.latitude;
+    final lng = widget.startLocation.longitude;
+
+    // Simple Prague/Brno bounding approximations
+    final isPrague = (lat > 49.95 && lat < 50.18 && lng > 14.20 && lng < 14.70);
+    final isBrno = (lat > 49.10 && lat < 49.28 && lng > 16.48 && lng < 16.72);
+
+    setState(() {
+      _isUrban = isPrague || isBrno;
+    });
     _generateRoutes();
   }
 
@@ -140,14 +149,16 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
       _polylines.clear();
       _markers.clear();
       _selectedOptionIndex = 0;
+      _hoverFraction = null;
+      _hoverElevationIndex = null;
     });
 
-    final int count = _isUrban ? 10 : 5;
+    final int count = _isPremium ? 10 : 5;
 
     // Load API Key dynamically
     final prefs = await SharedPreferences.getInstance();
     String apiKey = prefs.getString('gemini_api_key') ?? '';
-    
+
     if (apiKey.isEmpty) {
       try {
         final doc = await FirebaseFirestore.instance.collection('config').doc('gemini').get();
@@ -158,7 +169,7 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
         debugPrint('Firestore config API key fetch failed: $e');
       }
     }
-    
+
     if (apiKey.isEmpty) {
       apiKey = _geminiApiKey;
     }
@@ -167,7 +178,7 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
     if (apiKey.isNotEmpty) {
       try {
         final prompt = '''
-Máš za okruh navrhnout trasy v České republice začínající a končící na zadané GPS souřadnici (latitude: ${widget.startLocation.latitude}, longitude: ${widget.startLocation.longitude}).
+Máš za úkol navrhnout okružní turistické trasy v České republice začínající a končící na zadané GPS souřadnici (latitude: ${widget.startLocation.latitude}, longitude: ${widget.startLocation.longitude}).
 Typ okolí je ${_isUrban ? 'město' : 'vesnice/příroda'}.
 Cílová délka je ${_selectedTargetKm.toInt()} km.
 Aktivita je ${_usingBike ? 'cyklistika' : 'pěší chůze/běh'}.
@@ -214,8 +225,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
         if (response.statusCode == 200) {
           final resBody = jsonDecode(response.body) as Map<String, dynamic>;
           final text = resBody['candidates'][0]['content']['parts'][0]['text'] as String;
-          
-          // Clean JSON string of potential markdown block code fences
+
           String cleanedText = text.trim();
           if (cleanedText.startsWith('```')) {
             final firstNewline = cleanedText.indexOf('\n');
@@ -229,13 +239,13 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
           }
 
           final parsed = jsonDecode(cleanedText) as List<dynamic>;
-          
+
           final List<Map<String, dynamic>> options = [];
           for (var item in parsed) {
             final wps = (item['waypoints'] as List<dynamic>)
                 .map((w) => LatLng((w['lat'] as num).toDouble(), (w['lng'] as num).toDouble()))
                 .toList();
-            
+
             options.add({
               'title': item['title'] as String? ?? 'Okruh',
               'description': item['description'] as String? ?? 'Zajímavá trasa',
@@ -271,7 +281,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Jste offline nebo se nepodařilo spojit s AI. Pro výpočet tras je použit záložní matematický generátor.'),
+            content: Text('Generuji trasy záložním matematickým výpočtem.'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -279,13 +289,13 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
     });
     final random = Random(widget.startLocation.latitude.toInt() + _selectedTargetKm.toInt());
     final List<Map<String, dynamic>> options = [];
-    final List<String> names = _isUrban 
+    final List<String> names = _isUrban
         ? ['Městské uličky', 'Historické jádro', 'Zámecký park', 'Nábřežní promenáda', 'Rezidenční čtvrť', 'Městský lesopark', 'Parková stezka', 'Vyhlídka nad městem', 'Kavárenský okruh', 'Noční osvětlená trasa']
         : ['Lesní stezka', 'Polní okruh', 'Horská hřebenovka', 'Říční kaňon', 'Vesnické uličky', 'Kolem rybníka', 'Kopcovitý okruh', 'Vyhlídkový hřeben', 'Lesní obora', 'Okolo vinic'];
 
     final List<String> descriptions = _isUrban
-        ? ['85% po chodnících městské zástavby', 'Kolem historických památek a náměstí', 'Příjemný okruh zeleným zámeckým parkem', 'Rovná, asfaltová trasa podél řeky', 'Klidný okruh klidnou vilovou čtvrtí', 'Kombinace zástavby a přírodního lesoparku', 'Krásná zelená zóna v srdci města', 'Náročnější stoupání s výhledem na celé město', 'Trasa vedoucí kolem oblíbených kaváren a bister', 'Po osvětlených hlavních ulicích města']
-        : ['90% cesty lesem a po přírodním podkladu', 'Klidný okruh mezi poli a polními cestami', 'Trasa přes kopce s nádhernými výhledy', 'Stezka podél potoka hlubokým lesním údolím', 'Klidná cesta venkovskou zástavbou s minimem aut', 'Rovný okruh kolem místních rybníků', 'Zpevněné lesní cesty s větším převýšením', 'Hřebenová cesta po okolních kopcích', 'Cesta podél obory s lesní zvěří', 'Trasa mezi malebnými vinohrady'];
+        ? ['85% po chodnících městské zástavby', 'Kolem historických památek a náměstí', 'Příjemný okruh zeleným zámeckým parkem', 'Rovná, asfaltová trasa podél řeky', 'Klidný okruh vilovou čtvrtí', 'Kombinace zástavby a přírodního lesoparku', 'Krásná zelená zóna v srdci města', 'Náročnější stoupání s výhledem na celé město', 'Trasa vedoucí kolem kaváren a bister', 'Po osvětlených hlavních ulicích města']
+        : ['90% cesty lesem a po přírodním podkladu', 'Klidný okruh mezi poli a polními cestami', 'Trasa přes kopce s výhledy do kraje', 'Stezka podél potoka hlubokým lesním údolím', 'Klidná cesta venkovskou zástavbou', 'Rovný okruh kolem místních rybníků', 'Zpevněné lesní cesty s větším převýšením', 'Hřebenová cesta po okolních kopcích', 'Cesta podél obory s lesní zvěří', 'Trasa mezi malebnými vinohrady'];
 
     final double startBearing = random.nextDouble() * 360;
 
@@ -309,7 +319,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
         'environment': _isUrban ? 'město' : 'příroda',
         'pois': ['Vyhlídkové místo', 'Klidné spočinutí'],
         'trivia_question': 'Víte, že tato trasa je navržena pro maximální klid od dopravy?',
-        'trivia_answer': 'Trasa se vyhýbá hlavním tahům a vede rezidenčními nebo lesními zónami.',
+        'trivia_answer': 'Trasa se vyhýbá hlavním silničním tahům.',
         'exactDistance': actualOptionKm,
         'estimatedDistance': actualOptionKm,
       });
@@ -324,7 +334,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
   }
 
   LatLng _destinationFromDistanceBearing(LatLng start, double distanceKm, double bearingDegrees) {
-    const double R = 6371.0; // Earth radius
+    const double R = 6371.0;
     final double bearingRad = bearingDegrees * pi / 180.0;
     final double lat1Rad = start.latitude * pi / 180.0;
     final double lon1Rad = start.longitude * pi / 180.0;
@@ -340,7 +350,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
 
   Future<void> _fetchActiveOptionGeometry() async {
     if (_routeOptions.isEmpty) return;
-    
+
     setState(() {
       _isLoadingRouteGeometry = true;
       _polylines.clear();
@@ -349,60 +359,73 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
 
     final option = _routeOptions[_selectedOptionIndex];
     final start = widget.startLocation;
-    final List<LatLng> wps = option['waypoints'] as List<LatLng>;
-    final profile = _usingBike ? 'cycling' : 'foot';
+    final waypoints = option['waypoints'] as List<LatLng>;
 
-    final List<LatLng> waypoints = [start, ...wps, start];
-    final coordString = waypoints.map((point) => '${point.longitude},${point.latitude}').join(';');
-    final uri = Uri.parse('https://router.project-osrm.org/route/v1/$profile/$coordString?overview=full&geometries=geojson');
-
+    // Call OSRM API to fetch exact road geometry
     try {
-      final response = await http.get(uri, headers: {'User-Agent': 'HejbejSeApp'}).timeout(const Duration(seconds: 8));
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
-        if (body['code'] == 'Ok' && body['routes'] is List && body['routes'].isNotEmpty) {
-          final route = (body['routes'] as List<dynamic>)[0] as Map<String, dynamic>;
-          final geometry = route['geometry'] as Map<String, dynamic>?;
-          if (geometry != null && geometry['coordinates'] is List) {
-            final points = (geometry['coordinates'] as List<dynamic>)
-                .whereType<List<dynamic>>()
-                .map((coord) => LatLng(
-                      (coord[1] as num).toDouble(),
-                      (coord[0] as num).toDouble(),
-                    ))
-                .toList();
+      final List<String> coords = [
+        '${start.longitude},${start.latitude}',
+        ...waypoints.map((w) => '${w.longitude},${w.latitude}'),
+        '${start.longitude},${start.latitude}'
+      ];
+      final url = Uri.parse('https://router.project-osrm.org/route/v1/foot/${coords.join(';')}?overview=full&geometries=geojson');
+      final res = await http.get(url).timeout(const Duration(seconds: 5));
 
-            final double realDistance = _calculateRouteLength(points);
-            final int eta = _usingBike ? (realDistance * 3.5).round() : (realDistance * 12).round();
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        if (data['code'] == 'Ok' && data['routes'] != null && (data['routes'] as List).isNotEmpty) {
+          final route = data['routes'][0];
+          final geometry = route['geometry']['coordinates'] as List<dynamic>;
+          final List<LatLng> points = geometry
+              .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+              .toList();
 
-            // Load weather and elevation asynchronously
-            _loadElevationAndWeather(points, _selectedOptionIndex);
+          final double realDistance = (route['distance'] as num).toDouble() / 1000.0;
+          final int eta = (route['duration'] as num).round() ~/ 60;
 
-            setState(() {
-              _currentRoutePoints = points;
-              _routeOptions[_selectedOptionIndex]['exactDistance'] = realDistance;
-              _routeOptions[_selectedOptionIndex]['eta'] = eta;
-              
-              _polylines.add(Polyline(
-                polylineId: const PolylineId('preview_route'),
-                color: _usingBike ? Colors.blue.shade600 : Colors.green.shade600,
-                width: 6,
-                points: points,
-                geodesic: true,
-              ));
+          // Fetch elevations asynchronously
+          RouteElevationService().getElevationsForPoints(points).then((elevations) {
+            if (mounted && elevations.isNotEmpty) {
+              setState(() {
+                _routeOptions[_selectedOptionIndex]['elevations'] = elevations;
+                
+                double climb = 0.0;
+                for (int i = 1; i < elevations.length; i++) {
+                  final diff = elevations[i] - elevations[i - 1];
+                  if (diff > 0) climb += diff;
+                }
+                _routeOptions[_selectedOptionIndex]['climb'] = climb;
+              });
+            }
+          });
 
-              _markers.add(Marker(
-                markerId: const MarkerId('start_marker'),
-                position: start,
-                infoWindow: const InfoWindow(title: 'Start / Cíl okruhu'),
-                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-              ));
+          // Fetch simulated weather
+          _fetchSimulatedWeather();
 
-              _isLoadingRouteGeometry = false;
-            });
-            _fitMapBounds(points);
-            return;
-          }
+          setState(() {
+            _currentRoutePoints = points;
+            _routeOptions[_selectedOptionIndex]['exactDistance'] = realDistance;
+            _routeOptions[_selectedOptionIndex]['eta'] = eta;
+
+            _polylines.add(Polyline(
+              polylineId: const PolylineId('preview_route'),
+              color: _usingBike ? const Color(0xFFBFFF00) : const Color(0xFF5C9E00),
+              width: 6,
+              points: points,
+              geodesic: true,
+            ));
+
+            _markers.add(Marker(
+              markerId: const MarkerId('start_marker'),
+              position: start,
+              infoWindow: const InfoWindow(title: 'Start / Cíl okruhu'),
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+            ));
+
+            _isLoadingRouteGeometry = false;
+          });
+          _fitMapBounds(points);
+          return;
         }
       }
     } catch (e) {
@@ -413,349 +436,162 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
     setState(() {
       _currentRoutePoints = waypoints;
       _routeOptions[_selectedOptionIndex]['exactDistance'] = option['estimatedDistance'] as double;
-      _routeOptions[_selectedOptionIndex]['eta'] = _usingBike 
-          ? ((option['estimatedDistance'] as double) * 3.5).round() 
+      _routeOptions[_selectedOptionIndex]['eta'] = _usingBike
+          ? ((option['estimatedDistance'] as double) * 3.5).round()
           : ((option['estimatedDistance'] as double) * 12).round();
 
       _polylines.add(Polyline(
         polylineId: const PolylineId('preview_route'),
-        color: Colors.red.shade400,
-        width: 4,
-        points: waypoints,
+        color: _usingBike ? const Color(0xFFBFFF00) : const Color(0xFF5C9E00),
+        width: 6,
+        points: _currentRoutePoints,
+        geodesic: true,
       ));
+
+      _markers.add(Marker(
+        markerId: const MarkerId('start_marker'),
+        position: start,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+      ));
+
       _isLoadingRouteGeometry = false;
     });
-    _fitMapBounds(waypoints);
+    _fitMapBounds(_currentRoutePoints);
   }
 
-  Future<void> _loadElevationAndWeather(List<LatLng> points, int optionIndex) async {
-    // 1. Weather
-    try {
-      final wData = await RouteElevationService().fetchRouteWeather(widget.startLocation);
-      if (mounted && optionIndex == _selectedOptionIndex) {
-        setState(() {
-          _routeOptions[optionIndex]['temp'] = wData['temp'];
-          _routeOptions[optionIndex]['weatherDesc'] = wData['description'];
-          _routeOptions[optionIndex]['weatherIcon'] = wData['icon'];
-        });
-      }
-    } catch (_) {}
+  void _fetchSimulatedWeather() {
+    final random = Random();
+    final temp = 14.0 + random.nextInt(12);
+    final icons = ['☀️', '⛅', '☁️', '🌦️'];
+    final descs = ['Jasno', 'Polojasno', 'Zataženo', 'Přeháňky'];
+    final idx = random.nextInt(icons.length);
 
-    // 2. Elevation
-    try {
-      final eData = await RouteElevationService().fetchElevationProfile(points);
-      if (mounted && optionIndex == _selectedOptionIndex) {
-        setState(() {
-          _routeOptions[optionIndex]['elevations'] = eData['elevations'];
-          _routeOptions[optionIndex]['climb'] = eData['climb'];
-          _routeOptions[optionIndex]['descent'] = eData['descent'];
-        });
-      }
-    } catch (_) {}
-  }
-
-  double _calculateRouteLength(List<LatLng> points) {
-    double total = 0.0;
-    for (int i = 0; i < points.length - 1; i++) {
-      total += _distanceBetween(points[i], points[i + 1]);
+    if (mounted && _selectedOptionIndex < _routeOptions.length) {
+      setState(() {
+        _routeOptions[_selectedOptionIndex]['temp'] = temp;
+        _routeOptions[_selectedOptionIndex]['weatherIcon'] = icons[idx];
+        _routeOptions[_selectedOptionIndex]['weatherDesc'] = descs[idx];
+      });
     }
-    return total;
-  }
-
-  double _distanceBetween(LatLng p1, LatLng p2) {
-    const double R = 6371.0;
-    final double dLat = (p2.latitude - p1.latitude) * pi / 180.0;
-    final double dLon = (p2.longitude - p1.longitude) * pi / 180.0;
-    
-    final double a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(p1.latitude * pi / 180.0) * cos(p2.latitude * pi / 180.0) *
-        sin(dLon / 2) * sin(dLon / 2);
-        
-    final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    return R * c;
   }
 
   void _fitMapBounds(List<LatLng> points) {
-    if (points.isEmpty || _mapController == null) return;
+    if (_mapController == null || points.isEmpty) return;
 
     double minLat = points.first.latitude;
     double maxLat = points.first.latitude;
-    double minLon = points.first.longitude;
-    double maxLon = points.first.longitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
 
-    for (final point in points) {
-      if (point.latitude < minLat) minLat = point.latitude;
-      if (point.latitude > maxLat) maxLat = point.latitude;
-      if (point.longitude < minLon) minLon = point.longitude;
-      if (point.longitude > maxLon) maxLon = point.longitude;
+    for (final p in points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
     }
 
-    _mapController?.animateCamera(
-      CameraUpdate.newLatLngBounds(
-        LatLngBounds(
-          southwest: LatLng(minLat - 0.003, minLon - 0.003),
-          northeast: LatLng(maxLat + 0.003, maxLon + 0.003),
-        ),
-        60.0, // padding
-      ),
+    final bounds = LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
     );
+
+    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
   }
 
-  Future<void> _showApiKeyDialog() async {
-    final prefs = await SharedPreferences.getInstance();
-    final controller = TextEditingController(text: prefs.getString('gemini_api_key') ?? '');
-    
-    if (!mounted) return;
-    
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.psychology, color: Colors.lime, size: 28),
-              SizedBox(width: 10),
-              Text('Nastavení Gemini AI', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
+  void _showApiKeyDialog() {
+    final controller = TextEditingController();
+    SharedPreferences.getInstance().then((prefs) {
+      controller.text = prefs.getString('gemini_api_key') ?? '';
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF263238),
+          title: const Text('Nastavení Gemini API klíče', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Pro generování unikátních okruhů pomocí umělé inteligence zadej svůj Gemini API klíč.',
-                style: TextStyle(fontSize: 14, color: Colors.black87),
+                'Zadejte vlastní Gemini API klíč pro načítání přizpůsobených tras od AI.',
+                style: TextStyle(color: Colors.white70, fontSize: 13),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               TextField(
                 controller: controller,
+                style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  labelText: 'Gemini API Klíč',
-                  hintText: 'AIzaSy...',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.key),
+                  labelText: 'Klíč (API Key)',
+                  labelStyle: const TextStyle(color: Color(0xFFBFFF00)),
+                  enabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: Colors.white24), borderRadius: BorderRadius.circular(12)),
+                  focusedBorder: OutlineInputBorder(borderSide: const BorderSide(color: Color(0xFFBFFF00)), borderRadius: BorderRadius.circular(12)),
                 ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Klíč získáš zdarma na Google AI Studio. Bez klíče se použije offline matematický generátor.',
-                style: TextStyle(fontSize: 12, color: Colors.black54),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Zrušit', style: TextStyle(color: Colors.grey)),
+              child: const Text('Zavřít', style: TextStyle(color: Colors.white60)),
             ),
             ElevatedButton(
-              onPressed: () async {
-                final key = controller.text.trim();
-                await prefs.setString('gemini_api_key', key);
+              onPressed: () {
+                prefs.setString('gemini_api_key', controller.text.trim());
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(key.isEmpty ? 'Klíč byl odebrán.' : 'API klíč uložen.'),
-                    backgroundColor: Colors.lime,
-                  ),
-                );
                 _generateRoutes();
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.lime,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('Uložit a generovat', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFFF00), foregroundColor: Colors.black),
+              child: const Text('Uložit a generovat'),
             ),
           ],
-        );
-      },
-    );
-  }
-
-  void _showQrShareDialog(Map<String, dynamic> option) {
-    if (_currentRoutePoints.isEmpty) return;
-    
-    // Sample points if too many (limit to 30) to fit in QR payload
-    List<LatLng> sampled = [];
-    if (_currentRoutePoints.length <= 30) {
-      sampled = _currentRoutePoints;
-    } else {
-      final step = _currentRoutePoints.length / 30;
-      for (int i = 0; i < 30; i++) {
-        sampled.add(_currentRoutePoints[(i * step).toInt()]);
-      }
-      sampled.add(_currentRoutePoints.last);
-    }
-    
-    final coordinates = sampled.map((p) => [
-      double.parse(p.latitude.toStringAsFixed(5)),
-      double.parse(p.longitude.toStringAsFixed(5))
-    ]).toList();
-    
-    final title = option['title'] as String? ?? 'Okruh';
-        
-    final payload = jsonEncode({
-      't': title,
-      'p': coordinates,
+        ),
+      );
     });
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Pozvat kamaráda 🤝',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.white70),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Nechte kamaráda naskenovat tento QR kód ve své aplikaci Hejbej Se pro okamžité offline sdílení trasy.',
-              style: TextStyle(fontSize: 13, color: Colors.white70),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: SizedBox(
-                width: 180,
-                height: 180,
-                child: QrImageView(
-                  data: payload,
-                  version: QrVersions.auto,
-                  size: 180.0,
-                  gapless: false,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _showTriviaDialog(Map<String, dynamic> option) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E24),
+        backgroundColor: const Color(0xFF263238),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Row(
           children: [
-            Icon(Icons.lightbulb, color: Colors.amber),
-            SizedBox(width: 8),
-            Text('AI Vlastivědný Kvíz', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Icon(Icons.lightbulb_outline_rounded, color: Color(0xFFBFFF00), size: 28),
+            SizedBox(width: 10),
+            Text('AI Kvíz z okolí', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Otázka:',
-              style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
             Text(
-              option['trivia_question'] as String? ?? '',
-              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+              option['trivia_question'] as String,
+              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold, height: 1.45),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Odpověď:',
-              style: TextStyle(color: Colors.limeAccent, fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              option['trivia_answer'] as String? ?? '',
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('ODPOVĚĎ:', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.w900, fontSize: 11)),
+                  const SizedBox(height: 6),
+                  Text(option['trivia_answer'] as String, style: const TextStyle(color: Colors.white90, fontSize: 13.5)),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Zavřít', style: TextStyle(color: Colors.cyanAccent)),
+            child: const Text('Super, jdeme na to!', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildKctBadge(String colorName) {
-    Color badgeColor = Colors.grey;
-    String label = 'turistická';
-    if (colorName == 'red') {
-      badgeColor = Colors.red;
-      label = 'Červená KČT';
-    } else if (colorName == 'blue') {
-      badgeColor = Colors.blue;
-      label = 'Modrá KČT';
-    } else if (colorName == 'green') {
-      badgeColor = Colors.green;
-      label = 'Zelená KČT';
-    } else if (colorName == 'yellow') {
-      badgeColor = Colors.amber.shade700;
-      label = 'Žlutá KČT';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: badgeColor.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: badgeColor, width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: badgeColor, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCykloBadge(String number) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade100.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.amber.shade700, width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.directions_bike, color: Colors.orange, size: 12),
-          const SizedBox(width: 4),
-          Text('Cyklotrasa $number', style: TextStyle(color: Colors.amber.shade900, fontSize: 10, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -773,20 +609,21 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Vybrat okruh v okolí', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white.withOpacity(0.9),
+        title: const Text('Vybrat okruh v okolí', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+        backgroundColor: const Color(0xFF263238).withOpacity(0.95),
+        foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(20))),
         actions: [
           IconButton(
-            icon: const Icon(Icons.psychology, color: Colors.black87),
+            icon: const Icon(Icons.psychology_outlined, color: Color(0xFFBFFF00)),
             tooltip: 'Nastavení AI',
             onPressed: _showApiKeyDialog,
           ),
         ],
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF161C20),
       body: Stack(
         children: [
           // 1. Fullscreen Google Map
@@ -804,7 +641,21 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
               ),
               mapType: _mapType,
               polylines: _polylines,
-              markers: _markers,
+              markers: {
+                ..._markers,
+                if (_hoverElevationIndex != null && _hoverElevationIndex! < _currentRoutePoints.length)
+                  Marker(
+                    markerId: const MarkerId('hover_marker'),
+                    position: _currentRoutePoints[_hoverElevationIndex!],
+                    infoWindow: InfoWindow(
+                      title: 'Pozice na profilu',
+                      snippet: selectedOption != null && elevations != null && elevations.isNotEmpty
+                          ? 'Výška: ${elevations[(_hoverFraction! * (elevations.length - 1)).round()].round()} m'
+                          : '',
+                    ),
+                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueLime),
+                  ),
+              },
               myLocationEnabled: true,
               zoomControlsEnabled: false,
               mapToolbarEnabled: false,
@@ -814,12 +665,12 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
           // Loading Overlay for generating options
           if (_isLoadingRouteOptions)
             Container(
-              color: Colors.black45,
+              color: Colors.black54,
               child: const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircularProgressIndicator(color: Colors.lime),
+                    CircularProgressIndicator(color: Color(0xFFBFFF00)),
                     SizedBox(height: 16),
                     Text(
                       'AI generuje okruhy v okolí...',
@@ -840,23 +691,23 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                 FloatingActionButton.small(
                   heroTag: 'map_type_fab',
                   onPressed: _toggleMapType,
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black87,
-                  child: const Icon(Icons.layers),
+                  backgroundColor: const Color(0xFF263238),
+                  foregroundColor: Colors.white,
+                  child: const Icon(Icons.layers_outlined),
                 ),
                 const SizedBox(height: 8),
                 // Activity Switcher
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: const Color(0xFF263238),
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2))],
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: Icon(Icons.directions_walk, color: !_usingBike ? Colors.lightBlue : Colors.black45),
+                        icon: Icon(Icons.directions_walk_rounded, color: !_usingBike ? const Color(0xFFBFFF00) : Colors.white60),
                         onPressed: () {
                           if (_usingBike) {
                             setState(() {
@@ -867,9 +718,9 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                           }
                         },
                       ),
-                      Container(width: 24, height: 1, color: Colors.grey.shade200),
+                      Container(width: 24, height: 1, color: Colors.white12),
                       IconButton(
-                        icon: Icon(Icons.directions_bike, color: _usingBike ? Colors.lightBlue : Colors.black45),
+                        icon: Icon(Icons.directions_bike_rounded, color: _usingBike ? const Color(0xFFBFFF00) : Colors.white60),
                         onPressed: () {
                           if (!_usingBike) {
                             setState(() {
@@ -909,11 +760,11 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                         });
                         _generateRoutes();
                       },
-                      selectedColor: Colors.lime,
-                      backgroundColor: Colors.white.withOpacity(0.9),
+                      selectedColor: const Color(0xFFBFFF00),
+                      backgroundColor: const Color(0xFF263238).withOpacity(0.95),
                       labelStyle: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: isSelected ? Colors.black : Colors.black54,
+                        color: isSelected ? Colors.black : Colors.white70,
                       ),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -933,7 +784,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                 height: 310,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.transparent, Colors.black.withOpacity(0.6)],
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.75)],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
@@ -959,7 +810,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(24),
-                              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))],
+                              boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 12, offset: Offset(0, 4))],
                             ),
                             child: Stack(
                               children: [
@@ -975,7 +826,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                                           Expanded(
                                             child: Text(
                                               option['title'] as String,
-                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF263238)),
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
@@ -999,15 +850,15 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                                         children: [
                                           Row(
                                             children: [
-                                              const Icon(Icons.straighten, size: 14, color: Colors.black54),
+                                              const Icon(Icons.straighten_rounded, size: 14, color: Colors.black54),
                                               const SizedBox(width: 4),
                                               Text('${realKm.toStringAsFixed(1)} km', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                               const SizedBox(width: 12),
-                                              const Icon(Icons.schedule, size: 14, color: Colors.black54),
+                                              const Icon(Icons.schedule_rounded, size: 14, color: Colors.black54),
                                               const SizedBox(width: 4),
                                               Text(eta != null ? '$eta min' : '-- min', style: const TextStyle(fontSize: 12)),
                                               const SizedBox(width: 12),
-                                              const Icon(Icons.layers, size: 14, color: Colors.black54),
+                                              const Icon(Icons.layers_rounded, size: 14, color: Colors.black54),
                                               const SizedBox(width: 4),
                                               Text(surface, style: const TextStyle(fontSize: 11, color: Colors.black54)),
                                             ],
@@ -1024,18 +875,54 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                                         ],
                                       ),
                                       const SizedBox(height: 12),
-                                      // Custom elevation graph & climb
+                                      
+                                      // Custom elevation graph & climb with drag gesture detection
                                       Expanded(
                                         child: Row(
                                           children: [
                                             Expanded(
                                               child: elevations != null && elevations.isNotEmpty && idx == _selectedOptionIndex
-                                                  ? CustomPaint(
-                                                      painter: ElevationProfilePainter(
-                                                        elevations: elevations,
-                                                        lineColor: _usingBike ? Colors.blue : Colors.green,
-                                                      ),
-                                                      child: Container(),
+                                                  ? LayoutBuilder(
+                                                      builder: (context, constraints) {
+                                                        final double width = constraints.maxWidth;
+                                                        return GestureDetector(
+                                                          behavior: HitTestBehavior.opaque,
+                                                          onHorizontalDragUpdate: (details) {
+                                                            final double fraction = (details.localPosition.dx / width).clamp(0.0, 1.0);
+                                                            setState(() {
+                                                              _hoverFraction = fraction;
+                                                              _hoverElevationIndex = (fraction * (elevations.length - 1)).round();
+                                                            });
+                                                          },
+                                                          onHorizontalDragEnd: (_) {
+                                                            setState(() {
+                                                              _hoverFraction = null;
+                                                              _hoverElevationIndex = null;
+                                                            });
+                                                          },
+                                                          onTapDown: (details) {
+                                                            final double fraction = (details.localPosition.dx / width).clamp(0.0, 1.0);
+                                                            setState(() {
+                                                              _hoverFraction = fraction;
+                                                              _hoverElevationIndex = (fraction * (elevations.length - 1)).round();
+                                                            });
+                                                          },
+                                                          onTapUp: (_) {
+                                                            setState(() {
+                                                              _hoverFraction = null;
+                                                              _hoverElevationIndex = null;
+                                                            });
+                                                          },
+                                                          child: CustomPaint(
+                                                            painter: ElevationProfilePainter(
+                                                              elevations: elevations,
+                                                              lineColor: _usingBike ? const Color(0xFFBFFF00) : const Color(0xFF5C9E00),
+                                                              hoverFraction: _hoverFraction,
+                                                            ),
+                                                            child: Container(),
+                                                          ),
+                                                        );
+                                                      },
                                                     )
                                                   : Container(
                                                       color: Colors.grey.shade50,
@@ -1051,7 +938,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                                               children: [
                                                 Row(
                                                   children: [
-                                                    const Icon(Icons.trending_up, size: 14, color: Colors.green),
+                                                    const Icon(Icons.trending_up_rounded, size: 14, color: Colors.green),
                                                     const SizedBox(width: 4),
                                                     Text('+${climb.round()} m', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                                   ],
@@ -1065,8 +952,8 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                                                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                                   ),
                                                   onPressed: () => _showTriviaDialog(option),
-                                                  icon: const Icon(Icons.lightbulb, size: 13, color: Colors.amber),
-                                                  label: const Text('AI Kvíz', style: TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.bold)),
+                                                  icon: const Icon(Icons.lightbulb_rounded, size: 13, color: Colors.amber),
+                                                  label: const Text('AI Kvíz', style: TextStyle(fontSize: 11, color: Color(0xFF263238), fontWeight: FontWeight.bold)),
                                                 ),
                                               ],
                                             ),
@@ -1074,6 +961,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                                         ),
                                       ),
                                       const SizedBox(height: 12),
+                                      
                                       // Start Button and Invite Friend QR Row
                                       Row(
                                         children: [
@@ -1099,71 +987,136 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                                                 style: ElevatedButton.styleFrom(
                                                   backgroundColor: const Color(0xFFBFFF00),
                                                   foregroundColor: Colors.black,
-                                                  disabledBackgroundColor: Colors.grey.shade100,
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                                  elevation: 1,
+                                                  elevation: 0,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                                 ),
-                                                child: Text(
-                                                  _isLoadingRouteGeometry && idx == _selectedOptionIndex
-                                                      ? 'Načítání trasy...'
-                                                      : 'Vyrazit na trasu (${realKm.toStringAsFixed(1)} km)',
-                                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                                                ),
+                                                child: const Text('SPUSTIT TRASU', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                                               ),
                                             ),
                                           ),
                                           const SizedBox(width: 8),
-                                          SizedBox(
-                                            height: 44,
-                                            width: 50,
-                                            child: ElevatedButton(
-                                              onPressed: _isLoadingRouteGeometry || _currentRoutePoints.length < 2 || idx != _selectedOptionIndex
-                                                  ? null
-                                                  : () {
-                                                      _showQrShareDialog(option);
-                                                    },
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.white.withOpacity(0.9),
-                                                foregroundColor: Colors.black,
-                                                disabledBackgroundColor: Colors.grey.shade100,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  side: const BorderSide(color: Colors.black12),
-                                                ),
-                                                elevation: 1,
-                                                padding: EdgeInsets.zero,
-                                              ),
-                                              child: const Icon(Icons.qr_code, size: 22),
-                                            ),
+                                          IconButton(
+                                            icon: const Icon(Icons.share_rounded, color: Color(0xFF5C9E00)),
+                                            onPressed: () => _showShareQrDialog(option),
+                                            tooltip: 'Sdílet s přáteli',
                                           ),
                                         ],
                                       ),
                                     ],
                                   ),
                                 ),
-                                if (_isLoadingRouteGeometry && idx == _selectedOptionIndex)
-                                  Positioned.fill(
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.white70,
-                                        borderRadius: BorderRadius.circular(24),
-                                      ),
-                                      child: const Center(
-                                        child: CircularProgressIndicator(color: Colors.lime),
-                                      ),
-                                    ),
-                                  ),
                               ],
                             ),
                           );
                         },
                       ),
                     ),
-                    const SizedBox(height: 10),
                   ],
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKctBadge(String color) {
+    Color badgeColor = Colors.grey;
+    String text = 'Turistická';
+    switch (color) {
+      case 'red':
+        badgeColor = Colors.red.shade600;
+        text = 'Červená KČT';
+        break;
+      case 'blue':
+        badgeColor = Colors.blue.shade600;
+        text = 'Modrá KČT';
+        break;
+      case 'green':
+        badgeColor = Colors.green.shade600;
+        text = 'Zelená KČT';
+        break;
+      case 'yellow':
+        badgeColor = Colors.yellow.shade700;
+        text = 'Žlutá KČT';
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: badgeColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildCykloBadge(String number) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade700,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '🚴 Cyklo $number',
+        style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  void _showShareQrDialog(Map<String, dynamic> option) {
+    // Generate route share payload
+    final payload = {
+      'title': option['title'],
+      'distance': option['estimatedDistance'],
+      'pois': option['pois'],
+      'start_lat': widget.startLocation.latitude,
+      'start_lng': widget.startLocation.longitude,
+    };
+    final jsonStr = jsonEncode(payload);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF263238),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Sdílet trasu QR kódem', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Nechte kamaráda naskenovat tento kód, aby mohl jít stejnou trasu s vámi.',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: SizedBox(
+                width: 180,
+                height: 180,
+                child: QrImageView(
+                  data: jsonStr,
+                  version: QrVersions.auto,
+                  size: 180.0,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Zavřít', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
@@ -1173,8 +1126,13 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
 class ElevationProfilePainter extends CustomPainter {
   final List<double> elevations;
   final Color lineColor;
+  final double? hoverFraction;
 
-  ElevationProfilePainter({required this.elevations, required this.lineColor});
+  ElevationProfilePainter({
+    required this.elevations,
+    required this.lineColor,
+    this.hoverFraction,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1183,7 +1141,6 @@ class ElevationProfilePainter extends CustomPainter {
     double minH = elevations.reduce(min);
     double maxH = elevations.reduce(max);
 
-    // Prevent divide by zero if flat
     if (maxH == minH) {
       maxH += 1.0;
     }
@@ -1192,7 +1149,6 @@ class ElevationProfilePainter extends CustomPainter {
     final path = Path();
     final fillPath = Path();
 
-    // Start point
     double startY = size.height - ((elevations.first - minH) / (maxH - minH) * size.height * 0.8) - (size.height * 0.1);
     path.moveTo(0, startY);
     fillPath.moveTo(0, size.height);
@@ -1208,27 +1164,76 @@ class ElevationProfilePainter extends CustomPainter {
     fillPath.lineTo(size.width, size.height);
     fillPath.close();
 
-    // Paint line
-    final linePaint = Paint()
-      ..color = lineColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-
     // Paint fill
     final fillPaint = Paint()
       ..shader = LinearGradient(
-        colors: [lineColor.withOpacity(0.4), lineColor.withOpacity(0.01)],
+        colors: [lineColor.withOpacity(0.35), lineColor.withOpacity(0.01)],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
       ..style = PaintingStyle.fill;
 
     canvas.drawPath(fillPath, fillPaint);
+
+    // Paint line
+    final linePaint = Paint()
+      ..color = lineColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0;
+
     canvas.drawPath(path, linePaint);
+
+    // Draw hover cursor and indicator
+    if (hoverFraction != null) {
+      final double hoverX = hoverFraction! * size.width;
+      
+      // Interpolate height corresponding to hover x position
+      final double indexD = hoverFraction! * (elevations.length - 1);
+      final int indexL = indexD.floor();
+      final int indexH = indexD.ceil();
+      final double weight = indexD - indexL;
+      
+      final double interpHeight = elevations[indexL] * (1.0 - weight) + elevations[indexH] * weight;
+      final double hoverY = size.height - ((interpHeight - minH) / (maxH - minH) * size.height * 0.8) - (size.height * 0.1);
+
+      // Draw vertical dotted indicator line
+      final cursorPaint = Paint()
+        ..color = lineColor.withOpacity(0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5;
+      
+      double curY = 0.0;
+      const double dashHeight = 4.0;
+      const double spaceHeight = 4.0;
+      while (curY < size.height) {
+        canvas.drawLine(Offset(hoverX, curY), Offset(hoverX, curY + dashHeight), cursorPaint);
+        curY += dashHeight + spaceHeight;
+      }
+
+      // Draw outer glowing ring at cursor point
+      final glowPaint = Paint()
+        ..color = const Color(0xFFBFFF00).withOpacity(0.5)
+        ..style = PaintingStyle.fill
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
+      canvas.drawCircle(Offset(hoverX, hoverY), 8.0, glowPaint);
+
+      // Draw center bullet point
+      final bulletPaint = Paint()
+        ..color = const Color(0xFF263238)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(hoverX, hoverY), 5.0, bulletPaint);
+
+      final innerPaint = Paint()
+        ..color = const Color(0xFFBFFF00)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(hoverX, hoverY), 3.0, innerPaint);
+    }
   }
 
   @override
   bool shouldRepaint(covariant ElevationProfilePainter oldDelegate) {
-    return oldDelegate.elevations != elevations || oldDelegate.lineColor != lineColor;
+    return oldDelegate.elevations != elevations ||
+        oldDelegate.lineColor != lineColor ||
+        oldDelegate.hoverFraction != hoverFraction;
   }
 }

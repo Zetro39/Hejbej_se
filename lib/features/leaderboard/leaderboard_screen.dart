@@ -289,12 +289,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFF263238),
       appBar: AppBar(
-        title: const Text('ŽEBŘÍČEK A PŘÁTELÉ'),
+        title: const Text(
+          'Žebříček a Přátelé',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: -0.5, color: Colors.white),
+        ),
+        centerTitle: true,
+        backgroundColor: const Color(0xFF1E272C),
+        foregroundColor: Colors.white,
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: const Icon(Icons.people),
+            icon: const Icon(Icons.people_outline_rounded, color: Colors.white70),
             tooltip: 'Moji přátelé',
             onPressed: () {
               Navigator.of(context).push(
@@ -303,7 +311,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
             },
           ),
           IconButton(
-            icon: const Icon(Icons.person_add),
+            icon: const Icon(Icons.person_add_alt_rounded, color: Colors.white70),
             tooltip: 'Přidat přátele',
             onPressed: () {
               Navigator.of(context).push(
@@ -313,7 +321,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           ),
         ],
       ),
-      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
@@ -323,33 +330,69 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Zadej přezdívku nebo kód (např. #PEPA456)',
-                        filled: true,
-                        fillColor: Colors.lightBlue.shade50.withOpacity(0.5),
-                        prefixIcon: const Icon(Icons.search, color: Colors.lightBlue),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E272C),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white12, width: 1.5),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(color: Colors.white, fontSize: 15),
+                        decoration: InputDecoration(
+                          hintText: 'Zadej přezdívku nebo kód (např. #PEPA456)',
+                          hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+                          filled: true,
+                          fillColor: const Color(0xFF1E272C),
+                          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFFBFFF00)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _searchUser,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                  const SizedBox(width: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFBFFF00).withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFFD4FF00),
+                          Color(0xFFBFFF00),
+                        ],
                       ),
                     ),
-                    child: const Text('Hledat', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: ElevatedButton(
+                      onPressed: _searchUser,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text('Hledat', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
                   ),
                 ],
               ),
@@ -422,9 +465,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                     margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                     padding: const EdgeInsets.all(16.0),
                     decoration: BoxDecoration(
-                      color: Colors.lime.shade50.withOpacity(0.3),
+                      color: const Color(0xFF1E272C),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.lime.withOpacity(0.5)),
+                      border: Border.all(color: const Color(0xFFBFFF00).withOpacity(0.3), width: 1.5),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -436,11 +479,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                               '${_searchResult!['first_name']} ${_searchResult!['last_name']}'.trim().isEmpty
                                   ? _searchResult!['username']
                                   : '${_searchResult!['first_name']} ${_searchResult!['last_name']}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                             ),
                             Text(
                               _searchResult!['friend_code'],
-                              style: const TextStyle(color: Colors.black54, fontSize: 13),
+                              style: const TextStyle(color: Colors.white54, fontSize: 13),
                             ),
                           ],
                         ),
@@ -455,22 +498,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
 
             // Tab Selector [ Tento týden ] [ Tento měsíc ] [ Celkově ]
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.lightBlue.shade50.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: const EdgeInsets.all(4),
-                child: Row(
-                  children: [
-                    _buildTabButton(0, 'Tento týden'),
-                    _buildTabButton(1, 'Tento měsíc'),
-                    _buildTabButton(2, 'Celkově'),
-                  ],
-                ),
-              ),
-            ),
+               padding: const EdgeInsets.symmetric(horizontal: 16.0),
+               child: Container(
+                 decoration: BoxDecoration(
+                   color: const Color(0xFF1E272C),
+                   borderRadius: BorderRadius.circular(16),
+                 ),
+                 padding: const EdgeInsets.all(4),
+                 child: Row(
+                   children: [
+                     _buildTabButton(0, 'Tento týden'),
+                     _buildTabButton(1, 'Tento měsíc'),
+                     _buildTabButton(2, 'Celkově'),
+                   ],
+                 ),
+               ),
+             ),
 
             const SizedBox(height: 16),
 
@@ -525,8 +568,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                       });
 
                       return ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         itemCount: userDocs.length,
-                        separatorBuilder: (context, index) => const Divider(height: 1, indent: 70, color: Colors.black12),
+                        separatorBuilder: (context, index) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final doc = userDocs[index];
                           final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -548,7 +592,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                           }
 
                           final itemContent = Container(
-                            color: isMe ? Colors.lime.withOpacity(0.12) : null,
+                            decoration: BoxDecoration(
+                              color: isMe ? const Color(0xFF1B5E20).withOpacity(0.3) : const Color(0xFF1E272C),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isMe ? const Color(0xFFBFFF00).withOpacity(0.5) : Colors.white12,
+                                width: 1.5,
+                              ),
+                            ),
                             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                             child: Row(
                               children: [
@@ -560,9 +611,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                                 ),
                                 const SizedBox(width: 8),
                                 CircleAvatar(
-                                  backgroundColor: isMe ? Colors.lime : Colors.lightBlue.shade100,
-                                  foregroundColor: Colors.black,
-                                  child: Text(fullName.substring(0, 1).toUpperCase()),
+                                  backgroundColor: isMe ? const Color(0xFFBFFF00) : const Color(0xFF263238),
+                                  foregroundColor: isMe ? Colors.black : const Color(0xFFBFFF00),
+                                  child: Text(fullName.substring(0, 1).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -571,15 +622,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                                     children: [
                                       Text(
                                         isMe ? '$fullName (Ty)' : fullName,
-                                        style: TextStyle(
-                                          fontWeight: isMe ? FontWeight.bold : FontWeight.w600,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
                                           fontSize: 15,
+                                          color: Colors.white,
                                         ),
                                       ),
                                       if (code.isNotEmpty)
                                         Text(
                                           code,
-                                          style: const TextStyle(fontSize: 12, color: Colors.black45),
+                                          style: const TextStyle(fontSize: 12, color: Colors.white54),
                                         ),
                                     ],
                                   ),
@@ -587,9 +639,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                                 Text(
                                   '${dist.toStringAsFixed(1)} km',
                                   style: TextStyle(
-                                    fontWeight: isMe ? FontWeight.bold : FontWeight.bold,
+                                    fontWeight: FontWeight.bold,
                                     fontSize: 16,
-                                    color: isMe ? Colors.black87 : Colors.lightBlue.shade800,
+                                    color: isMe ? const Color(0xFFBFFF00) : Colors.white,
                                   ),
                                 ),
                               ],
@@ -634,11 +686,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
         },
         child: Container(
           decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
+            color: isSelected ? const Color(0xFFBFFF00) : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
-            boxShadow: isSelected
-                ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
-                : null,
           ),
           padding: const EdgeInsets.symmetric(vertical: 12),
           alignment: Alignment.center,
@@ -646,7 +695,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
             title,
             style: TextStyle(
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-              color: isSelected ? Colors.lightBlue.shade800 : Colors.black54,
+              color: isSelected ? Colors.black : Colors.white54,
               fontSize: 14,
             ),
           ),

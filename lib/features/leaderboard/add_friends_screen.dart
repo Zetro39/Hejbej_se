@@ -64,10 +64,9 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
         color: const Color(0xFF000000),
         emptyColor: const Color(0xFFFFFFFF),
         gapless: false,
-        errorCorrectionLevel: QrErrorCorrectLevel.Q,
+        errorCorrectionLevel: QrErrorCorrectionLevel.Q,
       );
 
-      // Create a canvas to draw the QR code with a solid white background and padding (quiet zone)
       const double qrSize = 512.0;
       const double padding = 64.0;
       const double canvasSize = qrSize + (padding * 2);
@@ -75,11 +74,9 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, canvasSize, canvasSize));
       
-      // 1. Draw solid white background
       final paint = Paint()..color = const Color(0xFFFFFFFF);
       canvas.drawRect(const Rect.fromLTWH(0, 0, canvasSize, canvasSize), paint);
       
-      // 2. Draw the QR code centered
       canvas.save();
       canvas.translate(padding, padding);
       qrPainter.paint(canvas, const Size(qrSize, qrSize));
@@ -136,7 +133,10 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('V obrázku nebyl nalezen žádný QR kód')),
+            const SnackBar(
+              content: Text('V obrázku nebyl nalezen žádný QR kód'),
+              backgroundColor: Colors.orangeAccent,
+            ),
           );
         }
       }
@@ -144,7 +144,10 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Chyba při načítání QR z galerie: $e')),
+          SnackBar(
+            content: Text('Chyba při načítání QR z galerie: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } finally {
@@ -182,7 +185,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
     });
 
     try {
-      // 1. Get current user's profile
       final myDoc = await _firestore.collection('users').doc(currentUser.uid).get();
       final myData = myDoc.data() ?? {};
       final currentFriendCode = myData['friend_code'] as String?;
@@ -197,7 +199,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
         throw Exception('Nemůžeš přidat sám sebe.');
       }
 
-      // 2. Query target user document by clean fields
       final cleanInput = _cleanStringForSearch(searchCode);
       QuerySnapshot query = await _firestore
           .collection('users')
@@ -213,7 +214,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
             .get();
       }
 
-      // Backward compatibility fallbacks if clean fields are not populated
       if (query.docs.isEmpty) {
         query = await _firestore
             .collection('users')
@@ -222,7 +222,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
             .get();
       }
 
-      // If not found, try querying by exact username
       if (query.docs.isEmpty) {
         query = await _firestore
             .collection('users')
@@ -231,7 +230,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
             .get();
       }
 
-      // If not found, try querying by lowercase username
       if (query.docs.isEmpty) {
         query = await _firestore
             .collection('users')
@@ -240,7 +238,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
             .get();
       }
 
-      // If not found, try querying by uppercase username
       if (query.docs.isEmpty) {
         query = await _firestore
             .collection('users')
@@ -249,7 +246,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
             .get();
       }
 
-      // If not found, try querying by capitalized username (e.g. Pepa)
       if (query.docs.isEmpty && searchCode.isNotEmpty) {
         final capitalized = searchCode[0].toUpperCase() + searchCode.substring(1).toLowerCase();
         query = await _firestore
@@ -269,7 +265,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
       final targetUsername = targetData['username'] ?? 'Uživatel';
       final resolvedTargetCode = targetData['friend_code'] as String? ?? targetCode;
 
-      // Check if relationship already exists
       final existingFriendDoc = await _firestore
           .collection('users')
           .doc(currentUser.uid)
@@ -284,7 +279,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
         } else if (status == 'outgoing') {
           throw Exception('Žádost o přátelství uživateli $targetUsername již byla odeslána.');
         } else if (status == 'incoming') {
-          // If they sent me a request already, accept it instantly
           final batch = _firestore.batch();
           final myFriendRef = _firestore
               .collection('users')
@@ -318,16 +312,17 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
+              backgroundColor: const Color(0xFF37474F),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text('🎉 Přátelé propojeni!'),
-              content: Text('Uživatel $targetUsername vám již dříve odeslal žádost. Nyní jste přátelé!'),
+              title: const Text('🎉 Přátelé propojeni!', style: TextStyle(color: Colors.white)),
+              content: Text('Uživatel $targetUsername vám již dříve odeslal žádost. Nyní jste přátelé!', style: const TextStyle(color: Colors.white70)),
               actions: [
                 TextButton(
                   onPressed: () {
                     Navigator.pop(context);
                     Navigator.pop(context);
                   },
-                  child: const Text('Super!'),
+                  child: const Text('Super!', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -336,7 +331,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
         }
       }
 
-      // Create new request: outgoing for sender, incoming for target
       final batch = _firestore.batch();
 
       final myFriendRef = _firestore
@@ -369,7 +363,6 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
 
       await batch.commit();
 
-      // Log friend connection request to activity feed
       try {
         await _firestore.collection('activities').add({
           'uid': currentUser.uid,
@@ -387,16 +380,17 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF37474F),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('✉️ Žádost odeslána!'),
-          content: Text('Žádost o přátelství byla úspěšně odeslána uživateli $targetUsername.'),
+          title: const Text('✉️ Žádost odeslána!', style: TextStyle(color: Colors.white)),
+          content: Text('Žádost o přátelství byla úspěšně odeslána uživateli $targetUsername.', style: const TextStyle(color: Colors.white70)),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context); // pop dialog
-                Navigator.pop(context); // pop screen
+                Navigator.pop(context);
+                Navigator.pop(context);
               },
-              child: const Text('Rozumím'),
+              child: const Text('Rozumím', style: TextStyle(color: Color(0xFFBFFF00))),
             ),
           ],
         ),
@@ -404,7 +398,10 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Nepodařilo se připojit přítele: ${e.toString().replaceAll('Exception: ', '')}')),
+          SnackBar(
+            content: Text('Nepodařilo se připojit přítele: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } finally {
@@ -419,63 +416,107 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF263238),
       appBar: AppBar(
-        title: const Text('PŘIDAT PŘÁTELE'),
+        title: const Text(
+          'PŘIDAT PŘÁTELE',
+          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFF1E272C),
         elevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // QR Code Section
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                elevation: 4,
-                shadowColor: Colors.lightBlue.shade100,
-                color: Colors.white,
+              // QR Code Card
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E272C),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Column(
                     children: [
                       const Text(
                         'Můj QR kód',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Ukaž tento kód kamarádovi k naskenování',
+                        style: TextStyle(fontSize: 12, color: Colors.white54),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
                       if (_myFriendCode.isNotEmpty)
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.lightBlue.shade50, width: 2),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(20),
                             color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFBFFF00).withOpacity(0.15),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
                           child: QrImageView(
                             data: _myFriendCode,
                             version: QrVersions.auto,
-                            size: 180.0,
+                            size: 160.0,
                             gapless: true,
+                            foregroundColor: const Color(0xFF263238),
                           ),
                         )
                       else
                         const SizedBox(
-                          height: 180,
-                          child: Center(child: CircularProgressIndicator()),
+                          height: 184,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFFBFFF00),
+                            ),
+                          ),
                         ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       Text(
-                        'Přezdívka: $_myUsername',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        _myUsername,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _myFriendCode,
-                        style: TextStyle(color: Colors.lightBlue.shade700, fontSize: 15, fontWeight: FontWeight.bold),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF263238),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          _myFriendCode,
+                          style: const TextStyle(
+                            color: Color(0xFFBFFF00),
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       Row(
                         children: [
                           Expanded(
@@ -483,15 +524,19 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
                               onPressed: () {
                                 Clipboard.setData(ClipboardData(text: _myFriendCode));
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Kód zkopírován do schránky')),
+                                  const SnackBar(
+                                    content: Text('Kód zkopírován do schránky'),
+                                    backgroundColor: Color(0xFF1B5E20),
+                                  ),
                                 );
                               },
-                              icon: const Icon(Icons.copy),
-                              label: const Text('Kopírovat kód'),
+                              icon: const Icon(Icons.copy, size: 18),
+                              label: const Text('Kopírovat', style: TextStyle(fontWeight: FontWeight.bold)),
                               style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.lightBlue),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                side: const BorderSide(color: Colors.white24, width: 1.5),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               ),
                             ),
                           ),
@@ -499,13 +544,14 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
                           Expanded(
                             child: ElevatedButton.icon(
                               onPressed: _shareQrCode,
-                              icon: const Icon(Icons.share),
-                              label: const Text('Sdílet QR'),
+                              icon: const Icon(Icons.share, size: 18),
+                              label: const Text('Sdílet QR', style: TextStyle(fontWeight: FontWeight.bold)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.lime,
+                                backgroundColor: const Color(0xFFBFFF00),
                                 foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                elevation: 0,
                               ),
                             ),
                           ),
@@ -518,66 +564,111 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
 
               const SizedBox(height: 24),
 
-              // Connect Friends Section
+              // Connect Friends Card
               const Text(
-                'Propojit se s kamarádem',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                'Připojit se s přítelem',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70),
               ),
               const SizedBox(height: 12),
 
-              ElevatedButton.icon(
-                onPressed: _isDecoding ? null : _pickAndDecodeQr,
-                icon: _isDecoding
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                    : const Icon(Icons.photo_library),
-                label: Text(_isDecoding ? 'Načítání QR kódu...' : 'Nahrát QR kód z galerie'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.lightBlue.shade50,
-                  foregroundColor: Colors.lightBlue.shade900,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 0,
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E272C),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white12),
                 ),
-              ),
-
-              const SizedBox(height: 16),
-              const Center(child: Text('nebo zadej kód ručně', style: TextStyle(color: Colors.black54, fontSize: 13))),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _codeController,
-                decoration: InputDecoration(
-                  labelText: 'Kód kamaráda (např. #PEPA456)',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.paste),
-                    onPressed: () async {
-                      final data = await Clipboard.getData('text/plain');
-                      if (data?.text != null) {
-                        _codeController.text = data!.text!.trim();
-                      }
-                    },
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _isDecoding ? null : _pickAndDecodeQr,
+                      icon: _isDecoding
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.photo_library, size: 20),
+                      label: Text(
+                        _isDecoding ? 'Dešifrování QR...' : 'Načíst QR kód z galerie',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1B5E20),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Row(
+                      children: [
+                        Expanded(child: Divider(color: Colors.white12)),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 10),
+                          child: Text('NEBO ZADAT RUČNĚ', style: TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                        Expanded(child: Divider(color: Colors.white12)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _codeController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: 'Kód kamaráda (např. #PEPA456)',
+                        labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Colors.white12, width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Colors.white12, width: 1.5),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF263238),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.paste, color: Color(0xFFBFFF00)),
+                          onPressed: () async {
+                            final data = await Clipboard.getData('text/plain');
+                            if (data?.text != null) {
+                              _codeController.text = data!.text!.trim();
+                            }
+                          },
+                        ),
+                      ),
+                      textCapitalization: TextCapitalization.characters,
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: _isConnecting ? null : () => _connectFriend(_codeController.text),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFBFFF00),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 2,
+                      ),
+                      child: _isConnecting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                            )
+                          : const Text(
+                              'Propojit se',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                    ),
+                  ],
                 ),
-                textCapitalization: TextCapitalization.characters,
-              ),
-              const SizedBox(height: 16),
-
-              ElevatedButton(
-                onPressed: _isConnecting ? null : () => _connectFriend(_codeController.text),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.lime,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: _isConnecting
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                    : const Text('Propojit se', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
