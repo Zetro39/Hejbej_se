@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:app_links/app_links.dart';
 import 'services/auth_service.dart';
 
 
@@ -24,6 +26,8 @@ class _MainShellState extends State<MainShell> {
   bool _blocked = false;
   Timer? _verifyTimer;
   StreamSubscription? _incomingFriendsSubscription;
+  late final AppLinks _appLinks;
+  StreamSubscription<Uri>? _linkSubscription;
 
   @override
   void initState() {
@@ -33,6 +37,7 @@ class _MainShellState extends State<MainShell> {
       await _checkBlocked();
     });
     _listenForIncomingFriends();
+    _initDeepLinks();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -48,6 +53,7 @@ class _MainShellState extends State<MainShell> {
   void dispose() {
     _verifyTimer?.cancel();
     _incomingFriendsSubscription?.cancel();
+    _linkSubscription?.cancel();
     super.dispose();
   }
 
@@ -166,6 +172,58 @@ class _MainShellState extends State<MainShell> {
   Future<void> _checkBlocked() async {
     final blocked = await AuthService().isBlockedDueToUnverified();
     if (mounted) setState(() => _blocked = blocked);
+  }
+
+  void _initDeepLinks() {
+    _appLinks = AppLinks();
+    
+    _appLinks.getInitialLink().then((uri) {
+      if (uri != null) {
+        _handleDeepLink(uri);
+      }
+    }).catchError((err) {
+      debugPrint('Error getting initial deep link: $err');
+    });
+
+    _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
+      _handleDeepLink(uri);
+    }, onError: (err) {
+      debugPrint('Error in deep link stream: $err');
+    });
+  }
+
+  void _handleDeepLink(Uri uri) {
+    debugPrint('Received deep link: $uri');
+    final path = uri.path;
+    final host = uri.host;
+    if (path.contains('route') || host.contains('route')) {
+      final dataParam = uri.queryParameters['data'];
+      if (dataParam != null && dataParam.isNotEmpty) {
+        _processIncomingRouteData(dataParam);
+      }
+    }
+  }
+
+  void _processIncomingRouteData(String rawData) {
+    if (rawData.isEmpty) return;
+    
+    String jsonString = rawData;
+    if (!rawData.trim().startsWith('{')) {
+      try {
+        final decodedBytes = base64Decode(rawData.trim());
+        jsonString = utf8.decode(decodedBytes);
+      } catch (_) {
+        jsonString = rawData;
+      }
+    }
+
+    MapsScreen.pendingSharedRouteNotifier.value = jsonString;
+
+    if (mounted) {
+      setState(() {
+        _index = 2; // Switch to Maps tab
+      });
+    }
   }
 
   @override

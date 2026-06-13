@@ -45,6 +45,8 @@ class PlacePrediction {
 class MapsScreen extends StatefulWidget {
   const MapsScreen({super.key});
 
+  static final ValueNotifier<String?> pendingSharedRouteNotifier = ValueNotifier<String?>(null);
+
   @override
   State<MapsScreen> createState() => _MapsScreenState();
 }
@@ -153,6 +155,12 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _loadPremiumStatus();
     _loadLocationSharingPreference();
     _fetchPartners();
+    MapsScreen.pendingSharedRouteNotifier.addListener(_handlePendingSharedRoute);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (MapsScreen.pendingSharedRouteNotifier.value != null) {
+        _handlePendingSharedRoute();
+      }
+    });
   }
 
   Future<void> _loadReachedCheckpoints() async {
@@ -365,6 +373,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _destinationController.dispose();
     _routePageController.dispose();
     _stepCountSubscription?.cancel();
+    MapsScreen.pendingSharedRouteNotifier.removeListener(_handlePendingSharedRoute);
     super.dispose();
   }
 
@@ -3731,15 +3740,17 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _scanRouteQr() async {
-    final scannedData = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (context) => const QrScannerScreen()),
-    );
-    
-    if (scannedData == null || scannedData.isEmpty) return;
-    
+  void _handlePendingSharedRoute() {
+    final data = MapsScreen.pendingSharedRouteNotifier.value;
+    if (data != null) {
+      MapsScreen.pendingSharedRouteNotifier.value = null;
+      _loadRouteFromData(data);
+    }
+  }
+
+  Future<void> _loadRouteFromData(String data) async {
     try {
-      final map = jsonDecode(scannedData) as Map<String, dynamic>;
+      final map = jsonDecode(data) as Map<String, dynamic>;
       final title = map['t'] as String;
       final coordsList = map['p'] as List<dynamic>;
       final points = coordsList.map((c) {
@@ -3792,7 +3803,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Trasa "$title" úspěšně naskenována!'),
+            content: Text('Trasa "$title" úspěšně načtena!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -3801,11 +3812,20 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Neplatný formát QR trasy: $e'),
+            content: Text('Neplatný formát sdílené trasy: $e'),
             backgroundColor: Colors.redAccent,
           ),
         );
       }
     }
+  }
+
+  Future<void> _scanRouteQr() async {
+    final scannedData = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (context) => const QrScannerScreen()),
+    );
+    
+    if (scannedData == null || scannedData.isEmpty) return;
+    await _loadRouteFromData(scannedData);
   }
 }
