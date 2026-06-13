@@ -170,6 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final cred = await AuthService().signInWithApple(
         idToken: credential.identityToken ?? '',
         rawNonce: rawNonce,
+        accessToken: credential.authorizationCode,
       );
       final user = cred.user;
       final name = user?.displayName ?? user?.email ?? 'Uživatel';
