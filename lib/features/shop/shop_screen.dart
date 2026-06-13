@@ -158,21 +158,35 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
   Future<void> _loadLimetkyAndCompanions() async {
     if (!mounted) return;
     setState(() => _loadingLimetky = true);
-    final prefs = await SharedPreferences.getInstance();
-    final balance = prefs.getInt('limetkyBalance') ?? 0;
-    final isPrem = prefs.getBool('isPremium') ?? false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final balance = prefs.getInt('limetkyBalance') ?? 0;
+      final isPrem = prefs.getBool('isPremium') ?? false;
 
-    final unlocked = await AuthService().getUnlockedCompanions();
-    final active = await AuthService().getSelectedCompanion();
+      final unlocked = await AuthService().getUnlockedCompanions().timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => <String>[],
+      );
+      final active = await AuthService().getSelectedCompanion().timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => null,
+      );
 
-    if (!mounted) return;
-    setState(() {
-      _limetkyBalance = balance;
-      _unlockedCompanions = unlocked;
-      _selectedCompanion = active;
-      _isPremium = isPrem;
-      _loadingLimetky = false;
-    });
+      if (!mounted) return;
+      setState(() {
+        _limetkyBalance = balance;
+        _unlockedCompanions = unlocked;
+        _selectedCompanion = active;
+        _isPremium = isPrem;
+        _loadingLimetky = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading limetky/companions: $e');
+      if (!mounted) return;
+      setState(() {
+        _loadingLimetky = false;
+      });
+    }
   }
 
   Future<void> _initializePayClient() async {
@@ -205,110 +219,120 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     final cost = _getCompanionCost(id);
     final name = companion['name'] as String;
 
-    if (_unlockedCompanions.contains(id)) {
-      // Toggle active status
-      if (_selectedCompanion == id) {
-        await AuthService().selectCompanion(null);
-        setState(() {
-          _selectedCompanion = null;
-        });
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Společník $name byl poslán domů.'),
-            backgroundColor: const Color(0xFF263238),
-          ),
-        );
-      } else {
-        await AuthService().selectCompanion(id);
-        setState(() {
-          _selectedCompanion = id;
-        });
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Společník $name tě nyní doprovází na mapě!'),
-            backgroundColor: const Color(0xFF5C9E00),
-          ),
-        );
-      }
-    } else {
-      // Try to unlock
-      if (_limetkyBalance < cost) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: const Color(0xFF263238),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text('Nedostatek Limetek 🍋', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            content: Text(
-              'K odemčení společníka $name potřebuješ $cost Limetek. Nyní máš $_limetkyBalance Limetek.\n\nChyť se do pohybu, získávej kilometry a splň denní výzvy pro nasbírání dalších!',
-              style: const TextStyle(color: Colors.white70),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Rozumím', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-
-      // Confirm purchase
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF263238),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('Odemknout společníka $name?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          content: Text(
-            'Opravdu si přeješ utratit $cost Limetek a odemknout společníka $name na mapu?',
-            style: const TextStyle(color: Colors.white70),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Zrušit', style: TextStyle(color: Colors.white60)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: TextButton.styleFrom(foregroundColor: const Color(0xFFBFFF00)),
-              child: const Text('Odemknout', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-
-      if (confirm == true) {
-        setState(() => _loadingLimetky = true);
-        final success = await AuthService().unlockCompanion(id, cost);
-        if (success) {
-          await _loadLimetkyAndCompanions();
+    try {
+      if (_unlockedCompanions.contains(id)) {
+        // Toggle active status
+        if (_selectedCompanion == id) {
+          await AuthService().selectCompanion(null);
+          setState(() {
+            _selectedCompanion = null;
+          });
           if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Společník $name byl poslán domů.'),
+              backgroundColor: const Color(0xFF263238),
+            ),
+          );
+        } else {
+          await AuthService().selectCompanion(id);
+          setState(() {
+            _selectedCompanion = id;
+          });
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Společník $name tě nyní doprovází na mapě!'),
+              backgroundColor: const Color(0xFF5C9E00),
+            ),
+          );
+        }
+      } else {
+        // Try to unlock
+        if (_limetkyBalance < cost) {
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
               backgroundColor: const Color(0xFF263238),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text('🎉 Společník zakoupen!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              content: Text('Úspěšně jsi odemkl společníka $name. Nyní ho můžeš aktivovat jedním klepnutím.', style: const TextStyle(color: Colors.white70)),
+              title: const Text('Nedostatek Limetek 🍋', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              content: Text(
+                'K odemčení společníka $name potřebuješ $cost Limetek. Nyní máš $_limetkyBalance Limetek.\n\nChyť se do pohybu, získávej kilometry a splň denní výzvy pro nasbírání dalších!',
+                style: const TextStyle(color: Colors.white70),
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Super!', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
+                  child: const Text('Rozumím', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
           );
-        } else {
-          setState(() => _loadingLimetky = false);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Chyba při komunikaci s databází.')),
-          );
+          return;
         }
+
+        // Confirm purchase
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: const Color(0xFF263238),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text('Odemknout společníka $name?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            content: Text(
+              'Opravdu si přeješ utratit $cost Limetek a odemknout společníka $name na mapu?',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Zrušit', style: TextStyle(color: Colors.white60)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: const Color(0xFFBFFF00)),
+                child: const Text('Odemknout', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+
+        if (confirm == true) {
+          setState(() => _loadingLimetky = true);
+          final success = await AuthService().unlockCompanion(id, cost);
+          if (success) {
+            await _loadLimetkyAndCompanions();
+            if (!mounted) return;
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: const Color(0xFF263238),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: const Text('🎉 Společník zakoupen!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                content: Text('Úspěšně jsi odemkl společníka $name. Nyní ho můžeš aktivovat jedním klepnutím.', style: const TextStyle(color: Colors.white70)),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Super!', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            setState(() => _loadingLimetky = false);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Chyba při komunikaci s databází.')),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error handling companion action: $e');
+      if (mounted) {
+        setState(() => _loadingLimetky = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chyba: $e')),
+        );
       }
     }
   }
