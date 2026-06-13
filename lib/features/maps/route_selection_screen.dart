@@ -384,17 +384,12 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
           final int eta = (route['duration'] as num).round() ~/ 60;
 
           // Fetch elevations asynchronously
-          RouteElevationService().getElevationsForPoints(points).then((elevations) {
+          RouteElevationService().fetchElevationProfile(points).then((result) {
+            final elevations = result['elevations'] as List<double>? ?? [];
             if (mounted && elevations.isNotEmpty) {
               setState(() {
                 _routeOptions[_selectedOptionIndex]['elevations'] = elevations;
-                
-                double climb = 0.0;
-                for (int i = 1; i < elevations.length; i++) {
-                  final diff = elevations[i] - elevations[i - 1];
-                  if (diff > 0) climb += diff;
-                }
-                _routeOptions[_selectedOptionIndex]['climb'] = climb;
+                _routeOptions[_selectedOptionIndex]['climb'] = result['climb'] as double? ?? 0.0;
               });
             }
           });
@@ -581,7 +576,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                 children: [
                   const Text('ODPOVĚĎ:', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.w900, fontSize: 11)),
                   const SizedBox(height: 6),
-                  Text(option['trivia_answer'] as String, style: const TextStyle(color: Colors.white90, fontSize: 13.5)),
+                  Text(option['trivia_answer'] as String, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13.5)),
                 ],
               ),
             ),
@@ -653,7 +648,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                           ? 'Výška: ${elevations[(_hoverFraction! * (elevations.length - 1)).round()].round()} m'
                           : '',
                     ),
-                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueLime),
+                    icon: BitmapDescriptor.defaultMarkerWithHue(80.0),
                   ),
               },
               myLocationEnabled: true,

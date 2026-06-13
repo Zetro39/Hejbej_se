@@ -238,7 +238,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 4),
                       Text(
                         preset['name']!,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white75),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -1175,7 +1175,7 @@ class _AchievementCard extends StatelessWidget {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
+          side: BorderSide(
             color: isUnlocked ? const Color(0xFFBFFF00).withOpacity(0.4) : Colors.white12,
             width: 1.5,
           ),

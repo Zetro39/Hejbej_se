@@ -524,7 +524,7 @@ class _WheelOfFortuneScreenState extends State<WheelOfFortuneScreen> with Ticker
           const SizedBox(height: 14),
           Text(
             task.description,
-            style: const TextStyle(color: Colors.white90, fontSize: 13.5, height: 1.45),
+            style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13.5, height: 1.45),
           ),
           if (task.exceptions.isNotEmpty && task.exceptions != 'Žádné') ...[
             const SizedBox(height: 10),

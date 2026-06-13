@@ -64,7 +64,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
         color: const Color(0xFF000000),
         emptyColor: const Color(0xFFFFFFFF),
         gapless: false,
-        errorCorrectionLevel: QrErrorCorrectionLevel.Q,
+        errorCorrectionLevel: QrErrorCorrectLevel.Q,
       );
 
       const double qrSize = 512.0;

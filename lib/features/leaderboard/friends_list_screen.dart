@@ -378,13 +378,18 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                       child: Row(
                         children: [
-                          CircleAvatar(
-                            backgroundColor: const Color(0xFF263238),
-                            foregroundColor: const Color(0xFFBFFF00),
-                            border: Border.all(color: Colors.white24),
-                            child: Text(
-                              username.substring(0, 1).toUpperCase(),
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white24, width: 1.5),
+                            ),
+                            child: CircleAvatar(
+                              backgroundColor: const Color(0xFF263238),
+                              foregroundColor: const Color(0xFFBFFF00),
+                              child: Text(
+                                username.substring(0, 1).toUpperCase(),
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 16),
