@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:pay/pay.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,11 +20,6 @@ class ShopScreen extends StatefulWidget {
 
 class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
   late TabController _tabController;
-  late Pay _payClient;
-  PaymentConfiguration? _applePayConfig;
-  PaymentConfiguration? _googlePayConfig;
-  bool _paymentReady = false;
-  bool _applePayAvailable = false;
   final TextEditingController _donationController = TextEditingController(text: '50');
   String _selectedAmount = '50';
 
@@ -84,7 +78,6 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
       duration: const Duration(seconds: 3),
     )..repeat();
     _loadLimetkyAndCompanions();
-    _initializePayClient();
     _startCountdownTimer();
   }
 
@@ -210,30 +203,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _initializePayClient() async {
-    try {
-      final appleConfig = await PaymentConfiguration.fromAsset('assets/apple_pay_config.json');
-      final googleConfig = await PaymentConfiguration.fromAsset('assets/google_pay_config.json');
-      _payClient = Pay({
-        PayProvider.apple_pay: appleConfig,
-        PayProvider.google_pay: googleConfig,
-      });
-      final appleAvailable = await _payClient.userCanPay(PayProvider.apple_pay);
-      if (!mounted) return;
-      setState(() {
-        _applePayConfig = appleConfig;
-        _googlePayConfig = googleConfig;
-        _applePayAvailable = appleAvailable;
-        _paymentReady = true;
-      });
-    } catch (e) {
-      debugPrint('Payment initialization failed: $e');
-      if (!mounted) return;
-      setState(() {
-        _paymentReady = true;
-      });
-    }
-  }
+
 
   Future<void> _handleCompanionAction(Map<String, dynamic> companion) async {
     final id = companion['id'] as String;
@@ -433,6 +403,40 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
               _isPremium = true;
             });
             await _loadLimetkyAndCompanions();
+          },
+        );
+      },
+    );
+  }
+
+  void _openSimulatedDonationSheet(String provider) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return _SimulatedPaymentSheet(
+          amount: _donationAmount,
+          title: 'Jednorázový dar ($provider)',
+          onSuccess: () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: const Color(0xFF263238),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: const Text('🎉 Děkujeme za dar!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                content: Text(
+                  'Tvoje podpora ve výši $_donationAmount Kč přes $provider byla úspěšně přijata.\n\nVážíme si tvé pomoci při vývoji Hejbej se!',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Nemáš zač!', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
           },
         );
       },
@@ -1004,47 +1008,73 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 const SizedBox(height: 16),
-                if (_paymentReady && (_applePayConfig != null || _googlePayConfig != null)) ...[
-                  if (_applePayAvailable && _applePayConfig != null)
-                    ApplePayButton(
-                      paymentConfiguration: _applePayConfig!,
-                      paymentItems: _paymentItems,
-                      style: ApplePayButtonStyle.black,
-                      width: double.infinity,
-                      height: 50,
-                      type: ApplePayButtonType.donate,
-                      onPaymentResult: _onApplePayResult,
-                    )
-                  else if (_googlePayConfig != null)
-                    GooglePayButton(
-                      paymentConfiguration: _googlePayConfig!,
-                      paymentItems: _paymentItems,
-                      type: GooglePayButtonType.donate,
-                      width: double.infinity,
-                      height: 50,
-                      onPaymentResult: _onGooglePayResult,
-                    )
-                  else
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: Text(
-                          'Platební brána není momentálně k dispozici.',
-                          style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 13),
+                Column(
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => _openSimulatedDonationSheet('Apple Pay'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
+                        elevation: 0,
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '',
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Podpořit přes Apple Pay',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
                     ),
-                ] else ...[
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: Text(
-                        'Platební brána není momentálně k dispozici.',
-                        style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 13),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () => _openSimulatedDonationSheet('Google Pay'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isWhite ? Colors.white : const Color(0xFF1E272C),
+                        foregroundColor: textColor,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: borderColor, width: 1.5),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'G',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: isWhite ? Colors.blue : const Color(0xFFBFFF00),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Pay',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Podpořit přes Google Pay',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ],
             ),
           ),
