@@ -1,0 +1,314 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'models/wheel_of_fortune_model.dart';
+import 'services/wheel_of_fortune_service.dart';
+
+class WheelEditorScreen extends StatefulWidget {
+  final WheelOfFortune? wheelToEdit;
+
+  const WheelEditorScreen({super.key, this.wheelToEdit});
+
+  @override
+  State<WheelEditorScreen> createState() => _WheelEditorScreenState();
+}
+
+class _WheelEditorScreenState extends State<WheelEditorScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final List<WheelTask> _tasks = [];
+
+  // Available icon categories for dropdown
+  final List<Map<String, String>> _availableIcons = [
+    {'code': 'luck', 'label': '🍀 Šťastná karta (Free Pass)'},
+    {'code': 'backpack', 'label': '🎒 Nosič batohů'},
+    {'code': 'silent', 'label': '🤫 Tichý bobřík'},
+    {'code': 'backward', 'label': '🔙 Chůze pozpátku'},
+    {'code': 'hop', 'label': '🦘 Skákání po jedné'},
+    {'code': 'knight', 'label': '⚔️ Král rytířů (Středověká řeč)'},
+    {'code': 'squat', 'label': '🏋️ Dřepování'},
+    {'code': 'whisper', 'label': '👂 Šeptání'},
+    {'code': 'airplane', 'label': '✈️ Letadlo (Rozpažené paže)'},
+    {'code': 'friends', 'label': '👥 Pospolu (Chůze u sebe)'},
+    {'code': 'mic', 'label': '🎙️ Sportovní komentátor'},
+    {'code': 'poem', 'label': '✍️ Básník / Mluva v rýmech'},
+    {'code': 'stick', 'label': '🥖 Posvátné žezlo (Nést klacek)'},
+    {'code': 'animal', 'label': '🐾 Zoolog (Hádání zvířat)'},
+    {'code': 'lock', 'label': '🔒 Ruce za zády'},
+    {'code': 'spy', 'label': '🕵️ Tajný agent (Krytí)'},
+    {'code': 'stone', 'label': '🪨 Strážce kamene'},
+    {'code': 'leaf', 'label': '🌿 Listový poklad'},
+    {'code': 'robot', 'label': '🤖 Mluva jako robot'},
+    {'code': 'music', 'label': '🎵 Písničkář (Zpěv)'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.wheelToEdit != null) {
+      _nameController.text = widget.wheelToEdit!.name;
+      _tasks.addAll(widget.wheelToEdit!.tasks);
+    } else {
+      // Add 3 default empty tasks to start with
+      _addTask();
+      _addTask();
+      _addTask();
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _addTask() {
+    setState(() {
+      _tasks.add(WheelTask(
+        id: 'task_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(1000)}',
+        title: '',
+        icon: 'backpack',
+        description: '',
+        exceptions: 'Žádné',
+      ));
+    });
+  }
+
+  void _removeTask(int index) {
+    setState(() {
+      _tasks.removeAt(index);
+    });
+  }
+
+  Future<void> _saveWheel() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    if (_tasks.length < 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Automat musí obsahovat alespoň 3 úkoly.')),
+      );
+      return;
+    }
+
+    final newWheel = WheelOfFortune(
+      id: widget.wheelToEdit?.id ?? 'wheel_${DateTime.now().millisecondsSinceEpoch}',
+      code: widget.wheelToEdit?.code ?? '',
+      name: _nameController.text.trim(),
+      tasks: _tasks,
+      isCustom: true,
+      creatorName: widget.wheelToEdit?.creatorName ?? 'Hráč',
+      creatorUid: widget.wheelToEdit?.creatorUid ?? '',
+      likes: widget.wheelToEdit?.likes ?? 0,
+    );
+
+    await WheelOfFortuneService().saveCustomWheel(newWheel);
+    if (mounted) {
+      Navigator.pop(context, true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        title: Text(widget.wheelToEdit == null ? 'Vytvořit automat úkolů' : 'Upravit automat'),
+        backgroundColor: Colors.lightBlue,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: _saveWheel,
+            icon: const Icon(Icons.check, size: 28),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Wheel Name Field
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.all(16.0),
+                child: TextFormField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: 'Název hry / automatu',
+                    hintText: 'Např. Bláznivá výprava',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    prefixIcon: const Icon(Icons.casino),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Zadejte název hry.';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  'SEZNAM ÚKOLŮ',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54, letterSpacing: 0.5),
+                ),
+              ),
+
+              // Tasks Editor List
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  itemCount: _tasks.length,
+                  itemBuilder: (context, index) {
+                    final task = _tasks[index];
+                    return Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Úkol #${index + 1}',
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.lightBlue.shade800),
+                                ),
+                                if (_tasks.length > 3)
+                                  IconButton(
+                                    onPressed: () => _removeTask(index),
+                                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+
+                            // Task Title
+                            TextFormField(
+                              initialValue: task.title,
+                              decoration: InputDecoration(
+                                labelText: 'Název úkolu',
+                                hintText: 'Např. Nosič batohů',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                isDense: true,
+                              ),
+                              onChanged: (val) {
+                                _tasks[index] = WheelTask(
+                                  id: task.id,
+                                  title: val,
+                                  icon: task.icon,
+                                  description: task.description,
+                                  exceptions: task.exceptions,
+                                );
+                              },
+                              validator: (val) => val == null || val.trim().isEmpty ? 'Vyplňte název úkolu.' : null,
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Icon Category Dropdown
+                            DropdownButtonFormField<String>(
+                              value: task.icon,
+                              decoration: InputDecoration(
+                                labelText: 'Symbol / Ikona',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                isDense: true,
+                              ),
+                              items: _availableIcons.map((i) {
+                                return DropdownMenuItem<String>(
+                                  value: i['code'],
+                                  child: Text(i['label']!),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    _tasks[index] = WheelTask(
+                                      id: task.id,
+                                      title: task.title,
+                                      icon: val,
+                                      description: task.description,
+                                      exceptions: task.exceptions,
+                                    );
+                                  });
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Task Description
+                            TextFormField(
+                              initialValue: task.description,
+                              maxLines: 2,
+                              decoration: InputDecoration(
+                                labelText: 'Jak úkol plnit',
+                                hintText: 'Neseš batoh hráči {hráč} po celý úsek. (Použij {hráč} pro náhodné jméno)',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                isDense: true,
+                              ),
+                              onChanged: (val) {
+                                _tasks[index] = WheelTask(
+                                  id: task.id,
+                                  title: task.title,
+                                  icon: task.icon,
+                                  description: val,
+                                  exceptions: task.exceptions,
+                                );
+                              },
+                              validator: (val) => val == null || val.trim().isEmpty ? 'Vyplňte popis úkolu.' : null,
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Exceptions
+                            TextFormField(
+                              initialValue: task.exceptions,
+                              decoration: InputDecoration(
+                                labelText: 'Výjimky / Omezení',
+                                hintText: 'Např. Pokud jdeš sám, úkol se ignoruje.',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                isDense: true,
+                              ),
+                              onChanged: (val) {
+                                _tasks[index] = WheelTask(
+                                  id: task.id,
+                                  title: task.title,
+                                  icon: task.icon,
+                                  description: task.description,
+                                  exceptions: val.isNotEmpty ? val : 'Žádné',
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              
+              // Bottom Add Task Bar
+              Container(
+                padding: const EdgeInsets.all(16),
+                color: Colors.white,
+                child: ElevatedButton.icon(
+                  onPressed: _addTask,
+                  icon: const Icon(Icons.add),
+                  label: const Text('PŘIDAT ÚKOL', style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.lightBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

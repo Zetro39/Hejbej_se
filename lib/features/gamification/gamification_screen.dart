@@ -7,6 +7,9 @@ import 'package:confetti/confetti.dart';
 import '../../services/auth_service.dart';
 import '../../services/step_tracker_service.dart';
 import '../story_game/screens/story_map_screen.dart';
+import 'models/wheel_of_fortune_model.dart';
+import 'services/wheel_of_fortune_service.dart';
+import 'wheel_editor_screen.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -22,6 +25,8 @@ class _GameScreenState extends State<GameScreen> {
   String? _selectedAvatar;
   String? _selectedCompanion;
   late ConfettiController _confettiController;
+  bool _showCommunityWheels = false;
+  final TextEditingController _searchCodeController = TextEditingController();
 
   @override
   void initState() {
@@ -55,6 +60,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() {
     _confettiController.dispose();
+    _searchCodeController.dispose();
     StepTrackerService().goalCompletedToday.removeListener(_onGoalCompletedChange);
     super.dispose();
   }
@@ -438,159 +444,576 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
+  Widget _buildChallengesTab(User? currentUser) {
+    if (currentUser == null) return const Center(child: Text('Uživatel není přihlášen'));
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                clipBehavior: Clip.antiAlias,
+                elevation: 2,
+                child: ExpansionTile(
+                  title: const Text('Denní cíle & Kroky', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  leading: const Icon(Icons.directions_run, color: Colors.lime),
+                  initiallyExpanded: true,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: _buildStepsCard(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                clipBehavior: Clip.antiAlias,
+                elevation: 2,
+                child: ExpansionTile(
+                  title: const Text('Speciální výpravy & hry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  leading: const Icon(Icons.map, color: Colors.purple),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: _buildSpecialGamesSectionBody(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                clipBehavior: Clip.antiAlias,
+                elevation: 2,
+                child: ExpansionTile(
+                  title: const Text('1v1 Výzvy na míru', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  leading: const Icon(Icons.bolt, color: Colors.orange),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Přehled výzev', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                              ElevatedButton.icon(
+                                onPressed: () => _showCreateChallengeDialog(context),
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Nová výzva'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.lime,
+                                  foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _buildChallengesList(currentUser.uid),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Align(
+          alignment: Alignment.topCenter,
+          child: ConfettiWidget(
+            confettiController: _confettiController,
+            blastDirectionality: BlastDirectionality.explosive,
+            shouldLoop: false,
+            colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple, Colors.lime],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChallengesList(String userId) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('challenges')
+          .where('participants', arrayContains: userId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+
+        if (docs.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            child: const Center(
+              child: Text(
+                'Zatím nemáš žádné výzvy. Klikni na „Nová výzva“!',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.black54),
+              ),
+            ),
+          );
+        }
+
+        final active = docs.where((doc) => doc['status'] == 'active').toList();
+        final pending = docs.where((doc) => doc['status'] == 'pending').toList();
+        final completed = docs.where((doc) => doc['status'] == 'completed').toList();
+
+        List<Widget> challengeWidgets = [];
+
+        if (active.isNotEmpty) {
+          challengeWidgets.add(_buildSectionTitle('Aktivní výzvy'));
+          challengeWidgets.addAll(active.map((doc) => _buildChallengeCard(doc, userId)));
+        }
+
+        if (pending.isNotEmpty) {
+          challengeWidgets.add(_buildSectionTitle('Čekající žádosti'));
+          challengeWidgets.addAll(pending.map((doc) => _buildChallengeCard(doc, userId)));
+        }
+
+        if (completed.isNotEmpty) {
+          challengeWidgets.add(_buildSectionTitle('Dokončené výzvy'));
+          challengeWidgets.addAll(completed.map((doc) => _buildChallengeCard(doc, userId)));
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: challengeWidgets,
+        );
+      },
+    );
+  }
+
+  Widget _buildSpecialGamesSectionBody() {
+    final show18Plus = _userAge != null && _userAge! >= 18;
+    return SizedBox(
+      height: 145,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _buildSpecialGameCard(
+            title: 'Ztracený amulet 💎',
+            description: 'Příběhové RPG. Ujdi 6 km a vyřeš záhadu ztraceného amuletu.',
+            icon: Icons.auto_awesome,
+            color: Colors.purple.shade50,
+            iconColor: Colors.purple.shade700,
+            is18Plus: false,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const StoryMapScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 12),
+          _buildSpecialGameCard(
+            title: 'Zámecká stezka',
+            description: 'Objev historické zámky and parky ve svém okolí.',
+            icon: Icons.fort,
+            color: Colors.amber.shade50,
+            iconColor: Colors.amber.shade700,
+            is18Plus: false,
+          ),
+          const SizedBox(width: 12),
+          _buildSpecialGameCard(
+            title: 'Krakonošův okruh',
+            description: 'Náročný výšlap horskou přírodou za bájným pánem hor.',
+            icon: Icons.landscape,
+            color: Colors.green.shade50,
+            iconColor: Colors.green.shade700,
+            is18Plus: false,
+          ),
+          if (show18Plus) ...[
+            const SizedBox(width: 12),
+            _buildSpecialGameCard(
+              title: 'Tour de Bear (18+)',
+              description: 'Chmelový okruh po lokálních hospůdkách a pivovarech.',
+              icon: Icons.sports_bar,
+              color: Colors.red.shade50,
+              iconColor: Colors.red.shade700,
+              is18Plus: true,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGameCreatorTab(User? currentUser) {
+    if (currentUser == null) return const Center(child: Text('Uživatel není přihlášen'));
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Stáhnout hru podle kódu',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchCodeController,
+                          decoration: InputDecoration(
+                            hintText: 'Např. #K15746',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            isDense: true,
+                            prefixIcon: const Icon(Icons.tag),
+                          ),
+                          textCapitalization: TextCapitalization.characters,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: () async {
+                          final code = _searchCodeController.text.trim();
+                          if (code.isEmpty) return;
+                          
+                          final wheel = await WheelOfFortuneService().searchWheelByCode(code);
+                          if (wheel != null) {
+                            _searchCodeController.clear();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Hra "${wheel.name}" byla úspěšně stažena!')),
+                            );
+                            setState(() {});
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Hra s tímto kódem nebyla nalezena.')),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.lightBlue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('STÁHNOUT', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const WheelEditorScreen()),
+              );
+              if (result == true) {
+                setState(() {});
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Vlastní automat úspěšně vytvořen!')),
+                );
+              }
+            },
+            icon: const Icon(Icons.add_circle_outline, size: 24),
+            label: const Text('VYTVOŘIT VLASTNÍ AUTOMAT ÚKOLŮ', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amberAccent,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Colors.black, width: 2),
+              ),
+              elevation: 4,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            clipBehavior: Clip.antiAlias,
+            elevation: 2,
+            child: ExpansionTile(
+              title: const Text('Od HEJBEJ 🍋', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              leading: const Icon(Icons.verified, color: Colors.amber),
+              initiallyExpanded: true,
+              children: [
+                Column(
+                  children: WheelOfFortuneService().getOfficialWheels().map((wheel) {
+                    return _buildWheelListTile(wheel, isOfficial: true, currentUser: currentUser);
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            clipBehavior: Clip.antiAlias,
+            elevation: 2,
+            child: ExpansionTile(
+              title: const Text('Od hráčů 👥', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              leading: const Icon(Icons.people, color: Colors.blue),
+              children: [
+                _buildPlayersWheelsSubTab(currentUser),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayersWheelsSubTab(User currentUser) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: ChoiceChip(
+                  label: const Center(child: Text('Moje a stažené')),
+                  selected: !_showCommunityWheels,
+                  onSelected: (val) {
+                    if (val) setState(() => _showCommunityWheels = false);
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ChoiceChip(
+                  label: const Center(child: Text('Top z komunity')),
+                  selected: _showCommunityWheels,
+                  onSelected: (val) {
+                    if (val) setState(() => _showCommunityWheels = true);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        _showCommunityWheels
+            ? _buildCommunityWheelsList(currentUser.uid)
+            : _buildLocalWheelsList(currentUser),
+      ],
+    );
+  }
+
+  Widget _buildLocalWheelsList(User currentUser) {
+    return FutureBuilder<List<WheelOfFortune>>(
+      future: WheelOfFortuneService().getCustomWheels(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: CircularProgressIndicator(),
+          ));
+        }
+
+        final wheels = snapshot.data ?? [];
+        if (wheels.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Text(
+              'Nemáš stažené ani vytvořené žádné automaty úkolů.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.black54),
+            ),
+          );
+        }
+
+        return Column(
+          children: wheels.map((w) => _buildWheelListTile(w, isOfficial: false, currentUser: currentUser)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildCommunityWheelsList(String currentUserId) {
+    return FutureBuilder<List<WheelOfFortune>>(
+      future: WheelOfFortuneService().fetchTopRatedCommunityWheels(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: CircularProgressIndicator(),
+          ));
+        }
+
+        final wheels = snapshot.data ?? [];
+        if (wheels.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Text(
+              'V komunitě zatím nejsou sdílené žádné automaty.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.black54),
+            ),
+          );
+        }
+
+        return Column(
+          children: wheels.map((w) {
+            return ListTile(
+              title: Text(w.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Autor: ${w.creatorName} • Kód: #${w.code}'),
+              leading: const Icon(Icons.public, color: Colors.green),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.thumb_up_alt_outlined, color: Colors.blue),
+                    onPressed: () async {
+                      await WheelOfFortuneService().likeCommunityWheel(w.id, currentUserId);
+                      setState(() {});
+                    },
+                  ),
+                  Text('${w.likes}'),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.download_for_offline_outlined, color: Colors.lightBlue),
+                    onPressed: () async {
+                      await WheelOfFortuneService().saveCustomWheel(w);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Hra "${w.name}" stažena mezi tvé lokální hry!')),
+                      );
+                      setState(() {});
+                    },
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildWheelListTile(WheelOfFortune w, {required bool isOfficial, required User currentUser}) {
+    return ListTile(
+      title: Text(w.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(isOfficial 
+          ? 'Oficiální • ${w.tasks.length} úkolů' 
+          : 'Kód: #${w.code.isNotEmpty ? w.code : "Není sdíleno"} • ${w.tasks.length} úkolů'),
+      leading: Icon(isOfficial ? Icons.verified : Icons.casino, color: isOfficial ? Colors.amber : Colors.blue),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.visibility_outlined, color: Colors.black54),
+            onPressed: () => _showWheelPreviewDialog(w),
+          ),
+          if (!isOfficial) ...[
+            if (w.code.isEmpty)
+              IconButton(
+                icon: const Icon(Icons.share, color: Colors.blue),
+                onPressed: () async {
+                  final code = await WheelOfFortuneService().shareWheelToCommunity(w, currentUser.uid, currentUser.displayName ?? 'Hráč');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Hra sdílena! Kód: #$code')),
+                  );
+                  setState(() {});
+                },
+              ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: () async {
+                await WheelOfFortuneService().deleteCustomWheel(w.id);
+                setState(() {});
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showWheelPreviewDialog(WheelOfFortune w) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(w.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: w.tasks.length,
+            itemBuilder: (context, index) {
+              final task = w.tasks[index];
+              return ListTile(
+                title: Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('${task.description}\nVýjimky: ${task.exceptions}'),
+                isThreeLine: true,
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('ZAVŘÍT'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = _auth.currentUser;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('HRY & VÝZVY'),
-        elevation: 0,
-      ),
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: currentUser == null
-            ? const Center(child: Text('Uživatel není přihlášen'))
-            : Stack(
-                children: [
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Steps Card (from template)
-                        _buildStepsCard(),
-                        const SizedBox(height: 24),
-
-                        // Special Games (e.g. Tour de Bear 18+)
-                        _buildSpecialGamesSection(),
-
-                        // Friend Activity Feed
-                        _buildFriendActivityFeed(currentUser.uid),
-                        
-                        // 1v1 Challenges Section Header
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              '1v1 Výzvy na míru',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            ElevatedButton.icon(
-                              onPressed: () => _showCreateChallengeDialog(context),
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text('Nová výzva'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.lime,
-                                foregroundColor: Colors.black,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Challenges List
-                        StreamBuilder<QuerySnapshot>(
-                          stream: _firestore
-                              .collection('challenges')
-                              .where('participants', arrayContains: currentUser.uid)
-                              .snapshots(),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) {
-                              return const Center(child: Padding(
-                                padding: EdgeInsets.all(24.0),
-                                child: CircularProgressIndicator(),
-                              ));
-                            }
-
-                            final docs = snapshot.data?.docs ?? [];
-
-                            if (docs.isEmpty) {
-                              return Container(
-                                padding: const EdgeInsets.all(24),
-                                decoration: BoxDecoration(
-                                  color: Colors.lightBlue.shade50.withOpacity(0.3),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: Colors.lightBlue.shade100),
-                                ),
-                                child: Column(
-                                  children: const [
-                                    Icon(Icons.bolt, size: 48, color: Colors.lightBlue),
-                                    SizedBox(height: 12),
-                                    Text(
-                                      'Zatím nemáš žádné výzvy.',
-                                      style: TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                    SizedBox(height: 6),
-                                    Text(
-                                      'Klikni na „Nová výzva“ a vyzvi přítele na souboj!',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.black54),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-
-                            // Split challenges
-                            final active = docs.where((doc) => doc['status'] == 'active').toList();
-                            final pending = docs.where((doc) => doc['status'] == 'pending').toList();
-                            final completed = docs.where((doc) => doc['status'] == 'completed').toList();
-
-                            List<Widget> challengeWidgets = [];
-
-                            if (active.isNotEmpty) {
-                              challengeWidgets.add(_buildSectionTitle('Aktivní výzvy'));
-                              challengeWidgets.addAll(active.map((doc) => _buildChallengeCard(doc, currentUser.uid)));
-                            }
-
-                            if (pending.isNotEmpty) {
-                              challengeWidgets.add(_buildSectionTitle('Čekající žádosti'));
-                              challengeWidgets.addAll(pending.map((doc) => _buildChallengeCard(doc, currentUser.uid)));
-                            }
-
-                            if (completed.isNotEmpty) {
-                              challengeWidgets.add(_buildSectionTitle('Dokončené výzvy'));
-                              challengeWidgets.addAll(completed.map((doc) => _buildChallengeCard(doc, currentUser.uid)));
-                            }
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: challengeWidgets,
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.topCenter,
-                    child: ConfettiWidget(
-                      confettiController: _confettiController,
-                      blastDirectionality: BlastDirectionality.explosive,
-                      shouldLoop: false,
-                      colors: const [
-                        Colors.green,
-                        Colors.blue,
-                        Colors.pink,
-                        Colors.orange,
-                        Colors.purple,
-                        Colors.lime,
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('HRY & VÝZVY'),
+          elevation: 0,
+          bottom: const TabBar(
+            indicatorColor: Colors.lime,
+            labelColor: Colors.black87,
+            unselectedLabelColor: Colors.black54,
+            tabs: [
+              Tab(icon: Icon(Icons.star), text: 'Výzvy'),
+              Tab(icon: Icon(Icons.casino), text: 'Tvorba her'),
+            ],
+          ),
+        ),
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: currentUser == null
+              ? const Center(child: Text('Uživatel není přihlášen'))
+              : TabBarView(
+                  children: [
+                    _buildChallengesTab(currentUser),
+                    _buildGameCreatorTab(currentUser),
+                  ],
+                ),
+        ),
       ),
     );
   }
+
 
   Widget _buildSectionTitle(String title) {
     return Padding(

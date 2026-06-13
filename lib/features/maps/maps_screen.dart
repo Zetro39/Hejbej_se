@@ -26,6 +26,9 @@ import 'ar_navigation_screen.dart';
 import 'route_selection_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../gamification/models/wheel_of_fortune_model.dart';
+import '../gamification/services/wheel_of_fortune_service.dart';
+import '../gamification/wheel_of_fortune_screen.dart';
 
 class PlacePrediction {
   final String description;
@@ -77,6 +80,12 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   bool _routeActive = false;
   double _remainingDistance = 0.0;
   int _remainingEta = 0;
+  WheelOfFortune? _activeRouteGame;
+  bool _isGroupMode = false;
+  double _gameLastTriggeredDistance = 0.0;
+  List<String> _gamePlayers = [];
+  Map<String, List<String>> _gamePlayerHistory = {};
+  Map<String, WheelTask> _gameActiveAssignments = {};
   int _closestWaypointIndex = 0;
   String _navigationInstruction = 'Sledujte vyznačenou trasu';
   IconData _navigationIcon = Icons.navigation;
@@ -189,6 +198,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     if (lastActivityString != null) {
       _lastActivityDate = DateTime.tryParse(lastActivityString);
     }
+    await _loadActiveGameState();
     
     final mapTypeStr = prefs.getString('preferred_map_type') ?? 'normal';
     if (mounted) {
@@ -1084,8 +1094,13 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _routeSuggestions.clear();
       _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
       _markers.removeWhere((m) => m.markerId.value.startsWith('route_'));
+      _activeRouteGame = null;
+      _gamePlayers.clear();
+      _gameActiveAssignments.clear();
+      _gamePlayerHistory.clear();
     });
     _clearCachedRoute();
+    _saveActiveGameState();
   }
 
   Future<void> _completeRoute() async {
@@ -1099,9 +1114,14 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _routeSuggestions.clear();
       _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
       _markers.removeWhere((m) => m.markerId.value.startsWith('route_'));
+      _activeRouteGame = null;
+      _gamePlayers.clear();
+      _gameActiveAssignments.clear();
+      _gamePlayerHistory.clear();
     });
     
     await _clearCachedRoute();
+    await _saveActiveGameState();
 
     if (mounted) {
       HapticFeedback.vibrate();
@@ -2381,6 +2401,15 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         _totalDistance += distanceKm;
         _limetkyBalance += distanceKm.toInt();
         await _savePersistentData();
+
+        // Game Integration check - trigger every 1.5 km
+        if (_activeRouteGame != null && _routeActive) {
+          if (_totalDistance - _gameLastTriggeredDistance >= 1.5) {
+            _gameLastTriggeredDistance = _totalDistance;
+            await _saveActiveGameState();
+            _triggerRouteGameRoll();
+          }
+        }
       }
       _previousPosition = position;
 
@@ -3213,83 +3242,198 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'ZBÝVÁ',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.black54,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.0,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_remainingDistance.toStringAsFixed(1)} km',
+                                      style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Container(
+                                  width: 1,
+                                  height: 36,
+                                  color: Colors.black12,
+                                ),
+                                Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'ČAS',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.black54,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.0,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$_remainingEta min',
+                                      style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton(
+                            onPressed: _cancelRoute,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.redAccent.shade100,
+                              foregroundColor: Colors.red.shade900,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                            ),
+                            child: const Text(
+                              'Konec',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_activeRouteGame != null) ...[
+                        const Divider(height: 24, thickness: 1),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'ZBÝVÁ',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.black54,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.0,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '🎰 Hra: ${_activeRouteGame!.name}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.blueAccent),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${_remainingDistance.toStringAsFixed(1)} km',
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ],
+                                  const SizedBox(height: 4),
+                                  if (_gameActiveAssignments.isEmpty)
+                                    Text(
+                                      'Další úkoly za: ${(1.5 - (_totalDistance - _gameLastTriggeredDistance)).clamp(0.0, 1.5).toStringAsFixed(1)} km',
+                                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                    )
+                                  else
+                                    const Text(
+                                      'Máte aktivní úkoly! Splňte je do konce úseku.',
+                                      style: TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.bold),
+                                    ),
+                                ],
+                              ),
                             ),
-                            Container(
-                              width: 1,
-                              height: 36,
-                              color: Colors.black12,
-                            ),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'ČAS',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.black54,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.0,
-                                  ),
+                            if (_gameActiveAssignments.isEmpty)
+                              ElevatedButton.icon(
+                                onPressed: _openGameWheelScreen,
+                                icon: const Icon(Icons.casino, size: 16),
+                                label: const Text('Losovat hned', style: TextStyle(fontSize: 12)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.amberAccent,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '$_remainingEta min',
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      ElevatedButton(
-                        onPressed: _cancelRoute,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent.shade100,
-                          foregroundColor: Colors.red.shade900,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        if (_gameActiveAssignments.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade50.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.amber.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                ..._gameActiveAssignments.entries.map((entry) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 6.0),
+                                    child: RichText(
+                                      text: TextSpan(
+                                        style: const TextStyle(color: Colors.black87, fontSize: 13),
+                                        children: [
+                                          TextSpan(text: '${entry.key}: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                          TextSpan(text: entry.value.title),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                                const SizedBox(height: 8),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      for (var entry in _gameActiveAssignments.entries) {
+                                        final list = _gamePlayerHistory[entry.key] ?? [];
+                                        list.add(entry.value.id);
+                                        _gamePlayerHistory[entry.key] = list;
+                                      }
+                                      _gameActiveAssignments.clear();
+                                    });
+                                    _saveActiveGameState();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Úkoly označeny za splněné! 🏆')),
+                                    );
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  child: const Text('Označit úkoly za splněné ✓', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ] else ...[
+                        const Divider(height: 24, thickness: 1),
+                        ElevatedButton.icon(
+                          onPressed: _showAddGameToRouteBottomSheet,
+                          icon: const Icon(Icons.casino_outlined, size: 18),
+                          label: const Text('Přidat hru na trasu 🎰', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amberAccent,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
                         ),
-                        child: const Text(
-                          'Konec',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -3827,5 +3971,268 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     
     if (scannedData == null || scannedData.isEmpty) return;
     await _loadRouteFromData(scannedData);
+  }
+
+  Future<void> _saveActiveGameState() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_activeRouteGame == null) {
+      await prefs.remove('active_game_id');
+      await prefs.remove('active_game_players');
+      await prefs.remove('active_game_mode');
+      await prefs.remove('active_game_last_triggered_dist');
+      await prefs.remove('active_game_assignments');
+      await prefs.remove('active_game_player_history');
+    } else {
+      await prefs.setString('active_game_id', _activeRouteGame!.id);
+      await prefs.setStringList('active_game_players', _gamePlayers);
+      await prefs.setBool('active_game_mode', _isGroupMode);
+      await prefs.setDouble('active_game_last_triggered_dist', _gameLastTriggeredDistance);
+      await prefs.setString('active_game_assignments', jsonEncode(
+        _gameActiveAssignments.map((k, v) => MapEntry(k, v.toJson()))
+      ));
+      await prefs.setString('active_game_player_history', jsonEncode(_gamePlayerHistory));
+    }
+  }
+
+  Future<void> _loadActiveGameState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final gameId = prefs.getString('active_game_id');
+      if (gameId == null) return;
+
+      final customWheels = await WheelOfFortuneService().getCustomWheels();
+      final officialWheels = WheelOfFortuneService().getOfficialWheels();
+      
+      WheelOfFortune? wheel;
+      for (final w in customWheels) {
+        if (w.id == gameId) {
+          wheel = w;
+          break;
+        }
+      }
+      if (wheel == null) {
+        for (final w in officialWheels) {
+          if (w.id == gameId) {
+            wheel = w;
+            break;
+          }
+        }
+      }
+
+      if (wheel == null) return;
+
+      setState(() {
+        _activeRouteGame = wheel;
+        _gamePlayers = prefs.getStringList('active_game_players') ?? ['Já'];
+        _isGroupMode = prefs.getBool('active_game_mode') ?? false;
+        _gameLastTriggeredDistance = prefs.getDouble('active_game_last_triggered_dist') ?? 0.0;
+        
+        final assignmentsJson = prefs.getString('active_game_assignments');
+        if (assignmentsJson != null) {
+          final decoded = jsonDecode(assignmentsJson) as Map<String, dynamic>;
+          _gameActiveAssignments = decoded.map((k, v) => MapEntry(k, WheelTask.fromJson(v)));
+        } else {
+          _gameActiveAssignments = {};
+        }
+
+        final historyJson = prefs.getString('active_game_player_history');
+        if (historyJson != null) {
+          final decoded = jsonDecode(historyJson) as Map<String, dynamic>;
+          _gamePlayerHistory = decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
+        } else {
+          _gamePlayerHistory = {};
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _triggerRouteGameRoll() async {
+    if (_activeRouteGame == null) return;
+    HapticFeedback.vibrate();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('🎰 Losování úkolu!', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Ušli jste dalších 1.5 km. Je čas vylosovat úkoly pro tuto část trasy!'),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _openGameWheelScreen();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.lime,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('SPUSTIT AUTOMAT'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openGameWheelScreen() {
+    if (_activeRouteGame == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WheelOfFortuneScreen(
+          playerNames: _gamePlayers,
+          wheel: _activeRouteGame!,
+          playerHistory: _gamePlayerHistory,
+          onComplete: (assignments) {
+            setState(() {
+              _gameActiveAssignments = assignments;
+            });
+            _saveActiveGameState();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showAddGameToRouteBottomSheet() async {
+    final official = WheelOfFortuneService().getOfficialWheels();
+    final custom = await WheelOfFortuneService().getCustomWheels();
+    final allWheels = [...official, ...custom];
+
+    if (!mounted) return;
+
+    WheelOfFortune? selectedWheel = allWheels.isNotEmpty ? allWheels.first : null;
+    final playersController = TextEditingController(text: 'Já');
+    String selectedMode = 'individual';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Center(
+                      child: Container(
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.all(Radius.circular(10))),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Nastavit hru pro trasu 🎰',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Vyberte automat úkolů:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<WheelOfFortune>(
+                      value: selectedWheel,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      items: allWheels.map((w) {
+                        return DropdownMenuItem<WheelOfFortune>(
+                          value: w,
+                          child: Text(w.name),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setModalState(() {
+                            selectedWheel = val;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Hráči na trase (oddělte čárkou):', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: playersController,
+                      decoration: InputDecoration(
+                        hintText: 'Já, Tomáš, Pepa',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.people),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Herní režim:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('Každý sám')),
+                            selected: selectedMode == 'individual',
+                            onSelected: (val) {
+                              if (val) setModalState(() => selectedMode = 'individual');
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('Celá parta')),
+                            selected: selectedMode == 'group',
+                            onSelected: (val) {
+                              if (val) setModalState(() => selectedMode = 'group');
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (selectedWheel == null) return;
+                        final pList = playersController.text
+                            .split(',')
+                            .map((s) => s.trim())
+                            .where((s) => s.isNotEmpty)
+                            .toList();
+                        
+                        setState(() {
+                          _activeRouteGame = selectedWheel;
+                          _gamePlayers = pList.isEmpty ? ['Já'] : pList;
+                          _isGroupMode = selectedMode == 'group';
+                          _gameLastTriggeredDistance = _totalDistance;
+                          _gameActiveAssignments.clear();
+                          _gamePlayerHistory.clear();
+                        });
+                        _saveActiveGameState();
+                        Navigator.pop(context);
+                        
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Hra "${selectedWheel!.name}" byla úspěšně přidána na trasu!')),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.lime,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: const Text('ULOŽIT HRU NA TRASU', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }
