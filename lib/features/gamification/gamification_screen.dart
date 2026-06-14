@@ -782,12 +782,12 @@ class _GameScreenState extends State<GameScreen> {
               if (result == true) {
                 setState(() {});
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Vlastní automat úspěšně vytvořen!')),
+                  const SnackBar(content: Text('Vlastní Kolo štěstí úspěšně vytvořeno!')),
                 );
               }
             },
             icon: const Icon(Icons.add_circle_outline, size: 24),
-            label: const Text('VYTVOŘIT VLASTNÍ AUTOMAT ÚKOLŮ', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            label: const Text('VYTVOŘIT VLASTNÍ KOLO ŠTĚSTÍ', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.amberAccent,
               foregroundColor: Colors.black,
@@ -909,7 +909,7 @@ class _GameScreenState extends State<GameScreen> {
           return Padding(
             padding: const EdgeInsets.all(24.0),
             child: Text(
-              'Nemáš stažené ani vytvořené žádné automaty úkolů.',
+              'Nemáš stažené ani vytvořené žádná Kola štěstí.',
               textAlign: TextAlign.center,
               style: TextStyle(color: textSecondary),
             ),
@@ -939,7 +939,7 @@ class _GameScreenState extends State<GameScreen> {
           return Padding(
             padding: const EdgeInsets.all(24.0),
             child: Text(
-              'V komunitě zatím nejsou sdílené žádné automaty.',
+              'V komunitě zatím nejsou sdílená žádná Kola štěstí.',
               textAlign: TextAlign.center,
               style: TextStyle(color: textSecondary),
             ),

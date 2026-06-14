@@ -85,7 +85,7 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
 
     if (_tasks.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Automat úkolů musí obsahovat alespoň 3 úkoly.')),
+        const SnackBar(content: Text('Kolo štěstí musí obsahovat alespoň 3 úkoly.')),
       );
       return;
     }
@@ -105,7 +105,7 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
       await WheelOfFortuneService().saveCustomWheel(newWheel);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Automat úkolů byl úspěšně uložen!'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Kolo štěstí bylo úspěšně uloženo!'), backgroundColor: Colors.green),
         );
         Navigator.pop(context, true);
       }
@@ -136,7 +136,7 @@ class _WheelEditorScreenState extends State<WheelEditorScreen> {
           backgroundColor: bgColor,
           appBar: AppBar(
             title: Text(
-              widget.wheelToEdit == null ? 'Vytvořit vlastní automat' : 'Upravit vlastní automat',
+              widget.wheelToEdit == null ? 'Vytvořit vlastní Kolo štěstí' : 'Upravit vlastní Kolo štěstí',
               style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5, color: appBarFg),
             ),
             backgroundColor: appBarBg,

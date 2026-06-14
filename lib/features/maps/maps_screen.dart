@@ -4104,7 +4104,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('SPUSTIT AUTOMAT'),
+            child: const Text('SPUSTIT KOLO ŠTĚSTÍ'),
           ),
         ],
       ),
@@ -4174,7 +4174,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Vyberte automat úkolů:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('Vyberte Kolo štěstí:', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<WheelOfFortune>(
                       value: selectedWheel,
