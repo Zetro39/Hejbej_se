@@ -1250,6 +1250,7 @@ class _GameScreenState extends State<GameScreen> {
                           MascotWidget(
                             avatar: _selectedCompanion!,
                             progress: progress,
+                            cardColor: cardColor,
                           ),
                       ],
                     ),
@@ -2044,11 +2045,13 @@ enum MascotState { sleeping, running, celebrating }
 class MascotWidget extends StatefulWidget {
   final String avatar;
   final double progress;
+  final Color? cardColor;
 
   const MascotWidget({
     super.key,
     required this.avatar,
     required this.progress,
+    this.cardColor,
   });
 
   @override
@@ -2199,6 +2202,8 @@ class _MascotWidgetState extends State<MascotWidget> with TickerProviderStateMix
 
     return Image.asset(
       'assets/images/$assetName',
+      color: widget.cardColor,
+      colorBlendMode: widget.cardColor != null ? BlendMode.multiply : null,
       fit: BoxFit.contain,
       width: 80,
       height: 80,
