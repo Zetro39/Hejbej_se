@@ -3461,7 +3461,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                           return Text(
                             reason.isNotEmpty ? reason : 'Zpomalte pro obnovení sbírání km.',
                             style: const TextStyle(
-                              color: Colors.white90,
+                              color: Colors.white70,
                               fontSize: 12,
                             ),
                           );
@@ -3684,7 +3684,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                                 _buildRouteInfoChip(
                                   '🎮 ${_activeRouteGame!.name}',
                                   color: Colors.orange.shade50,
-                                  textColor: Colors.orange.shade950,
+                                  textColor: Colors.orange.shade900,
                                 ),
                             ],
                           ),
@@ -3930,7 +3930,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.shade850,
+                                  color: Colors.orange.shade900,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
@@ -4003,7 +4003,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                               child: Text(
                                 _navigationInstruction,
                                 style: const TextStyle(
-                                  color: Colors.white90,
+                                  color: Colors.white70,
                                   fontSize: 12,
                                 ),
                                 maxLines: 1,

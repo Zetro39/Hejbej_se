@@ -1083,7 +1083,7 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
                           return Text(
                             reason.isNotEmpty ? reason : 'Zpomalte pro obnovení postupu v příběhu.',
                             style: const TextStyle(
-                              color: Colors.white90,
+                              color: Colors.white70,
                               fontSize: 12,
                             ),
                           );

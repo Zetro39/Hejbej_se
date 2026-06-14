@@ -842,7 +842,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                         Expanded(
                           child: Text(
                             b,
-                            style: const TextStyle(color: Colors.white75, fontSize: 12),
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
                           ),
                         ),
                       ],
