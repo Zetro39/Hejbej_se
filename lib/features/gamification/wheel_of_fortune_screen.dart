@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:confetti/confetti.dart';
 import 'models/wheel_of_fortune_model.dart';
 import '../../services/auth_service.dart';
 import 'widgets/task_doodle_widget.dart';
@@ -43,9 +44,8 @@ class _WheelOfFortuneScreenState extends State<WheelOfFortuneScreen> with Ticker
   late List<WheelTask> _availableTasksForCurrentPlayer;
 
   // Animation for Confetti & Neon flashing
-  late AnimationController _confettiController;
+  late ConfettiController _confettiController;
   late AnimationController _neonFlashingController;
-  final List<_ConfettiParticle> _particles = [];
 
   // Active Task popup show/hide
   bool _showTaskPopup = false;
@@ -56,14 +56,7 @@ class _WheelOfFortuneScreenState extends State<WheelOfFortuneScreen> with Ticker
     _players = widget.playerNames.isEmpty ? ['Já'] : List.from(widget.playerNames);
     _scrollController = FixedExtentScrollController();
 
-    _confettiController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..addListener(() {
-        if (_confettiController.isAnimating) {
-          _updateParticles();
-        }
-      });
+    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
 
     _neonFlashingController = AnimationController(
       vsync: this,
@@ -165,29 +158,7 @@ class _WheelOfFortuneScreenState extends State<WheelOfFortuneScreen> with Ticker
   }
 
   void _triggerConfetti() {
-    _particles.clear();
-    final random = math.Random();
-    for (int i = 0; i < 60; i++) {
-      _particles.add(_ConfettiParticle(
-        color: Colors.primaries[random.nextInt(Colors.primaries.length)],
-        x: 0.5,
-        y: 0.35,
-        vx: (random.nextDouble() - 0.5) * 15,
-        vy: (random.nextDouble() - 0.7) * 15 - 5,
-        radius: random.nextDouble() * 5 + 4,
-      ));
-    }
-    _confettiController.forward(from: 0.0);
-  }
-
-  void _updateParticles() {
-    setState(() {
-      for (var p in _particles) {
-        p.x += p.vx * 0.016;
-        p.y += p.vy * 0.016;
-        p.vy += 9.8 * 0.016 * 10; // gravity
-      }
-    });
+    _confettiController.play();
   }
 
   void _useReroll() {
@@ -450,14 +421,16 @@ class _WheelOfFortuneScreenState extends State<WheelOfFortuneScreen> with Ticker
             ),
           ),
 
-          // Custom Confetti canvas
-          if (_confettiController.isAnimating)
-            IgnorePointer(
-              child: CustomPaint(
-                size: Size.infinite,
-                painter: _ConfettiPainter(particles: _particles),
-              ),
+          // Confetti Overlay
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: Colors.primaries,
             ),
+          ),
         ],
       ),
     );
@@ -572,43 +545,4 @@ class _WheelOfFortuneScreenState extends State<WheelOfFortuneScreen> with Ticker
       ),
     );
   }
-}
-
-class _ConfettiParticle {
-  Color color;
-  double x;
-  double y;
-  double vx;
-  double vy;
-  double radius;
-
-  _ConfettiParticle({
-    required this.color,
-    required this.x,
-    required this.y,
-    required this.vx,
-    required this.vy,
-    required this.radius,
-  });
-}
-
-class _ConfettiPainter extends CustomPainter {
-  final List<_ConfettiParticle> particles;
-
-  _ConfettiPainter({required this.particles});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-    for (var p in particles) {
-      final double screenX = p.x * size.width;
-      final double screenY = p.y * size.height;
-      if (screenX < 0 || screenX > size.width || screenY > size.height) continue;
-      paint.color = p.color;
-      canvas.drawCircle(Offset(screenX, screenY), p.radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) => true;
 }

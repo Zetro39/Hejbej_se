@@ -2,6 +2,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_service.dart';
+import 'anticheat_service.dart';
+
 
 const String _distanceKey = 'totalDistance';
 
@@ -221,13 +223,18 @@ class LocationService {
     ).asyncMap((position) async {
       double distanceKm = 0.0;
 
-      if (_lastPosition != null) {
+      final prefs = await SharedPreferences.getInstance();
+      final usingBike = prefs.getBool('preferred_bike_mode') ?? false;
+
+      final countDistance = AntiCheatService().checkLocationUpdate(position, usingBike);
+
+      if (_lastPosition != null && countDistance) {
         final distance = Geolocator.distanceBetween(
           _lastPosition!.latitude,
           _lastPosition!.longitude,
           position.latitude,
           position.longitude,
-        );
+      );
         distanceKm = distance / 1000; // Convert to kilometers
       }
 
@@ -252,6 +259,7 @@ class LocationService {
   /// Reset tracking
   void reset() {
     _lastPosition = null;
+    AntiCheatService().reset();
   }
 }
 

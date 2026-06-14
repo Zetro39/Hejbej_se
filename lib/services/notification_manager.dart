@@ -8,6 +8,7 @@ class NotificationInboxItem {
   final String body;
   final DateTime timestamp;
   bool read;
+  final String? senderUid;
 
   NotificationInboxItem({
     required this.id,
@@ -15,6 +16,7 @@ class NotificationInboxItem {
     required this.body,
     required this.timestamp,
     this.read = false,
+    this.senderUid,
   });
 
   Map<String, dynamic> toJson() => {
@@ -23,6 +25,7 @@ class NotificationInboxItem {
     'body': body,
     'timestamp': timestamp.toIso8601String(),
     'read': read,
+    'senderUid': senderUid,
   };
 
   factory NotificationInboxItem.fromJson(Map<String, dynamic> json) => NotificationInboxItem(
@@ -31,6 +34,7 @@ class NotificationInboxItem {
     body: json['body'] as String,
     timestamp: DateTime.parse(json['timestamp'] as String),
     read: json['read'] as bool? ?? false,
+    senderUid: json['senderUid'] as String?,
   );
 }
 
@@ -42,7 +46,7 @@ class NotificationManager {
     unreadCountNotifier.value = await getUnreadCount();
   }
 
-  static Future<void> saveNotification(String title, String body) async {
+  static Future<void> saveNotification(String title, String body, {String? senderUid}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final listJson = prefs.getStringList(_keyNotifications) ?? [];
@@ -52,6 +56,7 @@ class NotificationManager {
         title: title,
         body: body,
         timestamp: DateTime.now(),
+        senderUid: senderUid,
       );
       
       listJson.insert(0, jsonEncode(newItem.toJson())); // Newest first

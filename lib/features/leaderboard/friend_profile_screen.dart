@@ -74,6 +74,8 @@ class FriendProfileScreen extends StatelessWidget {
               final limetky = data['limetky'] as int? ?? 0;
               final streak = data['streak'] as int? ?? 0;
               final totalDistance = (data['totalDistance'] as num?)?.toDouble() ?? 0.0;
+              final isPremium = data['isPremium'] as bool? ?? false;
+              final premiumTier = data['premiumTier'] as String?;
 
               final avatar = data['selected_avatar'] as String?;
               final birthDateTs = data['birth_date'] as Timestamp?;
@@ -145,18 +147,29 @@ class FriendProfileScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 12),
-                    
                     // Avatar container with Neon Lime glowing border
                     Center(
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFBFFF00), width: 3),
+                          border: Border.all(
+                            color: isPremium
+                                ? (premiumTier == '500' ? Colors.pinkAccent :
+                                   premiumTier == '100' ? Colors.cyanAccent :
+                                   premiumTier == '50' ? Colors.amberAccent :
+                                   const Color(0xFFBFFF00))
+                                : const Color(0xFFBFFF00),
+                            width: 3,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFBFFF00).withOpacity(0.15),
+                              color: (isPremium
+                                  ? (premiumTier == '500' ? Colors.pinkAccent :
+                                     premiumTier == '100' ? Colors.cyanAccent :
+                                     premiumTier == '50' ? Colors.amberAccent :
+                                     const Color(0xFFBFFF00))
+                                  : const Color(0xFFBFFF00)).withOpacity(0.15),
                               blurRadius: 16,
                               spreadRadius: 2,
                             ),
@@ -203,6 +216,45 @@ class FriendProfileScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
                       textAlign: TextAlign.center,
                     ),
+                    if (isPremium) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: (premiumTier == '500' ? Colors.pinkAccent :
+                                 premiumTier == '100' ? Colors.cyanAccent :
+                                 premiumTier == '50' ? Colors.amberAccent :
+                                 const Color(0xFFBFFF00)).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: premiumTier == '500' ? Colors.pinkAccent :
+                                   premiumTier == '100' ? Colors.cyanAccent :
+                                   premiumTier == '50' ? Colors.amberAccent :
+                                   const Color(0xFFBFFF00),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          premiumTier == '500' ? '💎 HEJBEJ Srdcař' :
+                          premiumTier == '100' ? '🎖️ Patron Projektu' :
+                          premiumTier == '50' ? '⭐ Super VIP' :
+                          '💖 VIP Podporovatel',
+                          style: TextStyle(
+                            color: premiumTier == '500' ? Colors.pinkAccent :
+                                   premiumTier == '100' ? Colors.cyanAccent :
+                                   premiumTier == '50' ? Colors.amberAccent :
+                                   const Color(0xFFBFFF00),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Finanční podporovatel aplikace Hejbej se 💖',
+                        style: TextStyle(color: textSecondary, fontSize: 12, fontStyle: FontStyle.italic),
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     if (code.isNotEmpty)
                       Text(

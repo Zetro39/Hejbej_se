@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:confetti/confetti.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/location_service.dart';
 
 const List<Map<String, dynamic>> _achievementData = [
@@ -90,7 +93,7 @@ class AchievementsScreen extends StatefulWidget {
   State<AchievementsScreen> createState() => _AchievementsScreenState();
 }
 
-class _AchievementsScreenState extends State<AchievementsScreen> with TickerProviderStateMixin {
+class _AchievementsScreenState extends State<AchievementsScreen> {
   late final DistanceManager _distanceManager;
   final List<bool> _loyaltyAchievements = [false, false, false];
   final List<bool> _stepsAchievements = List.filled(6, false);
@@ -100,24 +103,19 @@ class _AchievementsScreenState extends State<AchievementsScreen> with TickerProv
   bool _storyDifficultyHard = false;
   bool _storyDifficultyHardcore = false;
   final Map<String, bool> _checkpointAchievements = {};
+  int _invitedFriendsCount = 0;
+  bool _hasOwnedPremium = false;
+  bool _premiumForYear = false;
   
-  // Confetti particles state
-  final List<_ConfettiParticle> _confetti = [];
-  late AnimationController _confettiController;
+  // Confetti controller
+  late ConfettiController _confettiController;
 
   @override
   void initState() {
     super.initState();
     _distanceManager = DistanceManager();
     _loadAchievements();
-    _confettiController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..addListener(() {
-        if (_confettiController.isAnimating) {
-          _updateConfetti();
-        }
-      });
+    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
   }
 
   @override
@@ -128,7 +126,42 @@ class _AchievementsScreenState extends State<AchievementsScreen> with TickerProv
 
   Future<void> _loadAchievements() async {
     final prefs = await SharedPreferences.getInstance();
+    int friendsCount = prefs.getInt('invited_friends_count') ?? 0;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .collection('friends')
+            .where('status', isEqualTo: 'friends')
+            .get();
+        friendsCount = snap.docs.length;
+        await prefs.setInt('invited_friends_count', friendsCount);
+      } catch (_) {}
+    }
+
+    final isPrem = prefs.getBool('isPremium') ?? false;
+    final everOwned = prefs.getBool('ever_owned_premium') ?? false || isPrem;
+    final premiumStartTimeStr = prefs.getString('premium_start_time');
+    bool premForYear = prefs.getBool('premium_for_year') ?? false;
+    if (premiumStartTimeStr != null) {
+      try {
+        final startTime = DateTime.parse(premiumStartTimeStr);
+        if (DateTime.now().difference(startTime).inDays >= 365) {
+          premForYear = true;
+        }
+      } catch (_) {}
+    }
+    if (prefs.getBool('simulate_year_premium') == true) {
+      premForYear = true;
+    }
+
     setState(() {
+      _invitedFriendsCount = friendsCount;
+      _hasOwnedPremium = everOwned;
+      _premiumForYear = premForYear;
+
       _loyaltyAchievements[0] = prefs.getBool('loyaltyAchievement_0') ?? false;
       _loyaltyAchievements[1] = prefs.getBool('loyaltyAchievement_1') ?? false;
       _loyaltyAchievements[2] = prefs.getBool('loyaltyAchievement_2') ?? false;
@@ -151,36 +184,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> with TickerProv
   }
 
   void _triggerConfetti() {
-    final random = math.Random();
-    _confetti.clear();
-    for (int i = 0; i < 80; i++) {
-      _confetti.add(_ConfettiParticle(
-        color: HSLColor.fromAHSL(
-          1.0,
-          random.nextDouble() * 360,
-          0.85,
-          0.6,
-        ).toColor(),
-        x: random.nextDouble() * 400 - 100, // Spawn spread
-        y: -20,
-        vx: random.nextDouble() * 8.0 - 4.0,
-        vy: random.nextDouble() * 6.0 + 3.0,
-        size: random.nextDouble() * 7.0 + 4.0,
-        rotation: random.nextDouble() * math.pi * 2,
-        rotationSpeed: random.nextDouble() * 0.1 - 0.05,
-      ));
-    }
-    _confettiController.forward(from: 0.0);
-  }
-
-  void _updateConfetti() {
-    setState(() {
-      for (var p in _confetti) {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.rotation += p.rotationSpeed;
-      }
-    });
+    _confettiController.play();
   }
 
   @override
@@ -188,7 +192,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> with TickerProv
     final totalDistance = _distanceManager.totalDistance;
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
@@ -216,6 +220,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> with TickerProv
               Tab(text: 'Série'),
               Tab(text: 'Checky'),
               Tab(text: 'Výpravy'),
+              Tab(text: 'Sociální'),
             ],
           ),
         ),
@@ -234,17 +239,22 @@ class _AchievementsScreenState extends State<AchievementsScreen> with TickerProv
 
                 // 4. Výpravy Tab
                 _buildQuestsTab(),
+
+                // 5. Sociální Tab
+                _buildSocialTab(),
               ],
             ),
 
             // Confetti Overlay
-            if (_confettiController.isAnimating)
-              IgnorePointer(
-                child: CustomPaint(
-                  size: Size.infinite,
-                  painter: _ConfettiPainter(particles: _confetti),
-                ),
+            Align(
+              alignment: Alignment.topCenter,
+              child: ConfettiWidget(
+                confettiController: _confettiController,
+                blastDirectionality: BlastDirectionality.explosive,
+                shouldLoop: false,
+                colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple, Colors.lime],
               ),
+            ),
           ],
         ),
       ),
@@ -490,6 +500,48 @@ class _AchievementsScreenState extends State<AchievementsScreen> with TickerProv
           ),
         ),
       ),
+    );
+  }
+  Widget _buildSocialTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16.0),
+      children: [
+        _buildSectionHeader('👥 POZVANÍ PŘÁTELÉ'),
+        const SizedBox(height: 12),
+        _buildStreakTile(
+          'Nová krev I',
+          'Měj alespoň 1 spojeného přítele v aplikaci (${_invitedFriendsCount}/1)',
+          _invitedFriendsCount >= 1,
+          'bronze',
+        ),
+        _buildStreakTile(
+          'Nová krev II',
+          'Měj alespoň 5 spojených přátel v aplikaci (${_invitedFriendsCount}/5)',
+          _invitedFriendsCount >= 5,
+          'silver',
+        ),
+        _buildStreakTile(
+          'Nová krev III',
+          'Měj alespoň 10 spojených přátel v aplikaci (${_invitedFriendsCount}/10)',
+          _invitedFriendsCount >= 10,
+          'gold',
+        ),
+        const SizedBox(height: 24),
+        _buildSectionHeader('💖 DONÁTOŘI A SPONZOŘI'),
+        const SizedBox(height: 12),
+        _buildStreakTile(
+          'Věrný sponzor',
+          'Podpoř vývoj projektu dobrovolným členstvím (Premium)',
+          _hasOwnedPremium,
+          'platinum',
+        ),
+        _buildStreakTile(
+          'Patron na věky',
+          'Podporuj projekt dobrovolným členstvím po dobu jednoho roku',
+          _premiumForYear,
+          'cosmic',
+        ),
+      ],
     );
   }
 }
@@ -815,51 +867,4 @@ class MedalPainter extends CustomPainter {
   bool shouldRepaint(covariant MedalPainter oldDelegate) {
     return oldDelegate.medalType != medalType || oldDelegate.unlocked != unlocked;
   }
-}
-
-class _ConfettiParticle {
-  Color color;
-  double x;
-  double y;
-  double vx;
-  double vy;
-  double size;
-  double rotation;
-  double rotationSpeed;
-
-  _ConfettiParticle({
-    required this.color,
-    required this.x,
-    required this.y,
-    required this.vx,
-    required this.vy,
-    required this.size,
-    required this.rotation,
-    required this.rotationSpeed,
-  });
-}
-
-class _ConfettiPainter extends CustomPainter {
-  final List<_ConfettiParticle> particles;
-
-  _ConfettiPainter({required this.particles});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-    for (var p in particles) {
-      if (p.x < 0 || p.x > size.width || p.y > size.height) continue;
-      canvas.save();
-      canvas.translate(p.x, p.y);
-      canvas.rotate(p.rotation);
-      paint.color = p.color;
-      
-      // Draw square/rectangle confetti
-      canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: p.size, height: p.size * 1.5), paint);
-      canvas.restore();
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) => true;
 }

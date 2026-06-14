@@ -98,6 +98,28 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
 
+    // Kontrola, zda mě cílový uživatel nezablokoval pro šťouchání
+    try {
+      final friendSubDoc = await _firestore
+          .collection('users')
+          .doc(friendUid)
+          .collection('friends')
+          .doc(currentUser.uid)
+          .get();
+      if (friendSubDoc.exists && friendSubDoc.data()?['nudges_blocked'] == true) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Uživatel má vypnutá šťouchnutí od vás.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+    } catch (e) {
+      debugPrint('Chyba při kontrole blokace šťouchnutí: $e');
+    }
+
     final isWhite = MainShell.themeNotifier.value == 'white';
     final dialogBg = isWhite ? Colors.white : const Color(0xFF37474F);
     final cardColor = isWhite ? Colors.grey.shade100 : const Color(0xFF1E272C);
@@ -268,6 +290,36 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _unblockFriendNudges(String friendUid, String friendName) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      await _firestore
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('friends')
+          .doc(friendUid)
+          .set({'nudges_blocked': false}, SetOptions(merge: true));
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Šťouchnutí od uživatele $friendName bylo povoleno.'),
+          backgroundColor: const Color(0xFF1B5E20),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Nepodařilo se povolit šťouchání: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -461,87 +513,190 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                     final code = friend['friend_code'] as String? ?? '';
                     final isLocked = _isNudgeLocked(uid);
                     final remainingTime = _getRemainingNudgeTimeText(uid);
+                    final isBlocked = friend['nudges_blocked'] == true;
 
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => FriendProfileScreen(friendUid: uid),
+                    return FutureBuilder<DocumentSnapshot>(
+                      future: _firestore.collection('users').doc(uid).get(),
+                      builder: (context, userSnap) {
+                        bool friendIsPremium = false;
+                        String? friendPremiumTier;
+                        if (userSnap.hasData && userSnap.data!.exists) {
+                          final data = userSnap.data!.data() as Map<String, dynamic>? ?? {};
+                          friendIsPremium = data['isPremium'] as bool? ?? false;
+                          friendPremiumTier = data['premiumTier'] as String?;
+                        }
+
+                        Color? premiumColor;
+                        String premiumLabel = '';
+                        if (friendIsPremium) {
+                          if (friendPremiumTier == '500') {
+                            premiumColor = Colors.pinkAccent;
+                            premiumLabel = '💎 HEJBEJ Srdcař';
+                          } else if (friendPremiumTier == '100') {
+                            premiumColor = Colors.cyanAccent;
+                            premiumLabel = '🎖️ Patron Projektu';
+                          } else if (friendPremiumTier == '50') {
+                            premiumColor = Colors.amberAccent;
+                            premiumLabel = '⭐ Super VIP';
+                          } else {
+                            premiumColor = const Color(0xFFBFFF00);
+                            premiumLabel = '💖 VIP Podporovatel';
+                          }
+                        }
+
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: friendIsPremium ? premiumColor! : borderColor,
+                              width: friendIsPremium ? 2.0 : 1.0,
                             ),
-                          );
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                          child: Row(
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: borderColor, width: 1.5),
-                                ),
-                                child: CircleAvatar(
-                                  backgroundColor: bgColor,
-                                  foregroundColor: const Color(0xFFBFFF00),
-                                  child: Text(
-                                    username.substring(0, 1).toUpperCase(),
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      username,
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    if (code.isNotEmpty)
-                                      Text(
-                                        code,
-                                        style: TextStyle(fontSize: 13, color: textSecondary),
-                                      ),
-                                    if (isLocked && remainingTime.isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4.0),
-                                        child: Text(
-                                          'Popíchnuto (znovu za $remainingTime)',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Color(0xFFBFFF00),
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  isLocked ? Icons.timer_outlined : Icons.notifications_active,
-                                  color: isLocked ? textSecondary.withOpacity(0.3) : const Color(0xFFBFFF00),
-                                ),
-                                tooltip: isLocked ? 'Popíchnutí uzamčeno' : 'Popíchnout k pohybu',
-                                onPressed: isLocked ? null : () => _nudgeFriend(uid, username),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.person_remove, color: Colors.redAccent),
-                                tooltip: 'Odebrat z přátel',
-                                onPressed: () => _removeRelationship(uid, username),
-                              ),
-                            ],
+                            boxShadow: friendIsPremium
+                                ? [
+                                    BoxShadow(
+                                      color: premiumColor!.withOpacity(0.15),
+                                      blurRadius: 8,
+                                      spreadRadius: 1,
+                                    )
+                                  ]
+                                : null,
                           ),
-                        ),
-                      ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => FriendProfileScreen(friendUid: uid),
+                                ),
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: friendIsPremium ? premiumColor! : borderColor,
+                                        width: friendIsPremium ? 2.0 : 1.5,
+                                      ),
+                                    ),
+                                    child: CircleAvatar(
+                                      backgroundColor: bgColor,
+                                      foregroundColor: friendIsPremium ? premiumColor : const Color(0xFFBFFF00),
+                                      child: Text(
+                                        username.substring(0, 1).toUpperCase(),
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              username,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                                color: friendIsPremium ? premiumColor : textColor,
+                                              ),
+                                            ),
+                                            if (friendIsPremium) ...[
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                friendPremiumTier == '500' ? '💎' :
+                                                friendPremiumTier == '100' ? '🎖️' :
+                                                friendPremiumTier == '50' ? '⭐' : '💖',
+                                                style: const TextStyle(fontSize: 14),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        if (friendIsPremium)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2.0),
+                                            child: Text(
+                                              premiumLabel,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: premiumColor,
+                                              ),
+                                            ),
+                                          ),
+                                        const SizedBox(height: 2),
+                                        if (code.isNotEmpty)
+                                          Text(
+                                            code,
+                                            style: TextStyle(fontSize: 13, color: textSecondary),
+                                          ),
+                                        if (isBlocked)
+                                          const Padding(
+                                            padding: EdgeInsets.only(top: 4.0),
+                                            child: Text(
+                                              '🚫 Šťouchání zablokováno',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.redAccent,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          )
+                                        else if (isLocked && remainingTime.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 4.0),
+                                            child: Text(
+                                              'Popíchnuto (znovu za $remainingTime)',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Color(0xFFBFFF00),
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isBlocked)
+                                    TextButton(
+                                      onPressed: () => _unblockFriendNudges(uid, username),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: const Color(0xFFBFFF00),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        minimumSize: const Size(0, 0),
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: const Text(
+                                        'Povolit',
+                                        style: TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    )
+                                  else
+                                    IconButton(
+                                      icon: Icon(
+                                        isLocked ? Icons.timer_outlined : Icons.notifications_active,
+                                        color: isLocked ? textSecondary.withOpacity(0.3) : const Color(0xFFBFFF00),
+                                      ),
+                                      tooltip: isLocked ? 'Popíchnutí uzamčeno' : 'Popíchnout k pohybu',
+                                      onPressed: isLocked ? null : () => _nudgeFriend(uid, username),
+                                    ),
+                                  IconButton(
+                                    icon: const Icon(Icons.person_remove, color: Colors.redAccent),
+                                    tooltip: 'Odebrat z přátel',
+                                    onPressed: () => _removeRelationship(uid, username),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 );

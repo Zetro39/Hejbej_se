@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/step_tracker_service.dart';
+import '../../../services/anticheat_service.dart';
 import '../models/story_quest_model.dart';
 
 class StoryGameService {
@@ -243,6 +244,10 @@ class StoryGameService {
     await prefs.setString('quest_last_seen_date', todayStr);
 
     if (diff > 0) {
+      if (AntiCheatService().isCheating) {
+        debugPrint('Story progress blocked due to active cheating state.');
+        return;
+      }
       double deltaMeters = diff * 0.75;
       await addMeters(deltaMeters.toInt());
     }

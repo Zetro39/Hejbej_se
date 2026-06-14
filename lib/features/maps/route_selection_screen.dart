@@ -9,16 +9,47 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:hejbej_se/services/route_elevation_service.dart';
+import 'package:hejbej_se/features/gamification/models/wheel_of_fortune_model.dart';
+import 'package:hejbej_se/features/gamification/services/wheel_of_fortune_service.dart';
+
+class PlacePrediction {
+  final String description;
+  final String placeId;
+  final double? lat;
+  final double? lng;
+
+  PlacePrediction({
+    required this.description,
+    required this.placeId,
+    this.lat,
+    this.lng,
+  });
+
+  factory PlacePrediction.fromNominatimJson(Map<String, dynamic> json) {
+    return PlacePrediction(
+      description: json['display_name'] as String? ?? '',
+      placeId: (json['place_id'] ?? '').toString(),
+      lat: double.tryParse((json['lat'] ?? '').toString()),
+      lng: double.tryParse((json['lon'] ?? '').toString()),
+    );
+  }
+}
 
 class RouteSelectionScreen extends StatefulWidget {
   const RouteSelectionScreen({
     super.key,
     required this.startLocation,
     required this.isBikeDefault,
+    this.initialDestinationLocation,
+    this.initialDestinationAddress,
+    this.isAtoBMode = false,
   });
 
   final LatLng startLocation;
   final bool isBikeDefault;
+  final LatLng? initialDestinationLocation;
+  final String? initialDestinationAddress;
+  final bool isAtoBMode;
 
   @override
   State<RouteSelectionScreen> createState() => _RouteSelectionScreenState();
@@ -53,11 +84,27 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
 
   static final String _geminiApiKey = 'QcsFxeU-_EwQibGzGE8TVvmjwlHBs7s1Cxn0KHvvVLL6NR8bA.QA'.split('').reversed.join('');
 
+  // A-to-B navigation states
+  LatLng? _destinationLocation;
+  final TextEditingController _searchController = TextEditingController();
+  List<PlacePrediction> _suggestions = [];
+  bool _showSuggestionsOverlay = false;
+  Timer? _debounceTimer;
+
+  // Active game choice state variables
+  WheelOfFortune? _selectedGame;
+  List<String> _gamePlayers = ['Já'];
+  bool _isGroupMode = false;
+
   @override
   void initState() {
     super.initState();
     _usingBike = widget.isBikeDefault;
     _selectedTargetKm = _usingBike ? 25.0 : 8.0;
+    _destinationLocation = widget.initialDestinationLocation;
+    if (widget.initialDestinationAddress != null) {
+      _searchController.text = widget.initialDestinationAddress!;
+    }
 
     _pageController.addListener(() {
       final int newPage = _pageController.page?.round() ?? 0;
@@ -81,7 +128,165 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    _searchController.dispose();
+    _debounceTimer?.cancel();
     super.dispose();
+  }
+
+  void _showAddGameBottomSheetInRouteSelection() async {
+    final official = WheelOfFortuneService().getOfficialWheels();
+    final custom = await WheelOfFortuneService().getCustomWheels();
+    final allWheels = [...official, ...custom];
+
+    if (!mounted) return;
+
+    WheelOfFortune? selectedWheel = _selectedGame ?? (allWheels.isNotEmpty ? allWheels.first : null);
+    final playersController = TextEditingController(text: _gamePlayers.join(', '));
+    String selectedMode = _isGroupMode ? 'group' : 'individual';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Center(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black12,
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
+                        ),
+                        child: SizedBox(
+                          width: 40,
+                          height: 5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Nastavit hru pro trasu',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Vyberte Kolo štěstí:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<WheelOfFortune>(
+                      value: selectedWheel,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      items: allWheels.map((w) {
+                        return DropdownMenuItem<WheelOfFortune>(
+                          value: w,
+                          child: Text(w.name),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setModalState(() {
+                            selectedWheel = val;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Hráči na trase (oddělte čárkou):', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: playersController,
+                      decoration: InputDecoration(
+                        hintText: 'Já, Tomáš, Pepa',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.people),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Herní režim:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('Každý sám')),
+                            selected: selectedMode == 'individual',
+                            onSelected: (val) {
+                              if (val) setModalState(() => selectedMode = 'individual');
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('Celá parta')),
+                            selected: selectedMode == 'group',
+                            onSelected: (val) {
+                              if (val) setModalState(() => selectedMode = 'group');
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (selectedWheel == null) return;
+                        final pList = playersController.text
+                            .split(',')
+                            .map((s) => s.trim())
+                            .where((s) => s.isNotEmpty)
+                            .toList();
+                        
+                        setState(() {
+                          _selectedGame = selectedWheel;
+                          _gamePlayers = pList.isEmpty ? ['Já'] : pList;
+                          _isGroupMode = selectedMode == 'group';
+                        });
+                        Navigator.pop(context);
+                        
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Hra "${selectedWheel!.name}" byla vybrána pro trasu!')),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.lime,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: const Text('ULOŽIT HRU NA TRASU', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    ),
+                    if (_selectedGame != null) ...[
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _selectedGame = null;
+                            _gamePlayers = ['Já'];
+                            _isGroupMode = false;
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Odebrat hru z trasy', style: TextStyle(color: Colors.redAccent)),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _loadPremiumStatus() async {
@@ -139,10 +344,19 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
     setState(() {
       _isUrban = isPrague || isBrno;
     });
-    _generateRoutes();
+    if (!widget.isAtoBMode || _destinationLocation != null) {
+      _generateRoutes();
+    }
   }
 
   Future<void> _generateRoutes() async {
+    if (widget.isAtoBMode && _destinationLocation == null) {
+      setState(() {
+        _isLoadingRouteOptions = false;
+      });
+      return;
+    }
+
     setState(() {
       _isLoadingRouteOptions = true;
       _routeOptions.clear();
@@ -156,18 +370,19 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
     final int count = _isPremium ? 10 : 5;
 
     // Load API Key dynamically
-    final prefs = await SharedPreferences.getInstance();
-    String apiKey = prefs.getString('gemini_api_key') ?? '';
+    String apiKey = '';
+    try {
+      final doc = await FirebaseFirestore.instance.collection('config').doc('gemini').get();
+      if (doc.exists && doc.data() != null) {
+        apiKey = doc.data()!['api_key'] as String? ?? '';
+      }
+    } catch (e) {
+      debugPrint('Firestore config API key fetch failed: $e');
+    }
 
     if (apiKey.isEmpty) {
-      try {
-        final doc = await FirebaseFirestore.instance.collection('config').doc('gemini').get();
-        if (doc.exists && doc.data() != null) {
-          apiKey = doc.data()!['api_key'] as String? ?? '';
-        }
-      } catch (e) {
-        debugPrint('Firestore config API key fetch failed: $e');
-      }
+      final prefs = await SharedPreferences.getInstance();
+      apiKey = prefs.getString('gemini_api_key') ?? '';
     }
 
     if (apiKey.isEmpty) {
@@ -177,13 +392,42 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
     // 1. Try Gemini generation if API key is provided
     if (apiKey.isNotEmpty) {
       try {
-        final prompt = '''
+        final prompt = widget.isAtoBMode
+            ? '''
+Máš za úkol navrhnout 3 různé pěší/cyklistické trasy v České republice začínající na GPS souřadnici (start: lat: ${widget.startLocation.latitude}, lng: ${widget.startLocation.longitude}) a končící na cílové GPS souřadnici (cíl: lat: ${_destinationLocation!.latitude}, lng: ${_destinationLocation!.longitude}).
+Aktivita je ${_usingBike ? 'cyklistika' : 'pěší chůze/běh'}.
+Vygeneruj přesně 3 různé alternativní trasy.
+Pro každou trasu navrhni 2 až 3 klíčové body (waypoints) mezi startem a cílem tak, aby každá trasa vedla jinudy (např. jedna nejkratší, druhá přes park/les, třetí kolem historických památek nebo vyhlídek). Body musí ležet geograficky rozumně na cestě mezi startem a cílem.
+Zkus zjistit, zda trasa nebo její část vede po nějaké oficiální turistické značce KČT (červená, modrá, zelená, žlutá) nebo po očíslované cyklotrase, a uveď to.
+U každé trasy navrhni jednu zajímavou kvízovou otázku týkající se historie, geografie nebo zajímavostí okolí trasy (se zaručenou faktickou správností).
+
+Odpověz VÝHRADNĚ ve formátu JSON jako pole objektů s tímto schématem:
+[
+  {
+    "title": "Název trasy v češtině (např. Trasa přes park, Historická cesta)",
+    "description": "Stručný atraktivní popis trasy v češtině",
+    "waypoints": [
+      {"lat": 50.1234, "lng": 14.5678},
+      {"lat": 50.1256, "lng": 14.5712}
+    ],
+    "kct_color": "red" | "blue" | "green" | "yellow" | null,
+    "cyklo_number": "č. 2043" | null,
+    "surface": "asfalt" | "lesní cesta" | "smíšený",
+    "environment": "příroda" | "město" | "historické centrum",
+    "pois": ["Zajímavé místo 1", "Zajímavé místo 2"],
+    "trivia_question": "Otázka týkající se zajímavosti na trase",
+    "trivia_answer": "Správná a ověřená odpověď na otázku"
+  }
+]
+Nevkládej žádný doprovodný text, pouze čistý JSON.
+'''
+            : '''
 Máš za úkol navrhnout okružní turistické trasy v České republice začínající a končící na zadané GPS souřadnici (latitude: ${widget.startLocation.latitude}, longitude: ${widget.startLocation.longitude}).
 Typ okolí je ${_isUrban ? 'město' : 'vesnice/příroda'}.
 Cílová délka je ${_selectedTargetKm.toInt()} km.
 Aktivita je ${_usingBike ? 'cyklistika' : 'pěší chůze/běh'}.
 Vygeneruj přesně $count různých okruhů.
-Pro každý okruh navrhni 3 klíčové body (waypoints) mezi startem a cílem tak, aby vytvořily smyčku o celkové délce zhruba ${_selectedTargetKm.toInt()} km. Tyto body musí být v okruhu maximálně ${_selectedTargetKm / 2} km od startu.
+Pro každý okruh navrhni 3 klíčové body (waypoints) mezi startem a cílem tak, aby vytvořily smyčku o celkové délce zhruba ${_selectedTargetKm.toInt()} km. Tyto body must být v okruhu maximálně ${_selectedTargetKm / 2} km od startu.
 Zkus zjistit, zda trasa nebo její část vede po nějaké oficiální turistické značce KČT (červená, modrá, zelená, žlutá) nebo po očíslované cyklotrase, a uveď to.
 U každé trasy navrhni jednu zajímavou kvízovou otázku týkající se historie, geografie nebo zajímavostí okolí trasy (se zaručenou faktickou správností).
 
@@ -242,12 +486,30 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
 
           final List<Map<String, dynamic>> options = [];
           for (var item in parsed) {
-            final wps = (item['waypoints'] as List<dynamic>)
+            final wpsRaw = (item['waypoints'] as List<dynamic>)
                 .map((w) => LatLng((w['lat'] as num).toDouble(), (w['lng'] as num).toDouble()))
                 .toList();
 
+            final List<LatLng> wps = [];
+            if (widget.isAtoBMode) {
+              wps.addAll(wpsRaw);
+            } else {
+              final double targetWpDistance = _selectedTargetKm / 3.2; // Optimized loop distance
+              for (int wIdx = 0; wIdx < wpsRaw.length; wIdx++) {
+                final wp = wpsRaw[wIdx];
+                final bearing = _bearingBetween(widget.startLocation, wp);
+                final double factor = (wIdx == 1) ? 1.4 : 0.85;
+                final scaledWp = _destinationFromDistanceBearing(
+                  widget.startLocation,
+                  targetWpDistance * factor,
+                  bearing,
+                );
+                wps.add(scaledWp);
+              }
+            }
+
             options.add({
-              'title': item['title'] as String? ?? 'Okruh',
+              'title': item['title'] as String? ?? (widget.isAtoBMode ? 'Trasa k cíli' : 'Okruh'),
               'description': item['description'] as String? ?? 'Zajímavá trasa',
               'waypoints': wps,
               'kct_color': item['kct_color'] as String?,
@@ -257,8 +519,12 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
               'pois': List<String>.from(item['pois'] ?? []),
               'trivia_question': item['trivia_question'] as String? ?? 'Znáš historii tohoto místa?',
               'trivia_answer': item['trivia_answer'] as String? ?? 'Více se dozvíš na trase!',
-              'exactDistance': _selectedTargetKm,
-              'estimatedDistance': _selectedTargetKm,
+              'exactDistance': widget.isAtoBMode
+                  ? (_distanceBetween(widget.startLocation, _destinationLocation!) / 1000.0)
+                  : _selectedTargetKm,
+              'estimatedDistance': widget.isAtoBMode
+                  ? (_distanceBetween(widget.startLocation, _destinationLocation!) / 1000.0)
+                  : _selectedTargetKm,
             });
           }
 
@@ -276,7 +542,69 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
       }
     }
 
-    // 2. Fallback to Local Math-based generation
+    if (widget.isAtoBMode) {
+      // Fallback for A-to-B mode
+      final start = widget.startLocation;
+      final dest = _destinationLocation!;
+
+      double dLat = dest.latitude - start.latitude;
+      double dLng = dest.longitude - start.longitude;
+      LatLng mid = LatLng(start.latitude + dLat / 2, start.longitude + dLng / 2);
+
+      double pLat = -dLng;
+      double pLng = dLat;
+
+      final List<Map<String, dynamic>> options = [
+        {
+          'title': 'Přímá trasa',
+          'description': 'Nejkratší cesta k cíli.',
+          'waypoints': [mid],
+          'surface': 'smíšený',
+          'environment': 'město/příroda',
+          'pois': ['Hlavní cesta'],
+          'trivia_question': 'Víte, jaká je nejkratší cesta mezi dvěma body?',
+          'trivia_answer': 'Přímka.',
+          'estimatedDistance': _distanceBetween(start, dest) / 1000.0,
+        },
+        {
+          'title': 'Trasa přes okolí (vlevo)',
+          'description': 'Alternativní klidnější trasa s mírnou zacházkou vlevo.',
+          'waypoints': [
+            LatLng(start.latitude + dLat * 0.25 + pLat * 0.15, start.longitude + dLng * 0.25 + pLng * 0.15),
+            LatLng(start.latitude + dLat * 0.75 + pLat * 0.15, start.longitude + dLng * 0.75 + pLng * 0.15),
+          ],
+          'surface': 'smíšený',
+          'environment': 'příroda/klidná zóna',
+          'pois': ['Klidná stezka'],
+          'trivia_question': 'Máte rádi objevování nových míst?',
+          'trivia_answer': 'Tato trasa vám ukáže novou cestu.',
+          'estimatedDistance': (_distanceBetween(start, dest) * 1.25) / 1000.0,
+        },
+        {
+          'title': 'Trasa přes okolí (vpravo)',
+          'description': 'Alternativní trasa s mírnou zacházkou vpravo.',
+          'waypoints': [
+            LatLng(start.latitude + dLat * 0.25 - pLat * 0.15, start.longitude + dLng * 0.25 - pLng * 0.15),
+            LatLng(start.latitude + dLat * 0.75 - pLat * 0.15, start.longitude + dLng * 0.75 - pLng * 0.15),
+          ],
+          'surface': 'smíšený',
+          'environment': 'příroda/klidná zóna',
+          'pois': ['Alternativní stezka'],
+          'trivia_question': 'Jaké je vaše oblíbené zákoutí v této oblasti?',
+          'trivia_answer': 'Tato trasa vás provede pravou stranou.',
+          'estimatedDistance': (_distanceBetween(start, dest) * 1.25) / 1000.0,
+        },
+      ];
+
+      setState(() {
+        _routeOptions = options;
+        _isLoadingRouteOptions = false;
+      });
+      _fetchActiveOptionGeometry();
+      return;
+    }
+
+    // 2. Fallback to Local Math-based generation for loops
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -295,7 +623,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
 
     final List<String> descriptions = _isUrban
         ? ['85% po chodnících městské zástavby', 'Kolem historických památek a náměstí', 'Příjemný okruh zeleným zámeckým parkem', 'Rovná, asfaltová trasa podél řeky', 'Klidný okruh vilovou čtvrtí', 'Kombinace zástavby a přírodního lesoparku', 'Krásná zelená zóna v srdci města', 'Náročnější stoupání s výhledem na celé město', 'Trasa vedoucí kolem kaváren a bister', 'Po osvětlených hlavních ulicích města']
-        : ['90% cesty lesem a po přírodním podkladu', 'Klidný okruh mezi poli a polními cestami', 'Trasa přes kopce s výhledy do kraje', 'Stezka podél potoka hlubokým lesním údolím', 'Klidná cesta venkovskou zástavbou', 'Rovný okruh kolem místních rybníků', 'Zpevněné lesní cesty s větším převýšením', 'Hřebenová cesta po okolních kopcích', 'Cesta podél obory s lesní zvěří', 'Trasa mezi malebnými vinohrady'];
+        : ['90% cesty lesem a po přírodním podkladu', 'Klidný okruh mezi poli a polními cestami', 'Trasa přes kopce s výhledy do kraje', 'Stezka podél potoka hlukým lesním údolím', 'Klidná cesta venkovskou zástavbou', 'Rovný okruh kolem místních rybníků', 'Zpevněné lesní cesty s větším převýšením', 'Hřebenová cesta po okolních kopcích', 'Cesta podél obory s lesní zvěří', 'Trasa mezi malebnými vinohrady'];
 
     final double startBearing = random.nextDouble() * 360;
 
@@ -305,9 +633,10 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
       final double bearing = startBearing + (i * (360 / count));
       final double d = actualOptionKm / 3.0;
 
-      final wp1 = _destinationFromDistanceBearing(widget.startLocation, d, bearing - 25.0);
-      final wp2 = _destinationFromDistanceBearing(widget.startLocation, d * 1.2, bearing);
-      final wp3 = _destinationFromDistanceBearing(widget.startLocation, d, bearing + 25.0);
+      // Spreads the loop bearings wider (70 degrees left and right) to prevent out-and-back routing
+      final wp1 = _destinationFromDistanceBearing(widget.startLocation, d * 0.85, bearing - 70.0);
+      final wp2 = _destinationFromDistanceBearing(widget.startLocation, d * 1.4, bearing);
+      final wp3 = _destinationFromDistanceBearing(widget.startLocation, d * 0.85, bearing + 70.0);
 
       options.add({
         'title': names[i % names.length],
@@ -348,6 +677,35 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
     return LatLng(lat2Rad * 180.0 / pi, lon2Rad * 180.0 / pi);
   }
 
+  double _bearingBetween(LatLng start, LatLng end) {
+    final lat1 = start.latitude * pi / 180.0;
+    final lon1 = start.longitude * pi / 180.0;
+    final lat2 = end.latitude * pi / 180.0;
+    final lon2 = end.longitude * pi / 180.0;
+
+    final dLon = lon2 - lon1;
+    final y = sin(dLon) * cos(lat2);
+    final x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon);
+    final brng = atan2(y, x) * 180.0 / pi;
+    return (brng + 360.0) % 360.0;
+  }
+
+  double _distanceBetween(LatLng start, LatLng end) {
+    final lat1 = start.latitude * pi / 180.0;
+    final lon1 = start.longitude * pi / 180.0;
+    final lat2 = end.latitude * pi / 180.0;
+    final lon2 = end.longitude * pi / 180.0;
+
+    final dLat = lat2 - lat1;
+    final dLon = lon2 - lon1;
+
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+
+    return 6371000.0 * c; // in meters
+  }
+
   Future<void> _fetchActiveOptionGeometry() async {
     if (_routeOptions.isEmpty) return;
 
@@ -366,9 +724,13 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
       final List<String> coords = [
         '${start.longitude},${start.latitude}',
         ...waypoints.map((w) => '${w.longitude},${w.latitude}'),
-        '${start.longitude},${start.latitude}'
+        if (widget.isAtoBMode && _destinationLocation != null)
+          '${_destinationLocation!.longitude},${_destinationLocation!.latitude}'
+        else
+          '${start.longitude},${start.latitude}'
       ];
-      final url = Uri.parse('https://router.project-osrm.org/route/v1/foot/${coords.join(';')}?overview=full&geometries=geojson');
+      final profile = _usingBike ? 'bicycle' : 'foot';
+      final url = Uri.parse('https://router.project-osrm.org/route/v1/$profile/${coords.join(';')}?overview=full&geometries=geojson');
       final res = await http.get(url).timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {
@@ -413,9 +775,18 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
             _markers.add(Marker(
               markerId: const MarkerId('start_marker'),
               position: start,
-              infoWindow: const InfoWindow(title: 'Start / Cíl okruhu'),
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+              infoWindow: InfoWindow(title: widget.isAtoBMode ? 'Start' : 'Start / Cíl okruhu'),
+              icon: BitmapDescriptor.defaultMarkerWithHue(widget.isAtoBMode ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueOrange),
             ));
+
+            if (widget.isAtoBMode && _destinationLocation != null) {
+              _markers.add(Marker(
+                markerId: const MarkerId('dest_marker'),
+                position: _destinationLocation!,
+                infoWindow: const InfoWindow(title: 'Cíl'),
+                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+              ));
+            }
 
             _isLoadingRouteGeometry = false;
           });
@@ -446,8 +817,18 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
       _markers.add(Marker(
         markerId: const MarkerId('start_marker'),
         position: start,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+        infoWindow: InfoWindow(title: widget.isAtoBMode ? 'Start' : 'Start / Cíl okruhu'),
+        icon: BitmapDescriptor.defaultMarkerWithHue(widget.isAtoBMode ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueOrange),
       ));
+
+      if (widget.isAtoBMode && _destinationLocation != null) {
+        _markers.add(Marker(
+          markerId: const MarkerId('dest_marker'),
+          position: _destinationLocation!,
+          infoWindow: const InfoWindow(title: 'Cíl'),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        ));
+      }
 
       _isLoadingRouteGeometry = false;
     });
@@ -493,54 +874,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
     _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
   }
 
-  void _showApiKeyDialog() {
-    final controller = TextEditingController();
-    SharedPreferences.getInstance().then((prefs) {
-      controller.text = prefs.getString('gemini_api_key') ?? '';
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF263238),
-          title: const Text('Nastavení Gemini API klíče', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Zadejte vlastní Gemini API klíč pro načítání přizpůsobených tras od AI.',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Klíč (API Key)',
-                  labelStyle: const TextStyle(color: Color(0xFFBFFF00)),
-                  enabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: Colors.white24), borderRadius: BorderRadius.circular(12)),
-                  focusedBorder: OutlineInputBorder(borderSide: const BorderSide(color: Color(0xFFBFFF00)), borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Zavřít', style: TextStyle(color: Colors.white60)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                prefs.setString('gemini_api_key', controller.text.trim());
-                Navigator.pop(context);
-                _generateRoutes();
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFFF00), foregroundColor: Colors.black),
-              child: const Text('Uložit a generovat'),
-            ),
-          ],
-        ),
-      );
-    });
-  }
+
 
   void _showTriviaDialog(Map<String, dynamic> option) {
     showDialog(
@@ -592,6 +926,109 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
     );
   }
 
+  void _onSearchChanged(String val) {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _fetchNominatimSuggestions(val);
+    });
+  }
+
+  Future<void> _fetchNominatimSuggestions(String input) async {
+    if (input.isEmpty || input.trim().length < 2) {
+      setState(() {
+        _suggestions = [];
+        _showSuggestionsOverlay = false;
+      });
+      return;
+    }
+
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+        'q': input,
+        'format': 'json',
+        'limit': '5',
+        'addressdetails': '1',
+        'countrycodes': 'cz',
+        'accept-language': 'cs',
+      });
+      final response = await http.get(
+        uri,
+        headers: {'User-Agent': 'HejbejSeApp/1.0'},
+      ).timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => throw Exception('Nominatim timeout'),
+      );
+
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body) as List<dynamic>;
+        setState(() {
+          _suggestions = list
+              .whereType<Map<String, dynamic>>()
+              .map(PlacePrediction.fromNominatimJson)
+              .toList();
+          _showSuggestionsOverlay = true;
+        });
+        return;
+      }
+    } catch (e) {
+      debugPrint('Nominatim suggestion error: $e');
+    }
+
+    setState(() {
+      _suggestions = [];
+      _showSuggestionsOverlay = false;
+    });
+  }
+
+  void _onSuggestionSelected(PlacePrediction sug) {
+    if (sug.lat != null && sug.lng != null) {
+      setState(() {
+        _destinationLocation = LatLng(sug.lat!, sug.lng!);
+        _searchController.text = sug.description;
+        _showSuggestionsOverlay = false;
+        _suggestions.clear();
+      });
+      _generateRoutes();
+      FocusScope.of(context).unfocus();
+    }
+  }
+
+  Future<void> _onMapTapped(LatLng latLng) async {
+    setState(() {
+      _destinationLocation = latLng;
+      _isLoadingRouteGeometry = true;
+      _isLoadingRouteOptions = true;
+      _suggestions.clear();
+      _showSuggestionsOverlay = false;
+    });
+
+    // Start reverse geocoding to update address text
+    try {
+      final url = Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?format=json&lat=${latLng.latitude}&lon=${latLng.longitude}&zoom=18&addressdetails=1&accept-language=cs');
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'HejbejSeApp/1.0'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final displayName = data['display_name'] as String?;
+        if (displayName != null) {
+          setState(() {
+            _searchController.text = displayName;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Reverse geocoding failed: $e');
+      setState(() {
+        _searchController.text = '${latLng.latitude.toStringAsFixed(5)}, ${latLng.longitude.toStringAsFixed(5)}';
+      });
+    }
+
+    _generateRoutes();
+  }
+
   @override
   Widget build(BuildContext context) {
     final selectedOption = _routeOptions.isNotEmpty ? _routeOptions[_selectedOptionIndex] : null;
@@ -603,21 +1040,16 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Vybrat okruh v okolí', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-        backgroundColor: const Color(0xFF263238).withOpacity(0.95),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(20))),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.psychology_outlined, color: Color(0xFFBFFF00)),
-            tooltip: 'Nastavení AI',
-            onPressed: _showApiKeyDialog,
-          ),
-        ],
-      ),
+      appBar: widget.isAtoBMode
+          ? null
+          : AppBar(
+              title: const Text('Vybrat okruh v okolí', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+              backgroundColor: const Color(0xFF263238).withOpacity(0.95),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              centerTitle: true,
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(20))),
+            ),
       backgroundColor: const Color(0xFF161C20),
       body: Stack(
         children: [
@@ -654,6 +1086,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
               myLocationEnabled: true,
               zoomControlsEnabled: false,
               mapToolbarEnabled: false,
+              onTap: widget.isAtoBMode ? _onMapTapped : null,
             ),
           ),
 
@@ -661,15 +1094,15 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
           if (_isLoadingRouteOptions)
             Container(
               color: Colors.black54,
-              child: const Center(
+              child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircularProgressIndicator(color: Color(0xFFBFFF00)),
-                    SizedBox(height: 16),
+                    const CircularProgressIndicator(color: Color(0xFFBFFF00)),
+                    const SizedBox(height: 16),
                     Text(
-                      'AI generuje okruhy v okolí...',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      widget.isAtoBMode ? 'AI generuje trasy k cíli...' : 'AI generuje okruhy v okolí...',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ],
                 ),
@@ -678,7 +1111,9 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
 
           // 2. Map Overlays (Activity Toggle, MapType Layer Switcher)
           Positioned(
-            top: kToolbarHeight + 40,
+            top: widget.isAtoBMode
+                ? MediaQuery.of(context).padding.top + 80
+                : MediaQuery.of(context).padding.top + kToolbarHeight + 16,
             right: 16,
             child: Column(
               children: [
@@ -734,40 +1169,165 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
           ),
 
           // 3. Top Distance Chips (overlaying map)
-          Positioned(
-            top: kToolbarHeight + 40,
-            left: 0,
-            right: 80,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: (_usingBike ? _bikeDistances : _walkDistances).map((target) {
-                  final isSelected = target == _selectedTargetKm;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: ChoiceChip(
-                      label: Text('${target.toInt()} km'),
-                      selected: isSelected,
-                      onSelected: (_) {
-                        setState(() {
-                          _selectedTargetKm = target;
-                        });
-                        _generateRoutes();
-                      },
-                      selectedColor: const Color(0xFFBFFF00),
-                      backgroundColor: const Color(0xFF263238).withOpacity(0.95),
-                      labelStyle: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: isSelected ? Colors.black : Colors.white70,
+          if (!widget.isAtoBMode)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + kToolbarHeight + 16,
+              left: 0,
+              right: 80,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: (_usingBike ? _bikeDistances : _walkDistances).map((target) {
+                    final isSelected = target == _selectedTargetKm;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ChoiceChip(
+                        label: Text('${target.toInt()} km'),
+                        selected: isSelected,
+                        onSelected: (_) {
+                          setState(() {
+                            _selectedTargetKm = target;
+                          });
+                          _generateRoutes();
+                        },
+                        selectedColor: const Color(0xFFBFFF00),
+                        backgroundColor: const Color(0xFF263238).withOpacity(0.95),
+                        labelStyle: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isSelected ? Colors.black : Colors.white70,
+                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
-          ),
+
+          // Custom Search header for A-to-B mode
+          if (widget.isAtoBMode)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 10,
+              left: 12,
+              right: 12,
+              child: Card(
+                elevation: 6,
+                color: const Color(0xFF263238).withOpacity(0.95),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Colors.white12, width: 1),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          style: const TextStyle(color: Colors.white, fontSize: 15),
+                          decoration: const InputDecoration(
+                            hintText: 'Zadejte cíl trasy...',
+                            hintStyle: TextStyle(color: Colors.white54, fontSize: 15),
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                          onChanged: _onSearchChanged,
+                        ),
+                      ),
+                      if (_searchController.text.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.white54, size: 20),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _suggestions.clear();
+                              _showSuggestionsOverlay = false;
+                            });
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Nominatim suggestion list overlay
+          if (widget.isAtoBMode && _showSuggestionsOverlay && _suggestions.isNotEmpty)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 74,
+              left: 20,
+              right: 20,
+              child: Card(
+                elevation: 8,
+                color: const Color(0xFF263238),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Colors.white10, width: 1),
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 250),
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: _suggestions.length,
+                    itemBuilder: (context, index) {
+                      final sug = _suggestions[index];
+                      return ListTile(
+                        leading: const Icon(Icons.location_on_outlined, color: Color(0xFFBFFF00)),
+                        title: Text(
+                          sug.description,
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => _onSuggestionSelected(sug),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+
+          // Welcome card for A-to-B Mode when no destination is defined
+          if (widget.isAtoBMode && _destinationLocation == null && _routeOptions.isEmpty)
+            Positioned(
+              bottom: 40,
+              left: 16,
+              right: 16,
+              child: Card(
+                color: const Color(0xFF263238).withOpacity(0.95),
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: const BorderSide(color: Colors.white12, width: 1.5),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.map_outlined, color: Color(0xFFBFFF00), size: 40),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Cesta do cíle',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Zadejte cíl trasy do vyhledávače nahoře, nebo klikněte kdekoli na mapě pro určení cíle.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
           // 4. Bottom PageView Card Carousel
           if (_routeOptions.isNotEmpty)
@@ -977,6 +1537,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                                                           'cyklo_number': option['cyklo_number'] as String?,
                                                           'trivia_question': option['trivia_question'] as String?,
                                                           'trivia_answer': option['trivia_answer'] as String?,
+                                                          'using_bike': _usingBike,
                                                         });
                                                       },
                                                 style: ElevatedButton.styleFrom(

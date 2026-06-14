@@ -134,7 +134,11 @@ class _MainShellState extends State<MainShell> {
             title = '🏆 Nová výzva';
           }
 
-          await NotificationManager.saveNotification(title, message);
+          await NotificationManager.saveNotification(
+            title,
+            message,
+            senderUid: details['senderUid'] as String?,
+          );
 
           if (ms > currentSavedMs) {
             currentSavedMs = ms;

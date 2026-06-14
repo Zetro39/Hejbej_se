@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/story_quest_model.dart';
+import '../../../services/anticheat_service.dart';
 import '../services/story_game_service.dart';
 import 'point_and_click_screen.dart';
 import 'logic_puzzles_screen.dart';
@@ -961,47 +962,51 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
 
 
                   // Helper test button to simulate walking (ONLY FOR CONVENIENCE FOR USER TESTING)
-                  Positioned(
-                    bottom: 24,
-                    right: 16,
-                    child: Column(
-                      children: [
-                        FloatingActionButton.small(
-                          heroTag: 'skip_walk',
-                          backgroundColor: Colors.red.shade800,
-                          foregroundColor: Colors.white,
-                          onPressed: () => _service.addMeters(6000),
-                          tooltip: 'Přeskočit veškerou chůzi (K1 - K6)',
-                          child: const Icon(Icons.fast_forward),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Přeskočit\nchůzi',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
-                            Shadow(color: Colors.black, blurRadius: 4),
-                          ]),
-                        ),
-                        const SizedBox(height: 12),
-                        FloatingActionButton.small(
-                          heroTag: 'walk_100',
-                          backgroundColor: Colors.lime.shade800,
-                          foregroundColor: Colors.white,
-                          onPressed: () => _service.addMeters(200),
-                          tooltip: 'Simulovat +200 metrů chůze',
-                          child: const Icon(Icons.add_road),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Simulovat\n+200 m',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
-                            Shadow(color: Colors.black, blurRadius: 4),
-                          ]),
-                        )
-                      ],
+                  if (kDebugMode)
+                    Positioned(
+                      bottom: 24,
+                      right: 16,
+                      child: Column(
+                        children: [
+                          FloatingActionButton.small(
+                            heroTag: 'skip_walk',
+                            backgroundColor: Colors.red.shade800,
+                            foregroundColor: Colors.white,
+                            onPressed: () => _service.addMeters(6000),
+                            tooltip: 'Přeskočit veškerou chůzi (K1 - K6)',
+                            child: const Icon(Icons.fast_forward),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Přeskočit\nchůzi',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
+                              Shadow(color: Colors.black, blurRadius: 4),
+                            ]),
+                          ),
+                          const SizedBox(height: 12),
+                          FloatingActionButton.small(
+                            heroTag: 'walk_100',
+                            backgroundColor: Colors.lime.shade800,
+                            foregroundColor: Colors.white,
+                            onPressed: () => _service.addMeters(200),
+                            tooltip: 'Simulovat +200 metrů chůze',
+                            child: const Icon(Icons.add_road),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Simulovat\n+200 m',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white, shadows: [
+                              Shadow(color: Colors.black, blurRadius: 4),
+                            ]),
+                          )
+                        ],
+                      ),
                     ),
-                  ),
+
+                  // Anti-cheat warning overlay
+                  _buildAntiCheatOverlay(),
 
                   // Difficulty Selection Overlay (if not chosen yet)
                   if (_service.currentDifficulty == null)
@@ -1017,6 +1022,90 @@ class _StoryMapScreenState extends State<StoryMapScreen> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildAntiCheatOverlay() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: AntiCheatService().isCheatingNotifier,
+      builder: (context, isCheating, child) {
+        if (!isCheating) return const SizedBox.shrink();
+        return Positioned(
+          top: MediaQuery.of(context).padding.top + 80,
+          left: 16,
+          right: 16,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD32F2F).withOpacity(0.92), // Solid premium crimson red
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.35),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Color(0xFFFFFF00), // Pure yellow
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Rychlý pohyb detekován!',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      ValueListenableBuilder<String>(
+                        valueListenable: AntiCheatService().cheatReasonNotifier,
+                        builder: (context, reason, _) {
+                          return Text(
+                            reason.isNotEmpty ? reason : 'Zpomalte pro obnovení postupu v příběhu.',
+                            style: const TextStyle(
+                              color: Colors.white90,
+                              fontSize: 12,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Postup v příběhové hře je dočasně pozastaven.',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

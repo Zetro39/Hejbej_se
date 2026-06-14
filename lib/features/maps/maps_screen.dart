@@ -19,6 +19,9 @@ import 'package:mobile_scanner/mobile_scanner.dart' hide GeoPoint;
 import '../../services/location_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_manager.dart';
+import '../../services/step_tracker_service.dart';
+import '../../services/anticheat_service.dart';
+import '../../main_shell.dart';
 import '../profile/notification_inbox_screen.dart';
 import '../leaderboard/friend_profile_screen.dart';
 import 'qr_scanner_screen.dart';
@@ -165,6 +168,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    AntiCheatService().reset();
     _routePageController = PageController(viewportFraction: 0.88);
     _locationService = LocationService();
     _positionStream = _locationService.positionUpdateStream;
@@ -177,6 +181,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _loadPremiumStatus();
     _loadLocationSharingPreference();
     _fetchPartners();
+    StepTrackerService().stepsNotifier.addListener(_updateDistanceBySteps);
+    _updateDistanceBySteps();
     MapsScreen.pendingSharedRouteNotifier.addListener(_handlePendingSharedRoute);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (MapsScreen.pendingSharedRouteNotifier.value != null) {
@@ -384,6 +390,14 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _updateDistanceBySteps() {
+    if (mounted && !_routeActive) {
+      setState(() {
+        _todayDistance = StepTrackerService().stepsNotifier.value * 0.75;
+      });
+    }
+  }
+
   void dispose() {
     _mapController?.dispose();
     _positionSubscription?.cancel();
@@ -391,6 +405,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _destinationController.dispose();
     _routePageController.dispose();
     _stepCountSubscription?.cancel();
+    StepTrackerService().stepsNotifier.removeListener(_updateDistanceBySteps);
     MapsScreen.pendingSharedRouteNotifier.removeListener(_handlePendingSharedRoute);
     super.dispose();
   }
@@ -1406,12 +1421,195 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _gamePlayers.clear();
       _gameActiveAssignments.clear();
       _gamePlayerHistory.clear();
+      _todayDistance = StepTrackerService().stepsNotifier.value * 0.75;
     });
     _clearCachedRoute();
     _saveActiveGameState();
   }
 
+  Future<void> _saveRouteToCommunity() async {
+    final title = _routeSuggestions.isNotEmpty ? _routeSuggestions.first['title'] as String : 'Neznámý okruh';
+    final points = _activeRoutePoints;
+    if (points.isEmpty) return;
+
+    final String routeId = 'route_${points.first.latitude.toStringAsFixed(4)}_${points.first.longitude.toStringAsFixed(4)}_${points.last.latitude.toStringAsFixed(4)}_${points.last.longitude.toStringAsFixed(4)}';
+
+    try {
+      final docRef = FirebaseFirestore.instance.collection('community_routes').doc(routeId);
+      final List<Map<String, double>> coords = points.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList();
+      
+      await docRef.set({
+        'id': routeId,
+        'title': title,
+        'description': 'Uložený okruh o délce ${_routeSuggestions.first['distance'].toStringAsFixed(1)} km.',
+        'points': coords,
+        'start_lat': points.first.latitude,
+        'start_lng': points.first.longitude,
+        'distance': _routeSuggestions.first['distance'] as double,
+        'eta': _routeSuggestions.first['eta'] as int,
+        'ratings_count': 1,
+        'ratings_sum': 5.0,
+        'average_rating': 5.0,
+        'is_top': false,
+        'photos': [],
+        'kct_color': _activeRouteKctColor,
+        'cyklo_number': _activeRouteCykloNumber,
+        'created_by': FirebaseAuth.instance.currentUser?.uid,
+        'created_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Trasa byla úspěšně uložena do komunitních tras! 💾'),
+            backgroundColor: Color(0xFF1B5E20),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chyba při ukládání trasy: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  Future<void> _showCancelRouteDialog() async {
+    final isWhite = MainShell.themeNotifier.value == 'white';
+    final dialogBg = isWhite ? Colors.white : const Color(0xFF37474F);
+    final textColor = isWhite ? Colors.black : Colors.white;
+    final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+    final borderColor = isWhite ? Colors.grey.shade300 : Colors.white10;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: dialogBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: borderColor),
+        ),
+        title: Text(
+          'Zrušit trasu nebo okruh?',
+          style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Opravdu si přejete zrušit tuto trasu nebo okruh? Můžete si ji/jej před zrušením uložit do komunitních okruhů.',
+          style: TextStyle(color: textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'zrusit'),
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            child: const Text('Zrušit bez uložení'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'ulozit'),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFBFFF00)),
+            child: const Text('Uložit a zrušit', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'storno'),
+            child: Text('Zpět na trasu', style: TextStyle(color: textSecondary)),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 'zrusit') {
+      _cancelRoute();
+    } else if (result == 'ulozit') {
+      await _saveRouteToCommunity();
+      _cancelRoute();
+    }
+  }
+
+  void _showActiveAssignmentsDialog() {
+    final isWhite = MainShell.themeNotifier.value == 'white';
+    final dialogBg = isWhite ? Colors.white : const Color(0xFF37474F);
+    final textColor = isWhite ? Colors.black : Colors.white;
+    final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+    final borderColor = isWhite ? Colors.grey.shade300 : Colors.white10;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: dialogBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: borderColor),
+        ),
+        title: Text(
+          '🎯 Aktivní úkoly na trase',
+          style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ..._gameActiveAssignments.entries.map((entry) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6.0),
+                child: RichText(
+                  text: TextSpan(
+                    style: TextStyle(color: textColor, fontSize: 14),
+                    children: [
+                      TextSpan(text: '${entry.key}: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: entry.value.title),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                setState(() {
+                  for (var entry in _gameActiveAssignments.entries) {
+                    final list = _gamePlayerHistory[entry.key] ?? [];
+                    list.add(entry.value.id);
+                    _gamePlayerHistory[entry.key] = list;
+                  }
+                  _gameActiveAssignments.clear();
+                });
+                _saveActiveGameState();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Úkoly označeny za splněné! 🏆')),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFBFFF00),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Označit úkoly za splněné ✓', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Zavřít', style: TextStyle(color: textSecondary)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _completeRoute() async {
+    final title = _routeSuggestions.isNotEmpty ? _routeSuggestions.first['title'] as String? ?? 'Neznámá trasa' : 'Neznámá trasa';
+    final distance = _routeSuggestions.isNotEmpty ? (_routeSuggestions.first['distance'] as num?)?.toDouble() ?? 0.0 : 0.0;
+
+    final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'daily_routes_$todayStr';
+    final List<String> currentRoutes = prefs.getStringList(key) ?? [];
+    currentRoutes.add('$title|$distance');
+    await prefs.setStringList(key, currentRoutes);
+
     setState(() {
       _routeActive = false;
       _trackingEnabled = false;
@@ -1426,6 +1624,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _gamePlayers.clear();
       _gameActiveAssignments.clear();
       _gamePlayerHistory.clear();
+      _todayDistance = StepTrackerService().stepsNotifier.value * 0.75;
     });
     
     await _clearCachedRoute();
@@ -1956,7 +2155,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       context: context,
       builder: (context) {
         double tempWalkLength = _searchWalkLength;
-        double tempDrivingRadius = _searchDrivingRadius;
+        double tempDrivingRadius = _searchDrivingRadius.clamp(1.0, 50.0);
         bool isSearching = false;
         List<Map<String, dynamic>> results = [];
 
@@ -1984,14 +2183,14 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Dojezd autem (radius): ${tempDrivingRadius.round()} km',
+                            'Vzdálenost k začátku trasy: ${tempDrivingRadius.round()} km',
                             style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                           ),
                           Slider(
                             value: tempDrivingRadius,
-                            min: 5.0,
-                            max: 100.0,
-                            divisions: 19,
+                            min: 1.0,
+                            max: 50.0,
+                            divisions: 49,
                             activeColor: Colors.lime,
                             inactiveColor: Colors.white24,
                             onChanged: (val) {
@@ -2228,6 +2427,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       initialEta = _calculateRouteEta(initialRemaining);
     }
 
+    AntiCheatService().reset();
+
     setState(() {
       _trackingEnabled = true;
       _routeActive = true;
@@ -2257,16 +2458,16 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     }
   }
 
-  Widget _buildRouteInfoChip(String text) {
+  Widget _buildRouteInfoChip(String text, {Color? color, Color? textColor}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.lightBlue.shade50,
+        color: color ?? Colors.lightBlue.shade50,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         text,
-        style: const TextStyle(fontSize: 12, color: Colors.black87),
+        style: TextStyle(fontSize: 12, color: textColor ?? Colors.black87, fontWeight: textColor != null ? FontWeight.bold : FontWeight.normal),
       ),
     );
   }
@@ -2867,202 +3068,419 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   }
 
   void _showNavigationMenu() {
+    final theme = MainShell.themeNotifier.value;
+    final isWhite = theme == 'white';
+    final cardColor = isWhite ? Colors.white : const Color(0xFF1E272C);
+    final textColor = isWhite ? const Color(0xFF263238) : Colors.white;
+    final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+
     showModalBottomSheet(
       context: context,
+      backgroundColor: cardColor,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Vyberte režim mapy',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.lightBlue.shade50,
-                  child: const Icon(Icons.loop, color: Colors.lightBlue),
-                ),
-                title: const Text('Okruh v okolí'),
-                subtitle: const Text('Najděte snadné okruhy start-cíl ve vašem dosahu'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  
-                  // Check if GPS is enabled
-                  final gpsEnabled = await _locationService.isLocationServiceEnabled();
-                  if (!gpsEnabled) {
-                    if (mounted) {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('GPS vypnuto'),
-                          content: const Text('Zapněte prosím GPS (služby polohy) v nastavení telefonu, abyste mohli vybrat okruh ve svém okolí.'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('Rozumím'),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                    return;
-                  }
-
-                  // Check location permissions
-                  final permission = await Geolocator.checkPermission();
-                  if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-                    final requested = await _locationService.requestLocationPermission();
-                    if (!requested) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Přístup k poloze byl zamítnut. Povolte polohu v nastavení.')),
-                        );
-                      }
-                      return;
-                    }
-                  }
-
-                  // If _lastPosition is still null, try to actively fetch it
-                  Position? currentPos = _lastPosition;
-                  if (currentPos == null) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Získávám GPS polohu...'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                    currentPos = await _locationService.getCurrentLocation();
-                  }
-
-                  if (currentPos == null) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Nepodařilo se získat GPS polohu. Zkontrolujte signál.')),
-                      );
-                    }
-                    return;
-                  }
-
-                  // Update _lastPosition
-                  _lastPosition = currentPos;
-
-                  if (!mounted) return;
-                  
-                  final result = await Navigator.of(context).push<Map<String, dynamic>>(
-                    MaterialPageRoute(
-                      builder: (context) => RouteSelectionScreen(
-                        startLocation: LatLng(currentPos!.latitude, currentPos!.longitude),
-                        isBikeDefault: _usingBike,
-                      ),
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom + 16,
+            ),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                  Text(
+                    'Vyberte režim mapy',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
+                  ),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isWhite ? Colors.lightBlue.shade50 : Colors.lightBlue.shade900.withOpacity(0.3),
+                      child: Icon(Icons.loop, color: isWhite ? Colors.lightBlue : Colors.lightBlueAccent),
                     ),
-                  );
-
-                  if (result != null) {
-                    final points = result['points'] as List<LatLng>;
-                    final title = result['title'] as String;
-                    final distance = result['distance'] as double;
-                    final eta = result['eta'] as int;
-
-                    final polyline = Polyline(
-                      polylineId: const PolylineId('active_route'),
-                      color: _usingBike ? Colors.blue : Colors.green,
-                      width: 5,
-                      points: points,
-                      geodesic: true,
-                    );
-
-                    setState(() {
-                      _activeRoutePoints = points;
-                      _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
-                      _polylines.add(polyline);
-                      _destinationPoint = points.last;
+                    title: Text('Okruh v okolí', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                    subtitle: Text('Najděte snadné okruhy start-cíl ve vašem dosahu', style: TextStyle(color: textSecondary, fontSize: 12)),
+                    onTap: () async {
+                      Navigator.pop(context);
                       
-                      _routeSuggestions = [
-                        {
-                          'title': title,
-                          'coordinates': points,
-                          'distance': distance,
-                          'eta': eta,
-                          'poi_count': 0,
+                      // Check if GPS is enabled
+                      final gpsEnabled = await _locationService.isLocationServiceEnabled();
+                      if (!gpsEnabled) {
+                        if (mounted) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('GPS vypnuto'),
+                              content: const Text('Zapněte prosím GPS (služby polohy) v nastavení telefonu, abyste mohli vybrat okruh ve svém okolí.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Rozumím'),
+                                ),
+                              ],
+                            ),
+                          );
                         }
-                      ];
-                      _selectedRouteSuggestionIndex = 0;
-                      _showRouteSuggestions = false;
-                      _showRouteSearch = false;
-                      _taskCardExpanded = false;
-                    });
+                        return;
+                      }
 
-                    _startRoute();
-                  }
-                },
+                      // Check location permissions
+                      final permission = await Geolocator.checkPermission();
+                      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+                        final requested = await _locationService.requestLocationPermission();
+                        if (!requested) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Přístup k poloze byl zamítnut. Povolte polohu v nastavení.')),
+                            );
+                          }
+                          return;
+                        }
+                      }
+
+                      // If _lastPosition is still null, try to actively fetch it
+                      Position? currentPos = _lastPosition;
+                      if (currentPos == null) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Získávám GPS polohu...'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                        currentPos = await _locationService.getCurrentLocation();
+                      }
+
+                      if (currentPos == null) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Nepodařilo se získat GPS polohu. Zkontrolujte signál.')),
+                          );
+                        }
+                        return;
+                      }
+
+                      // Update _lastPosition
+                      _lastPosition = currentPos;
+
+                      if (!mounted) return;
+                      
+                      final result = await Navigator.of(context).push<Map<String, dynamic>>(
+                        MaterialPageRoute(
+                          builder: (context) => RouteSelectionScreen(
+                            startLocation: LatLng(currentPos!.latitude, currentPos!.longitude),
+                            isBikeDefault: _usingBike,
+                          ),
+                        ),
+                      );
+
+                      if (result != null) {
+                        final points = result['points'] as List<LatLng>;
+                        final title = result['title'] as String;
+                        final distance = result['distance'] as double;
+                        final eta = result['eta'] as int;
+                        final isBike = result['using_bike'] as bool? ?? _usingBike;
+
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('preferred_bike_mode', isBike);
+
+                        final polyline = Polyline(
+                          polylineId: const PolylineId('active_route'),
+                          color: isBike ? Colors.blue : Colors.green,
+                          width: 5,
+                          points: points,
+                          geodesic: true,
+                        );
+
+                        setState(() {
+                          _usingBike = isBike;
+                          _activeRoutePoints = points;
+                          _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+                          _polylines.add(polyline);
+                          _destinationPoint = points.last;
+                          
+                          _routeSuggestions = [
+                            {
+                              'title': title,
+                              'coordinates': points,
+                              'distance': distance,
+                              'eta': eta,
+                              'poi_count': 0,
+                              'trivia_question': result['trivia_question'] as String?,
+                              'trivia_answer': result['trivia_answer'] as String?,
+                            }
+                          ];
+                          _selectedRouteSuggestionIndex = 0;
+                          _showRouteSuggestions = false;
+                          _showRouteSearch = false;
+                          _taskCardExpanded = false;
+                          _routePlotted = true;
+
+                          if (result['selected_game'] != null) {
+                            _activeRouteGame = result['selected_game'] as WheelOfFortune?;
+                            _gamePlayers = List<String>.from(result['game_players'] as List<dynamic>? ?? ['Já']);
+                            _isGroupMode = result['is_group_mode'] as bool? ?? false;
+                            _gameLastTriggeredDistance = distance;
+                            _gameActiveAssignments.clear();
+                            _gamePlayerHistory.clear();
+                          } else {
+                            _activeRouteGame = null;
+                          }
+                        });
+                      }
+                    },
+                  ),
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isWhite ? Colors.lightBlue.shade50 : Colors.lightBlue.shade900.withOpacity(0.3),
+                      child: Icon(Icons.location_pin, color: isWhite ? Colors.lightBlue : Colors.lightBlueAccent),
+                    ),
+                    title: Text('Cesta do cíle', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                    subtitle: Text('Zadejte adresu nebo vyberte cíl na mapě', style: TextStyle(color: textSecondary, fontSize: 12)),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      
+                      // Check GPS enabled
+                      final gpsEnabled = await _locationService.isLocationServiceEnabled();
+                      if (!gpsEnabled) {
+                        if (mounted) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('GPS vypnuto'),
+                              content: const Text('Zapněte prosím GPS (služby polohy) v nastavení telefonu, abyste mohli vybrat cestu do cíle.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Rozumím'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return;
+                      }
+
+                      // Check location permissions
+                      final permission = await Geolocator.checkPermission();
+                      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+                        final requested = await _locationService.requestLocationPermission();
+                        if (!requested) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Přístup k poloze byl zamítnut. Povolte polohu v nastavení.')),
+                            );
+                          }
+                          return;
+                        }
+                      }
+
+                      Position? currentPos = _lastPosition;
+                      if (currentPos == null) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Získávám GPS polohu...'), duration: Duration(seconds: 2)),
+                          );
+                        }
+                        currentPos = await _locationService.getCurrentLocation();
+                      }
+
+                      if (currentPos == null) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Nepodařilo se získat GPS polohu. Zkontrolujte signál.')),
+                          );
+                        }
+                        return;
+                      }
+
+                      _lastPosition = currentPos;
+                      if (!mounted) return;
+
+                      final result = await Navigator.of(context).push<Map<String, dynamic>>(
+                        MaterialPageRoute(
+                          builder: (context) => RouteSelectionScreen(
+                            startLocation: LatLng(currentPos!.latitude, currentPos!.longitude),
+                            isBikeDefault: _usingBike,
+                            isAtoBMode: true,
+                          ),
+                        ),
+                      );
+
+                      if (result != null) {
+                        final points = result['points'] as List<LatLng>;
+                        final title = result['title'] as String;
+                        final distance = result['distance'] as double;
+                        final eta = result['eta'] as int;
+                        final isBike = result['using_bike'] as bool? ?? _usingBike;
+
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('preferred_bike_mode', isBike);
+
+                        final polyline = Polyline(
+                          polylineId: const PolylineId('active_route'),
+                          color: isBike ? Colors.blue : Colors.green,
+                          width: 5,
+                          points: points,
+                          geodesic: true,
+                        );
+
+                        setState(() {
+                          _usingBike = isBike;
+                          _activeRoutePoints = points;
+                          _polylines.removeWhere((p) => p.polylineId.value == 'active_route');
+                          _polylines.add(polyline);
+                          _destinationPoint = points.last;
+                          
+                          _routeSuggestions = [
+                            {
+                              'title': title,
+                              'coordinates': points,
+                              'distance': distance,
+                              'eta': eta,
+                              'poi_count': 0,
+                              'trivia_question': result['trivia_question'] as String?,
+                              'trivia_answer': result['trivia_answer'] as String?,
+                            }
+                          ];
+                          _selectedRouteSuggestionIndex = 0;
+                          _showRouteSuggestions = false;
+                          _showRouteSearch = false;
+                          _taskCardExpanded = false;
+                          _routePlotted = true;
+
+                          if (result['selected_game'] != null) {
+                            _activeRouteGame = result['selected_game'] as WheelOfFortune?;
+                            _gamePlayers = List<String>.from(result['game_players'] as List<dynamic>? ?? ['Já']);
+                            _isGroupMode = result['is_group_mode'] as bool? ?? false;
+                            _gameLastTriggeredDistance = distance;
+                            _gameActiveAssignments.clear();
+                            _gamePlayerHistory.clear();
+                          } else {
+                            _activeRouteGame = null;
+                          }
+                        });
+                      }
+                    },
+                  ),
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isWhite ? Colors.lightBlue.shade50 : Colors.lightBlue.shade900.withOpacity(0.3),
+                      child: Icon(Icons.qr_code_scanner, color: isWhite ? Colors.lightBlue : Colors.lightBlueAccent),
+                    ),
+                    title: Text('Načíst trasu z QR kódu', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                    subtitle: Text('Naskenujte trasu od kamaráda offline', style: TextStyle(color: textSecondary, fontSize: 12)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _scanRouteQr();
+                    },
+                  ),
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isWhite ? Colors.amber.shade50 : Colors.amber.shade900.withOpacity(0.3),
+                      child: Icon(Icons.stars, color: isWhite ? Colors.amber : Colors.amberAccent),
+                    ),
+                    title: Text('Top komunitní okruhy', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                    subtitle: Text('Vyhledat nejlépe hodnocené trasy v okolí', style: TextStyle(color: textSecondary, fontSize: 12)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showSearchCommunityRoutesDialog();
+                    },
+                  ),
+                ],
               ),
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.lightBlue.shade50,
-                  child: const Icon(Icons.location_pin, color: Colors.lightBlue),
+            ),
+          ),
+         ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAntiCheatOverlay() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: AntiCheatService().isCheatingNotifier,
+      builder: (context, isCheating, child) {
+        if (!isCheating) return const SizedBox.shrink();
+        return Positioned(
+          top: MediaQuery.of(context).padding.top + 80,
+          left: 16,
+          right: 16,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD32F2F).withOpacity(0.92), // Solid premium crimson red
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.35),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
-                title: const Text('Cesta do cíle'),
-                subtitle: const Text('Zadejte cíl a nechte trasu vytvořit'),
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    _showRouteSearch = false;
-                    _showRouteSuggestions = false;
-                    _isSelectingDestination = true;
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Klikněte na mapu pro výběr cíle.')),
-                  );
-                },
-              ),
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.lightBlue.shade50,
-                  child: const Icon(Icons.search, color: Colors.lightBlue),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Color(0xFFFFFF00), // Pure yellow
+                    size: 26,
+                  ),
                 ),
-                title: const Text('Hledat destinaci'),
-                subtitle: const Text('Vyhledejte město nebo cíl ve vyhledávání'),
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    _showRouteSearch = true;
-                    _showRouteSuggestions = false;
-                  });
-                },
-              ),
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.lightBlue.shade50,
-                  child: const Icon(Icons.qr_code_scanner, color: Colors.lightBlue),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Rychlý pohyb detekován!',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      ValueListenableBuilder<String>(
+                        valueListenable: AntiCheatService().cheatReasonNotifier,
+                        builder: (context, reason, _) {
+                          return Text(
+                            reason.isNotEmpty ? reason : 'Zpomalte pro obnovení sbírání km.',
+                            style: const TextStyle(
+                              color: Colors.white90,
+                              fontSize: 12,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Sbírání vzdálenosti je dočasně pozastaveno.',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                title: const Text('Načíst trasu z QR kódu'),
-                subtitle: const Text('Naskenujte trasu od kamaráda offline'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _scanRouteQr();
-                },
-              ),
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.amber.shade50,
-                  child: const Icon(Icons.stars, color: Colors.amber),
-                ),
-                title: const Text('Top komunitní okruhy'),
-                subtitle: const Text('Vyhledat nejlépe hodnocené trasy v okolí'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showSearchCommunityRoutesDialog();
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -3073,7 +3491,14 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
     final bottomOffset = MediaQuery.of(context).padding.bottom + 80;
-    final fabBaseOffset = _routeActive ? bottomOffset + 110 : bottomOffset + 76;
+    final double fabBaseOffset;
+    if (_routeActive) {
+      fabBaseOffset = bottomOffset + 100;
+    } else if (_routePlotted) {
+      fabBaseOffset = bottomOffset + 150;
+    } else {
+      fabBaseOffset = bottomOffset + 76;
+    }
 
     return Scaffold(
       extendBody: true,
@@ -3225,134 +3650,15 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
-          if (_routeActive)
-            Positioned(
-              top: topPadding + 12,
-              left: 16,
-              right: 80,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF2E3D30), Color(0xFF1B261C)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                  border: Border.all(color: Colors.white.withOpacity(0.12), width: 1.5),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _navigationIcon,
-                          color: const Color(0xFFBFFF00),
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _routeSuggestions.isNotEmpty && _selectedRouteSuggestionIndex < _routeSuggestions.length
-                                  ? (_routeSuggestions[_selectedRouteSuggestionIndex]['title'] as String).toUpperCase()
-                                  : 'AKTIVNÍ NAVIGACE',
-                              style: const TextStyle(
-                                color: Colors.white60,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _navigationInstruction,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          if (_isSelectingDestination)
-            Positioned(
-              top: topPadding + 210,
-              left: 16,
-              right: 16,
-              child: Card(
-                elevation: 6,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(14.0),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.location_on, color: Colors.lightBlue),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Klikněte na mapu pro výběr cíle, nebo zrušte a vyhledejte destinaci.',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black87),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _isSelectingDestination = false;
-                          });
-                        },
-                        child: const Text('Zrušit'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          if (_routeActive)
-            Positioned(
-              top: topPadding + 154,
-              right: 20,
-              child: CircleAvatar(
-                backgroundColor: const Color.fromRGBO(255, 255, 255, 0.9),
-                child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.black87),
-                  onPressed: _cancelRoute,
-                ),
-              ),
-            ),
           Positioned(
-            top: topPadding + 140,
+            bottom: bottomOffset - 40,
             left: 16,
             right: 16,
             child: AnimatedOpacity(
-              opacity: _routeActive || _showRouteSearch || _routePlotted ? 1.0 : 0.0,
+              opacity: (!_routeActive && _routePlotted) ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 250),
               child: IgnorePointer(
-                ignoring: !(_routeActive || _showRouteSearch || _routePlotted),
+                ignoring: !(!_routeActive && _routePlotted),
                 child: Card(
                   elevation: 4,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -3361,18 +3667,6 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (_destinationPoint != null) ...[
-                          const Text(
-                            'Na trase do cíle',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Vzdálenost se přičte až po fyzické chůzi',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
-                          ),
-                          const SizedBox(height: 10),
-                        ],
                         if ((_routeActive || _routePlotted) && _routeSuggestions.isNotEmpty) ...[
                           Text(
                             _routeSuggestions[_selectedRouteSuggestionIndex]['title'] as String,
@@ -3386,10 +3680,17 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                               _buildRouteInfoChip('${(_routeSuggestions[_selectedRouteSuggestionIndex]['distance'] as double).toStringAsFixed(1)} km'),
                               _buildRouteInfoChip('${_routeSuggestions[_selectedRouteSuggestionIndex]['eta']} min'),
                               _buildRouteInfoChip('${_routeSuggestions[_selectedRouteSuggestionIndex]['poi_count']} POI'),
+                              if (_activeRouteGame != null)
+                                _buildRouteInfoChip(
+                                  '🎮 ${_activeRouteGame!.name}',
+                                  color: Colors.orange.shade50,
+                                  textColor: Colors.orange.shade950,
+                                ),
                             ],
                           ),
                           const SizedBox(height: 12),
-                          if (_routePlotted && !_trackingEnabled)
+                          if (_routePlotted && !_trackingEnabled) ...[
+                            const SizedBox(height: 12),
                             Row(
                               children: [
                                 Expanded(
@@ -3420,6 +3721,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                                 ),
                               ],
                             ),
+                          ],
                         ],
                       ],
                     ),
@@ -3577,205 +3879,138 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             ),
           if (_routeActive)
             Positioned(
-              bottom: bottomOffset,
+              bottom: bottomOffset - 40,
               left: 16,
               right: 16,
               child: Card(
-                elevation: 10,
-                color: Colors.white.withOpacity(0.95),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                elevation: 6,
+                color: const Color(0xFF263238),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(12.0),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'ZBÝVÁ',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.black54,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.0,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${_remainingDistance.toStringAsFixed(1)} km',
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w900,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                  ],
+                                Text(
+                                  _routeSuggestions.isNotEmpty && _selectedRouteSuggestionIndex < _routeSuggestions.length
+                                      ? (_routeSuggestions[_selectedRouteSuggestionIndex]['title'] as String).toUpperCase()
+                                      : 'AKTIVNÍ NAVIGACE',
+                                  style: const TextStyle(
+                                    color: Color(0xFFBFFF00),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.1,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                Container(
-                                  width: 1,
-                                  height: 36,
-                                  color: Colors.black12,
-                                ),
-                                Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'ČAS',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.black54,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.0,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '$_remainingEta min',
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w900,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                  ],
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${_remainingDistance.toStringAsFixed(1)} km  •  $_remainingEta min',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          if (_gameActiveAssignments.isNotEmpty) ...[
+                            GestureDetector(
+                              onTap: _showActiveAssignmentsDialog,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade850,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.star, color: Colors.white, size: 12),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${_gameActiveAssignments.length} ${_gameActiveAssignments.length == 1 ? 'úkol' : _gameActiveAssignments.length < 5 ? 'úkoly' : 'úkolů'}',
+                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ] else if (_activeRouteGame != null) ...[
+                            GestureDetector(
+                              onTap: _openGameWheelScreen,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFBFFF00), width: 1),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.casino_outlined, color: Color(0xFFBFFF00), size: 12),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _activeRouteGame!.name,
+                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           ElevatedButton(
-                            onPressed: _cancelRoute,
+                            onPressed: _showCancelRouteDialog,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.redAccent.shade100,
-                              foregroundColor: Colors.red.shade900,
+                              backgroundColor: Colors.redAccent,
+                              foregroundColor: Colors.white,
                               elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              minimumSize: const Size(0, 0),
                             ),
                             child: const Text(
                               'Konec',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ],
                       ),
-                      if (_activeRouteGame != null) ...[
-                        const Divider(height: 24, thickness: 1),
+                      if (_navigationInstruction.isNotEmpty) ...[
+                        const Divider(color: Colors.white12, height: 12),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
+                            Icon(
+                              _navigationIcon,
+                              color: const Color(0xFFBFFF00),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '🎰 Hra: ${_activeRouteGame!.name}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.blueAccent),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  if (_gameActiveAssignments.isEmpty)
-                                    Text(
-                                      'Další úkoly za: ${(1.5 - (_totalDistance - _gameLastTriggeredDistance)).clamp(0.0, 1.5).toStringAsFixed(1)} km',
-                                      style: const TextStyle(fontSize: 12, color: Colors.black54),
-                                    )
-                                  else
-                                    const Text(
-                                      'Máte aktivní úkoly! Splňte je do konce úseku.',
-                                      style: TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.bold),
-                                    ),
-                                ],
+                              child: Text(
+                                _navigationInstruction,
+                                style: const TextStyle(
+                                  color: Colors.white90,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (_gameActiveAssignments.isEmpty)
-                              ElevatedButton.icon(
-                                onPressed: _openGameWheelScreen,
-                                icon: const Icon(Icons.casino, size: 16),
-                                label: const Text('Losovat hned', style: TextStyle(fontSize: 12)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.amberAccent,
-                                  foregroundColor: Colors.black,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                              ),
                           ],
-                        ),
-                        if (_gameActiveAssignments.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.shade50.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.amber.shade200),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                ..._gameActiveAssignments.entries.map((entry) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 6.0),
-                                    child: RichText(
-                                      text: TextSpan(
-                                        style: const TextStyle(color: Colors.black87, fontSize: 13),
-                                        children: [
-                                          TextSpan(text: '${entry.key}: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                          TextSpan(text: entry.value.title),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                                const SizedBox(height: 8),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      for (var entry in _gameActiveAssignments.entries) {
-                                        final list = _gamePlayerHistory[entry.key] ?? [];
-                                        list.add(entry.value.id);
-                                        _gamePlayerHistory[entry.key] = list;
-                                      }
-                                      _gameActiveAssignments.clear();
-                                    });
-                                    _saveActiveGameState();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Úkoly označeny za splněné! 🏆')),
-                                    );
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                  child: const Text('Označit úkoly za splněné ✓', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ] else ...[
-                        const Divider(height: 24, thickness: 1),
-                        ElevatedButton.icon(
-                          onPressed: _showAddGameToRouteBottomSheet,
-                          icon: const Icon(Icons.casino_outlined, size: 18),
-                          label: const Text('Přidat hru na trasu 🎰', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amberAccent,
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
                         ),
                       ],
                     ],
@@ -3907,6 +4142,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               },
             ),
           ),
+          // Anti-cheat warning overlay
+          _buildAntiCheatOverlay(),
         ],
       ),
     );
@@ -4490,7 +4727,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      'Nastavit hru pro trasu 🎰',
+                      'Nastavit hru pro trasu',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
                     ),
                     const SizedBox(height: 16),

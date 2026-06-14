@@ -37,6 +37,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _storyDifficultyMedium = false;
   bool _storyDifficultyHard = false;
   bool _storyDifficultyHardcore = false;
+  int _invitedFriendsCount = 0;
+  List<bool> _stepsAchievements = List.filled(6, false);
+  List<bool> _checkpointAchievements = List.filled(5, false);
+  bool _hasOwnedPremium = false;
+  bool _premiumForYear = false;
 
   String _firstName = '';
   String _lastName = '';
@@ -130,7 +135,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
       stepsList.add(steps);
     }
 
+    // Fetch friend count from Firestore in the background
+    int friendsCount = prefs.getInt('invited_friends_count') ?? 0;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .collection('friends')
+            .where('status', isEqualTo: 'friends')
+            .get();
+        friendsCount = snap.docs.length;
+        await prefs.setInt('invited_friends_count', friendsCount);
+      } catch (_) {}
+    }
+
+    final isPrem = prefs.getBool('isPremium') ?? false;
+    final everOwned = prefs.getBool('ever_owned_premium') ?? false || isPrem;
+    final premiumStartTimeStr = prefs.getString('premium_start_time');
+    bool premForYear = prefs.getBool('premium_for_year') ?? false;
+    if (premiumStartTimeStr != null) {
+      try {
+        final startTime = DateTime.parse(premiumStartTimeStr);
+        if (DateTime.now().difference(startTime).inDays >= 365) {
+          premForYear = true;
+        }
+      } catch (_) {}
+    }
+    if (prefs.getBool('simulate_year_premium') == true) {
+      premForYear = true;
+    }
+
     setState(() {
+      _invitedFriendsCount = friendsCount;
       _activeCompanion = companion;
       last7DaysSteps = stepsList;
       limetkyBalance = prefs.getInt('limetkyBalance') ?? 0;
@@ -150,6 +188,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _storyDifficultyMedium = prefs.getBool('achievement_story_difficulty_medium') ?? false;
       _storyDifficultyHard = prefs.getBool('achievement_story_difficulty_hard') ?? false;
       _storyDifficultyHardcore = prefs.getBool('achievement_story_difficulty_hardcore') ?? false;
+
+      final milestones = [5, 10, 25, 50, 100, 365];
+      for (int i = 0; i < milestones.length; i++) {
+        _stepsAchievements[i] = prefs.getBool('steps_achievement_${milestones[i]}') ?? false;
+      }
+
+      for (int i = 1; i <= 5; i++) {
+        _checkpointAchievements[i - 1] = prefs.getBool('achievement_checkpoint_${i}_reached') ?? false;
+      }
+
+      _hasOwnedPremium = everOwned;
+      _premiumForYear = premForYear;
     });
     _updateAchievements();
   }
@@ -714,6 +764,114 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return days == 1 ? 'Denní série: 1 den' : 'Denní série: $days dnů';
   }
 
+  void _showDayDetailsDialog(DateTime date, int steps, double distance, List<String> routes) {
+    final theme = MainShell.themeNotifier.value;
+    final isWhite = theme == 'white';
+    final cardColor = isWhite ? Colors.white : const Color(0xFF1E272C);
+    final textColor = isWhite ? const Color(0xFF263238) : Colors.white;
+    final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+    
+    final formattedDate = '${date.day}. ${date.month}. ${date.year}';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: cardColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text(
+            '📊 Aktivita: $formattedDate',
+            style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildStatBox('👟 Kroky', '$steps', textColor, textSecondary),
+                  _buildStatBox('📏 Vzdálenost', '${distance.toStringAsFixed(2)} km', textColor, textSecondary),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '🏁 Dokončené trasy',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textColor),
+              ),
+              const SizedBox(height: 8),
+              if (routes.isEmpty)
+                Text(
+                  'Tento den jsi nedokončil žádnou trasu.',
+                  style: TextStyle(color: textSecondary, fontSize: 12, fontStyle: FontStyle.italic),
+                  textAlign: TextAlign.center,
+                )
+              else
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 180),
+                  width: double.maxFinite,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: routes.length,
+                    itemBuilder: (context, idx) {
+                      final parts = routes[idx].split('|');
+                      final title = parts[0];
+                      final dist = parts.length > 1 ? double.tryParse(parts[1]) ?? 0.0 : 0.0;
+                      return Card(
+                        color: isWhite ? Colors.grey.shade100 : Colors.white.withOpacity(0.05),
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.directions_walk, color: Color(0xFFBFFF00), size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${dist.toStringAsFixed(1)} km',
+                                style: const TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Zavřít',
+                style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStatBox(String title, String val, Color textColor, Color textSecondary) {
+    return Column(
+      children: [
+        Text(title, style: TextStyle(color: textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(val, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
   Widget _buildWeeklyActivityChart(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     int maxSteps = last7DaysSteps.isEmpty ? 10000 : last7DaysSteps.reduce((curr, next) => curr > next ? curr : next);
     if (maxSteps < 10000) maxSteps = 10000;
@@ -757,50 +915,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 final ratio = steps / maxSteps;
                 final barHeight = (ratio * 100).clamp(6.0, 100.0);
 
-                return Column(
-                  children: [
-                    Text(
-                      steps >= 1000 ? '${(steps / 1000).toStringAsFixed(1)}k' : '$steps',
-                      style: TextStyle(fontSize: 10, color: textSecondary, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      width: 16,
-                      height: barHeight,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        gradient: isGoalMet
-                            ? const LinearGradient(
-                                colors: [Color(0xFFD4FF00), Color(0xFFBFFF00)],
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                              )
-                            : LinearGradient(
-                                colors: [Colors.grey.withOpacity(0.4), Colors.grey.withOpacity(0.2)],
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                              ),
-                        boxShadow: isGoalMet
-                            ? [
-                                BoxShadow(
-                                  color: const Color(0xFFBFFF00).withOpacity(0.4),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () async {
+                    final dateStr = date.toIso8601String().substring(0, 10);
+                    final prefs = await SharedPreferences.getInstance();
+                    final routesKey = 'daily_routes_$dateStr';
+                    final routes = prefs.getStringList(routesKey) ?? [];
+                    double dist = prefs.getDouble('daily_distance_$dateStr') ?? 0.0;
+                    if (dist == 0.0 && steps > 0) {
+                      dist = steps * 0.00075;
+                    }
+                    _showDayDetailsDialog(date, steps, dist, routes);
+                  },
+                  child: Column(
+                    children: [
+                      Text(
+                        steps >= 1000 ? '${(steps / 1000).toStringAsFixed(1)}k' : '$steps',
+                        style: TextStyle(fontSize: 10, color: textSecondary, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        width: 16,
+                        height: barHeight,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          gradient: isGoalMet
+                              ? const LinearGradient(
+                                  colors: [Color(0xFFD4FF00), Color(0xFFBFFF00)],
+                                  begin: Alignment.bottomCenter,
+                                  end: Alignment.topCenter,
                                 )
-                              ]
-                            : [],
+                              : LinearGradient(
+                                  colors: [Colors.grey.withOpacity(0.4), Colors.grey.withOpacity(0.2)],
+                                  begin: Alignment.bottomCenter,
+                                  end: Alignment.topCenter,
+                                ),
+                          boxShadow: isGoalMet
+                              ? [
+                                  BoxShadow(
+                                    color: const Color(0xFFBFFF00).withOpacity(0.4),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  )
+                                ]
+                              : [],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      dayName,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: index == 6 ? const Color(0xFFBFFF00) : textSecondary,
-                        fontWeight: index == 6 ? FontWeight.bold : FontWeight.normal,
+                      const SizedBox(height: 8),
+                      Text(
+                        dayName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: index == 6 ? const Color(0xFFBFFF00) : textSecondary,
+                          fontWeight: index == 6 ? FontWeight.bold : FontWeight.normal,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 );
               }),
             ),
@@ -963,6 +1135,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'value': 99995.0,
       'icon': Icons.explore,
     });
+
+    final stepMilestones = [5, 10, 25, 50, 100, 365];
+    for (int i = 0; i < stepMilestones.length; i++) {
+      achievementItems.add({
+        'title': 'Svědomitý ${stepMilestones[i]} d.',
+        'unlocked': _stepsAchievements[i],
+        'type': 'steps',
+        'value': stepMilestones[i].toDouble(),
+        'icon': Icons.check_circle_outline,
+      });
+    }
+    for (int i = 0; i < 5; i++) {
+      achievementItems.add({
+        'title': 'Checkpoint ${i + 1}',
+        'unlocked': _checkpointAchievements[i],
+        'type': 'checkpoint',
+        'value': (i + 1).toDouble(),
+        'icon': Icons.location_on,
+      });
+    }
+    final friendMilestones = [1, 5, 10];
+    for (int i = 0; i < friendMilestones.length; i++) {
+      achievementItems.add({
+        'title': 'Nová krev ${friendMilestones[i]}',
+        'unlocked': _invitedFriendsCount >= friendMilestones[i],
+        'type': 'invitation',
+        'value': friendMilestones[i].toDouble(),
+        'icon': Icons.person_add,
+      });
+    }
+    achievementItems.add({
+      'title': 'Věrný sponzor',
+      'unlocked': _hasOwnedPremium,
+      'type': 'premium',
+      'value': 99994.0,
+      'icon': Icons.workspace_premium,
+    });
+    achievementItems.add({
+      'title': 'Patron na věky',
+      'unlocked': _premiumForYear,
+      'type': 'premium',
+      'value': 99993.0,
+      'icon': Icons.volunteer_activism,
+    });
+
+    final int totalCount = achievementItems.length;
+    final int unlockedCount = achievementItems.where((item) => item['unlocked'] == true).length;
+    final double completionPercentage = totalCount > 0 ? (unlockedCount / totalCount) * 100 : 0.0;
 
     final visibleAchievements = List<Map<String, dynamic>>.from(achievementItems)
       ..sort((a, b) {
@@ -1198,12 +1418,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 12),
                     _buildGamingGrid(cardColor, textColor, textSecondary, borderColor),
                     const SizedBox(height: 28),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Úspěchy',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Úspěchy',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFBFFF00).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFBFFF00), width: 1.5),
+                          ),
+                          child: Text(
+                            '${completionPercentage.toStringAsFixed(0)}% splněno',
+                            style: const TextStyle(
+                              color: Color(0xFFBFFF00),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     GridView.count(

@@ -39,10 +39,10 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
 
   // Premium State
   bool _isPremium = false;
+  String? _premiumTier;
+  String? _premiumShippingAddress;
   late AnimationController _sweepController;
 
-  Timer? _countdownTimer;
-  String _countdownText = '';
 
   final List<Map<String, dynamic>> _companions = [
     {
@@ -85,7 +85,6 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     )..repeat();
     _loadLimetkyAndCompanions();
     _initializePayClient();
-    _startCountdownTimer();
   }
 
   @override
@@ -93,46 +92,10 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     _tabController.dispose();
     _donationController.dispose();
     _sweepController.dispose();
-    _countdownTimer?.cancel();
     super.dispose();
   }
 
-  void _startCountdownTimer() {
-    _countdownTimer?.cancel();
-    
-    final now = DateTime.now();
-    final midnight = DateTime(now.year, now.month, now.day + 1);
-    final diff = midnight.difference(now);
-    final hours = diff.inHours.toString().padLeft(2, '0');
-    final minutes = (diff.inMinutes % 60).toString().padLeft(2, '0');
-    final seconds = (diff.inSeconds % 60).toString().padLeft(2, '0');
-    _countdownText = '${hours}h:${minutes}m:${seconds}s';
-
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        _updateRemainingTime();
-      }
-    });
-  }
-
-  void _updateRemainingTime() {
-    final now = DateTime.now();
-    final midnight = DateTime(now.year, now.month, now.day + 1);
-    final diff = midnight.difference(now);
-    
-    final hours = diff.inHours.toString().padLeft(2, '0');
-    final minutes = (diff.inMinutes % 60).toString().padLeft(2, '0');
-    final seconds = (diff.inSeconds % 60).toString().padLeft(2, '0');
-    
-    setState(() {
-      _countdownText = '${hours}h:${minutes}m:${seconds}s';
-    });
-  }
-
   int _getCompanionCost(String id) {
-    if (id == 'deer') {
-      return 75; // Flash Sale discount
-    }
     final comp = _companions.firstWhere((c) => c['id'] == id);
     return comp['cost'] as int;
   }
@@ -171,6 +134,8 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
       );
       final balance = prefs.getInt('limetkyBalance') ?? 0;
       final isPrem = prefs.getBool('isPremium') ?? false;
+      final tier = prefs.getString('premiumTier');
+      final address = prefs.getString('premiumShippingAddress');
       final unlockedLocally = prefs.getStringList('unlocked_companions') ?? [];
       final activeLocally = prefs.getString('selected_companion');
 
@@ -180,10 +145,47 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
           _unlockedCompanions = unlockedLocally;
           _selectedCompanion = activeLocally;
           _isPremium = isPrem;
+          _premiumTier = tier;
+          _premiumShippingAddress = address;
         });
       }
     } catch (e) {
       debugPrint('Local prefs load failed: $e');
+    }
+
+    // Load from Firestore in background
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>? ?? {};
+          final isPremDb = data['isPremium'] as bool? ?? false;
+          final tierDb = data['premiumTier'] as String?;
+          final addressDb = data['premiumShippingAddress'] as String?;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('isPremium', isPremDb);
+          if (tierDb != null) {
+            await prefs.setString('premiumTier', tierDb);
+          } else {
+            await prefs.remove('premiumTier');
+          }
+          if (addressDb != null) {
+            await prefs.setString('premiumShippingAddress', addressDb);
+          } else {
+            await prefs.remove('premiumShippingAddress');
+          }
+          if (mounted) {
+            setState(() {
+              _isPremium = isPremDb;
+              _premiumTier = tierDb;
+              _premiumShippingAddress = addressDb;
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint('Firebase load premium data failed: $e');
+      }
     }
 
     // 2. Fetch from the server in the background
@@ -412,25 +414,95 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
   }
 
   // Simulated checkout bottom sheet for Premium Subscription
-  void _openSimulatedPaymentSheet() {
+  void _openSimulatedPaymentSheet(double price, String tierName) {
+    if (price == 500.0) {
+      final addressController = TextEditingController();
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E272C),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('Zadejte doručovací adresu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Pro zasílání měsíčního dárku s logem HEJBEJ potřebujeme vaši doručovací adresu v ČR.',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: addressController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Doručovací adresa (ulice, č.p., město, PSČ)',
+                    labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white30)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFBFFF00))),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Zrušit', style: TextStyle(color: Colors.white70)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final addr = addressController.text.trim();
+                  if (addr.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Zadejte prosím platnou adresu.')),
+                    );
+                    return;
+                  }
+                  Navigator.pop(context);
+                  _launchSimulatedPayment(price, tierName, shippingAddress: addr);
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFFF00), foregroundColor: Colors.black),
+                child: const Text('Pokračovat k platbě'),
+              ),
+            ],
+          );
+        },
+      );
+    } else {
+      _launchSimulatedPayment(price, tierName);
+    }
+  }
+
+  void _launchSimulatedPayment(double price, String tierName, {String? shippingAddress}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         return _SimulatedPaymentSheet(
-          amount: '25.00',
-          title: 'Členství Premium (Hejbej se)',
+          amount: price.toStringAsFixed(2),
+          title: 'Podpora Hejbej se ($tierName)',
           onSuccess: () async {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setBool('isPremium', true);
+            await prefs.setString('premiumTier', tierName);
+            await prefs.setBool('ever_owned_premium', true);
+            if (prefs.getString('premium_start_time') == null) {
+              await prefs.setString('premium_start_time', DateTime.now().toIso8601String());
+            }
+            if (shippingAddress != null) {
+              await prefs.setString('premiumShippingAddress', shippingAddress);
+            }
 
-            // Sync with Firebase if available
             final user = FirebaseAuth.instance.currentUser;
             if (user != null) {
               try {
                 await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
                   'isPremium': true,
+                  'premiumTier': tierName,
+                  'ever_owned_premium': true,
+                  'premium_start_time': DateTime.now().toIso8601String(),
+                  if (shippingAddress != null) 'premiumShippingAddress': shippingAddress,
                 });
               } catch (e) {
                 debugPrint('Firebase isPremium sync failed: $e');
@@ -439,6 +511,8 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
 
             setState(() {
               _isPremium = true;
+              _premiumTier = tierName;
+              _premiumShippingAddress = shippingAddress;
             });
             await _loadLimetkyAndCompanions();
           },
@@ -551,92 +625,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
           ),
         ),
 
-        // Flash Sale Banner
         const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFF8F00), Color(0xFFFF5722)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.orange.withOpacity(0.4),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              const Text('⚡', style: TextStyle(fontSize: 36)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'BLESKOVÁ NABÍDKA',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Jelen jen za 75 🍋 (běžně 100)',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.timer_outlined, color: Colors.white70, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Končí za: $_countdownText',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final deer = _companions.firstWhere((c) => c['id'] == 'deer');
-                  _handleCompanionAction(deer);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.orange.shade800,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                ),
-                child: const Text(
-                  'ZÍSKAT',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 24),
         Text(
           'LESNÍ SPOLEČNÍCI NA MAPU',
           style: TextStyle(fontWeight: FontWeight.w900, color: textColor, letterSpacing: 0.8, fontSize: 12),
@@ -770,51 +759,124 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
             );
           },
         ),
+        const SizedBox(height: 180),
+      ],
+    );
+  }
 
-        // Instruction Box
-        const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: borderColor, width: 1.5),
-          ),
+  Widget _buildPremiumTierCard({
+    required String title,
+    required String priceText,
+    required double price,
+    required String badge,
+    required IconData icon,
+    required List<String> benefits,
+    required Color accentColor,
+    required String tierName,
+  }) {
+    final bool isActive = _isPremium && _premiumTier == tierName;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: isActive
+            ? SweepGradient(
+                colors: [
+                  accentColor,
+                  accentColor.withOpacity(0.3),
+                  accentColor,
+                ],
+                transform: GradientRotation(_sweepController.value * math.pi * 2),
+              )
+            : null,
+        color: isActive ? null : Colors.transparent,
+      ),
+      child: Card(
+        color: const Color(0xFF1E272C),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        elevation: isActive ? 8 : 2,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: accentColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      badge,
+                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
               Text(
-                '🍋 Jak získat limetky?',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
-              ),
-              const SizedBox(height: 16),
-              _buildInstructionItem(
-                Icons.directions_walk_rounded,
-                'Plň denní cíle kroků',
-                'Za každý splněný denní cíl získáš 5 limetek.',
-                textColor,
-                textSecondary,
+                priceText,
+                style: TextStyle(color: Colors.grey.shade400, fontSize: 14, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 12),
-              _buildInstructionItem(
-                Icons.map_rounded,
-                'Dokonči outdoor trasy',
-                'Procházení a objevování nových tras ti přinese 10 limetek.',
-                textColor,
-                textSecondary,
-              ),
+              const Divider(color: Colors.white24),
+              const SizedBox(height: 8),
+              ...benefits.map((b) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(icon, color: accentColor, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            b,
+                            style: const TextStyle(color: Colors.white75, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
               const SizedBox(height: 12),
-              _buildInstructionItem(
-                Icons.casino_outlined,
-                'Roztoč Kolo štěstí',
-                'Každý den máš jedno roztočení zdarma s možností vyhrát limetky.',
-                textColor,
-                textSecondary,
+              ElevatedButton(
+                onPressed: isActive ? null : () => _openSimulatedPaymentSheet(price, tierName),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isActive ? Colors.transparent : accentColor,
+                  foregroundColor: isActive ? Colors.white : Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: isActive ? BorderSide(color: accentColor, width: 1.5) : BorderSide.none,
+                  ),
+                ),
+                child: Text(
+                  isActive ? 'Aktivní podpora 💖' : 'Podpořit – $priceText',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                ),
               ),
+              if (isActive && tierName == '500' && _premiumShippingAddress != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Doručovací adresa: $_premiumShippingAddress',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11, fontStyle: FontStyle.italic),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -834,136 +896,101 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
         ),
         const SizedBox(height: 8),
         Text(
-          'Vývoj a provoz mapových služeb stojí nemalé finance. Podporou získáš exkluzivní výhody!',
+          'Vývoj a provoz mapových a serverových služeb stojí nemalé finance. Podporou pomáháte přežití celého projektu!',
           style: TextStyle(fontSize: 13, color: textSecondary),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
 
-        // Premium Card with Liquid neon outline Sweep effect when active
-        AnimatedBuilder(
-          animation: _sweepController,
-          builder: (context, child) {
-            return Container(
-              padding: const EdgeInsets.all(2), // border width
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                gradient: _isPremium
-                    ? SweepGradient(
-                        colors: const [
-                          Color(0xFFBFFF00),
-                          Color(0xFF1B5E20),
-                          Color(0xFFBFFF00),
-                        ],
-                        transform: GradientRotation(_sweepController.value * math.pi * 2),
-                      )
-                    : null,
-                color: _isPremium ? null : Colors.transparent,
-              ),
-              child: child,
-            );
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.grey.shade900, Colors.black87],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Členství Premium',
-                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFBFFF00),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          '🌟 VIP',
-                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '25 Kč / měsíčně',
-                    style: TextStyle(color: Colors.grey.shade400, fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(color: Colors.white24),
-                  const SizedBox(height: 12),
-                  const Row(
-                    children: [
-                      Icon(Icons.check_circle_rounded, color: Color(0xFFBFFF00), size: 20),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Možnost vygenerovat 10 okruhů trasy od AI (běžně 5)',
-                          style: TextStyle(color: Colors.white, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Row(
-                    children: [
-                      Icon(Icons.check_circle_rounded, color: Color(0xFFBFFF00), size: 20),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Exkluzivní AR 3D směrová navigace na mapě',
-                          style: TextStyle(color: Colors.white, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Row(
-                    children: [
-                      Icon(Icons.check_circle_rounded, color: Color(0xFFBFFF00), size: 20),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Zlaté ikony, zobrazení VIP a podpora vývoje map',
-                          style: TextStyle(color: Colors.white, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _isPremium ? null : _openSimulatedPaymentSheet,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isPremium ? Colors.transparent : const Color(0xFFBFFF00),
-                      foregroundColor: _isPremium ? Colors.white : Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: _isPremium ? const BorderSide(color: Color(0xFFBFFF00), width: 1.5) : BorderSide.none,
-                      ),
-                    ),
-                    child: Text(
-                      _isPremium ? 'Předplatné aktivní 🌟' : 'Předplatit – 25 Kč / měsíc',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        // Info warning block
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.amber.shade900.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.amber.shade800, width: 1.5),
           ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Upozornění pro dárce 💖',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Členství je zamýšleno jako dobrovolný příspěvek a podpora na provoz a další vývoj mapových služeb. Zakoupením získáte grafické zvýraznění a VIP odznaky mezi přáteli a v žebříčcích.',
+                      style: TextStyle(color: Colors.grey.shade300, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // 4 Tiers of support
+        _buildPremiumTierCard(
+          title: 'Podporovatel',
+          priceText: '25 Kč / měsíc',
+          price: 25.0,
+          badge: '🌟 VIP',
+          icon: Icons.star_rounded,
+          benefits: [
+            'Zlatá ikona a VIP odznak v žebříčku',
+            'Grafické zvýraznění jména pro všechny přátele',
+            'Generování až 10 AI okruhů v okolí (standardně 5)',
+          ],
+          accentColor: const Color(0xFFBFFF00),
+          tierName: '25',
+        ),
+        _buildPremiumTierCard(
+          title: 'Super Podporovatel',
+          priceText: '50 Kč / měsíc',
+          price: 50.0,
+          badge: '⭐ Super VIP',
+          icon: Icons.stars_rounded,
+          benefits: [
+            'Výraznější VIP odznak v profilech a žebříčku',
+            'Vaše jméno svítí zlatě v seznamu přátel',
+            'Možnost přednostně testovat chystané novinky',
+          ],
+          accentColor: Colors.amberAccent,
+          tierName: '50',
+        ),
+        _buildPremiumTierCard(
+          title: 'Patron projektu',
+          priceText: '100 Kč / měsíc',
+          price: 100.0,
+          badge: '🎖️ Patron',
+          icon: Icons.workspace_premium_rounded,
+          benefits: [
+            'Speciální zlatý rámeček u vašeho jména',
+            'Přednostní technická podpora od vývojářů',
+            'Zobrazení v seznamu hlavních přátel projektu',
+          ],
+          accentColor: Colors.cyanAccent,
+          tierName: '100',
+        ),
+        _buildPremiumTierCard(
+          title: 'HEJBEJ Srdcař',
+          priceText: '500 Kč / měsíc',
+          price: 500.0,
+          badge: '💎 Srdcař',
+          icon: Icons.diamond_rounded,
+          benefits: [
+            'Unikátní diamantová ikona u vašeho profilu',
+            'Každý měsíc fyzický dárek s logem HEJBEJ (tričko, lahev, nálepky atd.)',
+            'Doručováno bezplatně na vaši adresu v ČR',
+          ],
+          accentColor: Colors.pinkAccent,
+          tierName: '500',
         ),
 
         const SizedBox(height: 32),
@@ -1058,6 +1085,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
             ),
           ),
         ),
+        const SizedBox(height: 180),
       ],
     );
   }
