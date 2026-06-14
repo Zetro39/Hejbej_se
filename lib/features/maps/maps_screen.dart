@@ -20,6 +20,7 @@ import '../../services/location_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_manager.dart';
 import '../profile/notification_inbox_screen.dart';
+import '../leaderboard/friend_profile_screen.dart';
 import 'qr_scanner_screen.dart';
 import 'package:pay/pay.dart';
 import 'ar_navigation_screen.dart';
@@ -120,6 +121,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   bool _shareLocation = false;
   DateTime? _lastLocationShareTime;
   StreamSubscription<QuerySnapshot>? _friendsLocationsSubscription;
+  final Map<String, BitmapDescriptor> _cachedFriendIcons = {};
+  final Map<String, String> _geocodingCache = {};
 
   double _totalDistance = 0.0;
   int _limetkyBalance = 0;
@@ -433,50 +436,350 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           .collection('users')
           .where(FieldPath.documentId, whereIn: queryUids)
           .snapshots()
-          .listen((snapshot) {
+          .listen((snapshot) async {
         if (!mounted) return;
 
-        setState(() {
-          _markers.removeWhere((m) => m.markerId.value.startsWith('friend_'));
+        final newMarkers = <Marker>[];
+        final now = DateTime.now();
 
-          final now = DateTime.now();
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          final shareLoc = data['share_location'] as bool? ?? false;
+          if (!shareLoc) continue;
 
-          for (final doc in snapshot.docs) {
-            final data = doc.data();
-            final shareLoc = data['share_location'] as bool? ?? false;
-            if (!shareLoc) continue;
+          final locationGeo = data['last_location'] as GeoPoint?;
+          final lastUpdateTs = data['last_location_time'] as Timestamp?;
 
-            final locationGeo = data['last_location'] as GeoPoint?;
-            final lastUpdateTs = data['last_location_time'] as Timestamp?;
+          if (locationGeo == null || lastUpdateTs == null) continue;
 
-            if (locationGeo == null || lastUpdateTs == null) continue;
+          final lastUpdate = lastUpdateTs.toDate();
+          if (now.difference(lastUpdate).inHours >= 24) continue;
 
-            final lastUpdate = lastUpdateTs.toDate();
-            if (now.difference(lastUpdate).inHours >= 2) continue;
+          final username = data['username'] as String? ?? 'Uživatel';
+          final latLng = LatLng(locationGeo.latitude, locationGeo.longitude);
+          final avatarStr = data['selected_avatar'] as String? ?? 'boy';
 
-            final username = data['username'] as String? ?? 'Uživatel';
-            final latLng = LatLng(locationGeo.latitude, locationGeo.longitude);
-            final minutesAgo = now.difference(lastUpdate).inMinutes;
+          BitmapDescriptor iconDescriptor;
+          try {
+            if (_cachedFriendIcons.containsKey(avatarStr)) {
+              iconDescriptor = _cachedFriendIcons[avatarStr]!;
+            } else {
+              Uint8List bytes;
+              if (avatarStr.startsWith('base64:')) {
+                bytes = base64Decode(avatarStr.substring(7));
+              } else {
+                final ByteData data = await rootBundle.load('assets/images/$avatarStr.png');
+                bytes = data.buffer.asUint8List();
+              }
+              final circularIcon = await _getCircularMarker(bytes, 100, Colors.white);
+              _cachedFriendIcons[avatarStr] = circularIcon;
+              iconDescriptor = circularIcon;
+            }
+          } catch (e) {
+            debugPrint('Failed to load friend avatar marker: $e');
+            iconDescriptor = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+          }
 
-            final timeText = minutesAgo <= 1
-                ? 'aktivní před chvílí'
-                : 'aktivní před $minutesAgo min';
+          newMarkers.add(
+            Marker(
+              markerId: MarkerId('friend_${doc.id}'),
+              position: latLng,
+              icon: iconDescriptor,
+              onTap: () {
+                _showFriendBottomSheet(
+                  friendUid: doc.id,
+                  username: username,
+                  avatar: avatarStr,
+                  latLng: latLng,
+                  lastUpdate: lastUpdate,
+                );
+              },
+            ),
+          );
+        }
 
-            _markers.add(
-              Marker(
-                markerId: MarkerId('friend_${doc.id}'),
-                position: latLng,
-                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-                infoWindow: InfoWindow(
-                  title: username,
-                  snippet: timeText,
+        if (mounted) {
+          setState(() {
+            _markers.removeWhere((m) => m.markerId.value.startsWith('friend_'));
+            _markers.addAll(newMarkers);
+          });
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<String> _reverseGeocode(double lat, double lng) async {
+    final cacheKey = '${lat.toStringAsFixed(5)},${lng.toStringAsFixed(5)}';
+    if (_geocodingCache.containsKey(cacheKey)) {
+      return _geocodingCache[cacheKey]!;
+    }
+
+    try {
+      final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1');
+      final response = await http.get(url, headers: {
+        'User-Agent': 'HejbejSeApp/1.0 (contact@zetro39.cz)',
+        'Accept-Language': 'cs',
+      }).timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final addressMap = data['address'] as Map<String, dynamic>?;
+        if (addressMap != null) {
+          final road = addressMap['road'] as String?;
+          final houseNumber = addressMap['house_number'] as String?;
+          final suburb = addressMap['suburb'] as String?;
+          final city = (addressMap['city'] ?? addressMap['town'] ?? addressMap['village'] ?? addressMap['municipality']) as String?;
+
+          List<String> parts = [];
+          if (road != null) {
+            if (houseNumber != null) {
+              parts.add('$road $houseNumber');
+            } else {
+              parts.add(road);
+            }
+          } else if (suburb != null) {
+            parts.add(suburb);
+          }
+
+          if (city != null) {
+            parts.add(city);
+          }
+
+          if (parts.isNotEmpty) {
+            final result = parts.join(', ');
+            _geocodingCache[cacheKey] = result;
+            return result;
+          }
+        }
+        final displayName = data['display_name'] as String?;
+        if (displayName != null) {
+          final shortAddress = displayName.split(', ').take(3).join(', ');
+          _geocodingCache[cacheKey] = shortAddress;
+          return shortAddress;
+        }
+      }
+    } catch (e) {
+      debugPrint('Reverse geocoding failed: $e');
+    }
+
+    return 'Souřadnice: ${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+  }
+
+  void _showFriendBottomSheet({
+    required String friendUid,
+    required String username,
+    required String avatar,
+    required LatLng latLng,
+    required DateTime lastUpdate,
+  }) {
+    final isWhiteTheme = MainShell.themeNotifier.value == 'white';
+    final bgColor = isWhiteTheme ? Colors.white : const Color(0xFF1E272C);
+    final textColor = isWhiteTheme ? Colors.black87 : Colors.white;
+    final subTextColor = isWhiteTheme ? Colors.black54 : Colors.white70;
+
+    String addressStr = 'Načítám adresu...';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: bgColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            if (addressStr == 'Načítám adresu...') {
+              _reverseGeocode(latLng.latitude, latLng.longitude).then((resolvedAddress) {
+                if (context.mounted) {
+                  setSheetState(() {
+                    addressStr = resolvedAddress;
+                  });
+                }
+              });
+            }
+
+            final now = DateTime.now();
+            final difference = now.difference(lastUpdate);
+            String timeAgoText = '';
+            if (difference.inMinutes < 1) {
+              timeAgoText = 'před chvílí';
+            } else if (difference.inMinutes < 60) {
+              timeAgoText = 'před ${difference.inMinutes} min';
+            } else {
+              timeAgoText = 'před ${difference.inHours} hod';
+            }
+
+            Widget avatarWidget;
+            if (avatar.startsWith('base64:')) {
+              avatarWidget = CircleAvatar(
+                radius: 30,
+                backgroundImage: MemoryImage(base64Decode(avatar.substring(7))),
+              );
+            } else {
+              avatarWidget = CircleAvatar(
+                radius: 30,
+                backgroundImage: AssetImage('assets/images/$avatar.png'),
+              );
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: isWhiteTheme ? Colors.black12 : Colors.white24,
+                          borderRadius: BorderRadius.circular(2.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isWhiteTheme ? Colors.grey.shade300 : Colors.white24,
+                              width: 2,
+                            ),
+                          ),
+                          child: avatarWidget,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                username,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.access_time_rounded,
+                                    size: 14,
+                                    color: Colors.greenAccent.shade700,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Aktivní $timeAgoText',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.greenAccent.shade700,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isWhiteTheme ? Colors.grey.shade100 : const Color(0xFF263238),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.location_on_rounded,
+                                size: 16,
+                                color: isWhiteTheme ? Colors.lightBlue : const Color(0xFFBFFF00),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Aktuální poloha',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: subTextColor,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            addressStr,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: textColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => FriendProfileScreen(friendUid: friendUid),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.person_search_rounded),
+                            label: const Text('Zobrazit profil'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFBFFF00),
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close_rounded),
+                          style: IconButton.styleFrom(
+                            backgroundColor: isWhiteTheme ? Colors.grey.shade200 : Colors.white10,
+                            foregroundColor: textColor,
+                            padding: const EdgeInsets.all(14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             );
-          }
-        });
-      });
-    } catch (_) {}
+          },
+        );
+      },
+    );
   }
 
   Future<void> _toggleLocationSharing() async {
