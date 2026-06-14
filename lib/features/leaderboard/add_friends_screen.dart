@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import '../../main_shell.dart';
 
 class AddFriendsScreen extends StatefulWidget {
   const AddFriendsScreen({super.key});
@@ -377,20 +378,29 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
       } catch (_) {}
 
       if (!mounted) return;
+      final isWhite = MainShell.themeNotifier.value == 'white';
+      final dialogBg = isWhite ? Colors.white : const Color(0xFF37474F);
+      final textColor = isWhite ? Colors.black : Colors.white;
+      final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+      final borderColor = isWhite ? Colors.grey.shade300 : Colors.white10;
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF37474F),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('✉️ Žádost odeslána!', style: TextStyle(color: Colors.white)),
-          content: Text('Žádost o přátelství byla úspěšně odeslána uživateli $targetUsername.', style: const TextStyle(color: Colors.white70)),
+          backgroundColor: dialogBg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: borderColor),
+          ),
+          title: Text('✉️ Žádost odeslána!', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+          content: Text('Žádost o přátelství byla úspěšně odeslána uživateli $targetUsername.', style: TextStyle(color: textSecondary)),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.pop(context);
               },
-              child: const Text('Rozumím', style: TextStyle(color: Color(0xFFBFFF00))),
+              child: const Text('Rozumím', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -415,265 +425,281 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF263238),
-      appBar: AppBar(
-        title: const Text(
-          'PŘIDAT PŘÁTELE',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: Colors.white),
-        ),
-        backgroundColor: const Color(0xFF1E272C),
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // QR Code Card
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E272C),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    )
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Můj QR kód',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Ukaž tento kód kamarádovi k naskenování',
-                        style: TextStyle(fontSize: 12, color: Colors.white54),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 20),
-                      if (_myFriendCode.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            color: Colors.white,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFBFFF00).withOpacity(0.15),
-                                blurRadius: 12,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: QrImageView(
-                            data: _myFriendCode,
-                            version: QrVersions.auto,
-                            size: 160.0,
-                            gapless: true,
-                            foregroundColor: const Color(0xFF263238),
-                          ),
+    return ValueListenableBuilder<String>(
+      valueListenable: MainShell.themeNotifier,
+      builder: (context, theme, child) {
+        final isWhite = theme == 'white';
+        final bgColor = isWhite ? const Color(0xFFF9FBFC) : const Color(0xFF263238);
+        final cardColor = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final textColor = isWhite ? Colors.black : Colors.white;
+        final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+        final textDisabled = isWhite ? Colors.black38 : Colors.white30;
+        final borderColor = isWhite ? Colors.grey.shade300 : Colors.white10;
+        final appBarBg = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final appBarFg = isWhite ? Colors.black : Colors.white;
+
+        return Scaffold(
+          backgroundColor: bgColor,
+          appBar: AppBar(
+            title: Text(
+              'PŘIDAT PŘÁTELE',
+              style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: appBarFg),
+            ),
+            backgroundColor: appBarBg,
+            elevation: 0,
+            centerTitle: true,
+            iconTheme: IconThemeData(color: appBarFg),
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // QR Code Card
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: borderColor),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         )
-                      else
-                        const SizedBox(
-                          height: 184,
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: Color(0xFFBFFF00),
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 20),
-                      Text(
-                        _myUsername,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF263238),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          _myFriendCode,
-                          style: const TextStyle(
-                            color: Color(0xFFBFFF00),
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                Clipboard.setData(ClipboardData(text: _myFriendCode));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Kód zkopírován do schránky'),
-                                    backgroundColor: Color(0xFF1B5E20),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.copy, size: 18),
-                              label: const Text('Kopírovat', style: TextStyle(fontWeight: FontWeight.bold)),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.white24, width: 1.5),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _shareQrCode,
-                              icon: const Icon(Icons.share, size: 18),
-                              label: const Text('Sdílet QR', style: TextStyle(fontWeight: FontWeight.bold)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFBFFF00),
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                elevation: 0,
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Connect Friends Card
-              const Text(
-                'Připojit se s přítelem',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70),
-              ),
-              const SizedBox(height: 12),
-
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E272C),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _isDecoding ? null : _pickAndDecodeQr,
-                      icon: _isDecoding
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.photo_library, size: 20),
-                      label: Text(
-                        _isDecoding ? 'Dešifrování QR...' : 'Načíst QR kód z galerie',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1B5E20),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 0,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Row(
-                      children: [
-                        Expanded(child: Divider(color: Colors.white12)),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 10),
-                          child: Text('NEBO ZADAT RUČNĚ', style: TextStyle(color: Colors.white30, fontSize: 11, fontWeight: FontWeight.bold)),
-                        ),
-                        Expanded(child: Divider(color: Colors.white12)),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _codeController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Kód kamaráda (např. #PEPA456)',
-                        labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: Colors.white12, width: 1.5),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: Colors.white12, width: 1.5),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
-                        ),
-                        filled: true,
-                        fillColor: const Color(0xFF263238),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.paste, color: Color(0xFFBFFF00)),
-                          onPressed: () async {
-                            final data = await Clipboard.getData('text/plain');
-                            if (data?.text != null) {
-                              _codeController.text = data!.text!.trim();
-                            }
-                          },
-                        ),
-                      ),
-                      textCapitalization: TextCapitalization.characters,
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: _isConnecting ? null : () => _connectFriend(_codeController.text),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFBFFF00),
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 2,
-                      ),
-                      child: _isConnecting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Můj QR kód',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Ukaž tento kód kamarádovi k naskenování',
+                            style: TextStyle(fontSize: 12, color: textSecondary),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 20),
+                          if (_myFriendCode.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                color: Colors.white,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFBFFF00).withOpacity(0.15),
+                                    blurRadius: 12,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: QrImageView(
+                                data: _myFriendCode,
+                                version: QrVersions.auto,
+                                size: 160.0,
+                                gapless: true,
+                                foregroundColor: const Color(0xFF263238),
+                              ),
                             )
-                          : const Text(
-                              'Propojit se',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          else
+                            const SizedBox(
+                              height: 184,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFFBFFF00),
+                                ),
+                              ),
                             ),
+                          const SizedBox(height: 20),
+                          Text(
+                            _myUsername,
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isWhite ? Colors.grey.shade100 : const Color(0xFF263238),
+                              borderRadius: BorderRadius.circular(10),
+                              border: isWhite ? Border.all(color: Colors.grey.shade300) : null,
+                            ),
+                            child: Text(
+                              _myFriendCode,
+                              style: const TextStyle(
+                                color: Color(0xFFBFFF00),
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    Clipboard.setData(ClipboardData(text: _myFriendCode));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Kód zkopírován do schránky'),
+                                        backgroundColor: Color(0xFF1B5E20),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.copy, size: 18),
+                                  label: const Text('Kopírovat', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(color: borderColor, width: 1.5),
+                                    foregroundColor: textColor,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _shareQrCode,
+                                  icon: const Icon(Icons.share, size: 18),
+                                  label: const Text('Sdílet QR', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFBFFF00),
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    elevation: 0,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        ],
+                      ),
                     ),
-                  ],
-                ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Connect Friends Card
+                  Text(
+                    'Připojit se s přítelem',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textSecondary),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _isDecoding ? null : _pickAndDecodeQr,
+                          icon: _isDecoding
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.photo_library, size: 20),
+                          label: Text(
+                            _isDecoding ? 'Dešifrování QR...' : 'Načíst QR kód z galerie',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1B5E20),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 0,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(child: Divider(color: borderColor)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Text('NEBO ZADAT RUČNĚ', style: TextStyle(color: textDisabled, fontSize: 11, fontWeight: FontWeight.bold)),
+                            ),
+                            Expanded(child: Divider(color: borderColor)),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _codeController,
+                          style: TextStyle(color: textColor),
+                          decoration: InputDecoration(
+                            labelText: 'Kód kamaráda (např. #PEPA456)',
+                            labelStyle: TextStyle(color: textSecondary, fontSize: 13),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(color: borderColor, width: 1.5),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(color: borderColor, width: 1.5),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
+                            ),
+                            filled: true,
+                            fillColor: isWhite ? Colors.grey.shade50 : const Color(0xFF263238),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.paste, color: Color(0xFFBFFF00)),
+                              onPressed: () async {
+                                final data = await Clipboard.getData('text/plain');
+                                if (data?.text != null) {
+                                  _codeController.text = data!.text!.trim();
+                                }
+                              },
+                            ),
+                          ),
+                          textCapitalization: TextCapitalization.characters,
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: _isConnecting ? null : () => _connectFriend(_codeController.text),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFBFFF00),
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 2,
+                          ),
+                          child: _isConnecting
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                                )
+                              : const Text(
+                                  'Propojit se',
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

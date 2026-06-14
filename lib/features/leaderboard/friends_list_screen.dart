@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
 import 'add_friends_screen.dart';
 import 'friend_profile_screen.dart';
+import '../../main_shell.dart';
 
 class FriendsListScreen extends StatefulWidget {
   const FriendsListScreen({super.key});
@@ -97,6 +98,13 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
 
+    final isWhite = MainShell.themeNotifier.value == 'white';
+    final dialogBg = isWhite ? Colors.white : const Color(0xFF37474F);
+    final cardColor = isWhite ? Colors.grey.shade100 : const Color(0xFF1E272C);
+    final textColor = isWhite ? Colors.black : Colors.white;
+    final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+    final borderColor = isWhite ? Colors.grey.shade300 : Colors.white10;
+
     final selectedMsg = await showDialog<String>(
       context: context,
       builder: (context) {
@@ -106,25 +114,28 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           'Dneska spíš? Koukej hejbnout zadkem! 😜',
         ];
         return AlertDialog(
-          backgroundColor: const Color(0xFF37474F),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Text(
+          backgroundColor: dialogBg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: borderColor),
+          ),
+          title: Text(
             '💬 Vtipné popíchnutí',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: options.map((opt) {
               return Card(
-                color: const Color(0xFF1E272C),
+                color: cardColor,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Colors.white10),
+                  side: BorderSide(color: borderColor),
                 ),
                 margin: const EdgeInsets.symmetric(vertical: 6),
                 child: ListTile(
-                  title: Text(opt, style: const TextStyle(fontSize: 14, color: Colors.white)),
+                  title: Text(opt, style: TextStyle(fontSize: 14, color: textColor)),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFFBFFF00)),
                   onTap: () => Navigator.pop(context, opt),
                 ),
@@ -134,7 +145,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, null),
-              child: const Text('Zrušit', style: TextStyle(color: Colors.white38)),
+              child: Text('Zrušit', style: TextStyle(color: textSecondary)),
             ),
           ],
         );
@@ -193,17 +204,26 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
 
+    final isWhite = MainShell.themeNotifier.value == 'white';
+    final dialogBg = isWhite ? Colors.white : const Color(0xFF37474F);
+    final textColor = isWhite ? Colors.black : Colors.white;
+    final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+    final borderColor = isWhite ? Colors.grey.shade300 : Colors.white10;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF37474F),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Odebrat z přátel?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: Text('Opravdu chcete odebrat uživatele $targetName ze svých přátel?', style: const TextStyle(color: Colors.white70)),
+        backgroundColor: dialogBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: borderColor),
+        ),
+        title: Text('Odebrat z přátel?', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+        content: Text('Opravdu chcete odebrat uživatele $targetName ze svých přátel?', style: TextStyle(color: textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Zrušit', style: TextStyle(color: Colors.grey)),
+            child: Text('Zrušit', style: TextStyle(color: textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -268,183 +288,197 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF263238),
-      appBar: AppBar(
-        title: const Text(
-          'MOJI PŘÁTELÉ',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: Colors.white),
-        ),
-        centerTitle: true,
-        backgroundColor: const Color(0xFF1E272C),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add, color: Color(0xFFBFFF00)),
-            tooltip: 'Přidat přátele',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
-              );
-            },
+    return ValueListenableBuilder<String>(
+      valueListenable: MainShell.themeNotifier,
+      builder: (context, theme, child) {
+        final isWhite = theme == 'white';
+        final bgColor = isWhite ? const Color(0xFFF9FBFC) : const Color(0xFF263238);
+        final cardColor = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final textColor = isWhite ? Colors.black : Colors.white;
+        final textSecondary = isWhite ? Colors.black54 : Colors.white70;
+        final borderColor = isWhite ? Colors.grey.shade300 : Colors.white10;
+        final appBarBg = isWhite ? Colors.white : const Color(0xFF1E272C);
+        final appBarFg = isWhite ? Colors.black : Colors.white;
+
+        return Scaffold(
+          backgroundColor: bgColor,
+          appBar: AppBar(
+            title: Text(
+              'MOJI PŘÁTELÉ',
+              style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: appBarFg),
+            ),
+            centerTitle: true,
+            backgroundColor: appBarBg,
+            elevation: 0,
+            iconTheme: IconThemeData(color: appBarFg),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.person_add, color: Color(0xFFBFFF00)),
+                tooltip: 'Přidat přátele',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: StreamBuilder<List<Map<String, dynamic>>>(
-          stream: _getFriendsListStream(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: Color(0xFFBFFF00)));
-            }
+          body: SafeArea(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _getFriendsListStream(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFFBFFF00)));
+                }
 
-            final friends = snapshot.data ?? [];
+                final friends = snapshot.data ?? [];
 
-            if (friends.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundColor: const Color(0xFF1E272C),
-                      child: Icon(Icons.people_outline, size: 50, color: const Color(0xFFBFFF00).withOpacity(0.8)),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Zatím tu nikdo není',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Přidej si své kamarády pomocí jejich kódu nebo QR kódu, abys mohl sledovat jejich pokroky a popichovat je k pohybu!',
-                      style: TextStyle(fontSize: 14, color: Colors.white70, height: 1.4),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
-                        );
-                      },
-                      icon: const Icon(Icons.person_add),
-                      label: const Text('Přidat prvního přítele', style: TextStyle(fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFBFFF00),
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 2,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              itemCount: friends.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final friend = friends[index];
-                final uid = friend['uid'] as String? ?? '';
-                final username = friend['username'] as String? ?? 'Uživatel';
-                final code = friend['friend_code'] as String? ?? '';
-                final isLocked = _isNudgeLocked(uid);
-                final remainingTime = _getRemainingNudgeTimeText(uid);
-
-                return Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E272C),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => FriendProfileScreen(friendUid: uid),
+                if (friends.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(32.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: cardColor,
+                          child: Icon(Icons.people_outline, size: 50, color: const Color(0xFFBFFF00).withOpacity(0.8)),
                         ),
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      child: Row(
-                        children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white24, width: 1.5),
-                            ),
-                            child: CircleAvatar(
-                              backgroundColor: const Color(0xFF263238),
-                              foregroundColor: const Color(0xFFBFFF00),
-                              child: Text(
-                                username.substring(0, 1).toUpperCase(),
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Zatím tu nikdo není',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Přidej si své kamarády pomocí jejich kódu nebo QR kódu, abys mohl sledovat jejich pokroky a popichovat je k pohybu!',
+                          style: TextStyle(fontSize: 14, color: textSecondary, height: 1.4),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 32),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
+                            );
+                          },
+                          icon: const Icon(Icons.person_add),
+                          label: const Text('Přidat prvního přítele', style: TextStyle(fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFBFFF00),
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 2,
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  username,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-                                ),
-                                const SizedBox(height: 2),
-                                if (code.isNotEmpty)
-                                  Text(
-                                    code,
-                                    style: const TextStyle(fontSize: 13, color: Colors.white54),
-                                  ),
-                                if (isLocked && remainingTime.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4.0),
-                                    child: Text(
-                                      'Popíchnuto (znovu za $remainingTime)',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFFBFFF00),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              isLocked ? Icons.timer_outlined : Icons.notifications_active,
-                              color: isLocked ? Colors.white24 : const Color(0xFFBFFF00),
-                            ),
-                            tooltip: isLocked ? 'Popíchnutí uzamčeno' : 'Popíchnout k pohybu',
-                            onPressed: isLocked ? null : () => _nudgeFriend(uid, username),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.person_remove, color: Colors.redAccent),
-                            tooltip: 'Odebrat z přátel',
-                            onPressed: () => _removeRelationship(uid, username),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ),
+                  );
+                }
+
+                return ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  itemCount: friends.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final friend = friends[index];
+                    final uid = friend['uid'] as String? ?? '';
+                    final username = friend['username'] as String? ?? 'Uživatel';
+                    final code = friend['friend_code'] as String? ?? '';
+                    final isLocked = _isNudgeLocked(uid);
+                    final remainingTime = _getRemainingNudgeTimeText(uid);
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => FriendProfileScreen(friendUid: uid),
+                            ),
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          child: Row(
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: borderColor, width: 1.5),
+                                ),
+                                child: CircleAvatar(
+                                  backgroundColor: bgColor,
+                                  foregroundColor: const Color(0xFFBFFF00),
+                                  child: Text(
+                                    username.substring(0, 1).toUpperCase(),
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      username,
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    if (code.isNotEmpty)
+                                      Text(
+                                        code,
+                                        style: TextStyle(fontSize: 13, color: textSecondary),
+                                      ),
+                                    if (isLocked && remainingTime.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4.0),
+                                        child: Text(
+                                          'Popíchnuto (znovu za $remainingTime)',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFFBFFF00),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  isLocked ? Icons.timer_outlined : Icons.notifications_active,
+                                  color: isLocked ? textSecondary.withOpacity(0.3) : const Color(0xFFBFFF00),
+                                ),
+                                tooltip: isLocked ? 'Popíchnutí uzamčeno' : 'Popíchnout k pohybu',
+                                onPressed: isLocked ? null : () => _nudgeFriend(uid, username),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.person_remove, color: Colors.redAccent),
+                                tooltip: 'Odebrat z přátel',
+                                onPressed: () => _removeRelationship(uid, username),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
-            );
-          },
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
