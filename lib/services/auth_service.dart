@@ -193,6 +193,7 @@ class AuthService {
 
         double weeklyDistance = (data['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
         double monthlyDistance = (data['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
+        double yearlyDistance = (data['yearlyDistance'] as num?)?.toDouble() ?? 0.0;
 
         Timestamp? lastUpdateTs = data['lastDistanceUpdate'] as Timestamp?;
 
@@ -204,6 +205,9 @@ class AuthService {
           if (now.month != lastUpdate.month || now.year != lastUpdate.year) {
             monthlyDistance = 0.0;
           }
+          if (now.year != lastUpdate.year) {
+            yearlyDistance = 0.0;
+          }
         }
 
         double oldTotalDistance = (data['totalDistance'] as num?)?.toDouble() ?? 0.0;
@@ -212,11 +216,13 @@ class AuthService {
 
         weeklyDistance += delta;
         monthlyDistance += delta;
+        yearlyDistance += delta;
 
         transaction.set(docRef, {
           'totalDistance': totalDistance,
           'weeklyDistance': weeklyDistance,
           'monthlyDistance': monthlyDistance,
+          'yearlyDistance': yearlyDistance,
           'limetky': limetky,
           'lastDistanceUpdate': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
@@ -272,7 +278,7 @@ class AuthService {
     }
   }
 
-  Future<void> updateDistanceLocal(double totalDistance, double weeklyDistance, double monthlyDistance, int limetky) async {
+  Future<void> updateDistanceLocal(double totalDistance, double weeklyDistance, double monthlyDistance, double yearlyDistance, int limetky) async {
     final user = _auth.currentUser;
     if (user == null) return;
 
@@ -282,6 +288,7 @@ class AuthService {
         'totalDistance': totalDistance,
         'weeklyDistance': weeklyDistance,
         'monthlyDistance': monthlyDistance,
+        'yearlyDistance': yearlyDistance,
         'limetky': limetky,
         'lastDistanceUpdate': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -307,6 +314,9 @@ class AuthService {
         }
         if (data['monthlyDistance'] != null) {
           await prefs.setDouble('monthlyDistance', (data['monthlyDistance'] as num).toDouble());
+        }
+        if (data['yearlyDistance'] != null) {
+          await prefs.setDouble('yearlyDistance', (data['yearlyDistance'] as num).toDouble());
         }
         if (data['limetky'] != null) {
           await prefs.setInt('limetkyBalance', (data['limetky'] as num).toInt());

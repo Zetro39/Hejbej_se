@@ -17,20 +17,23 @@ class DistanceManager {
   double _totalDistance = 0.0;
   double _weeklyDistance = 0.0;
   double _monthlyDistance = 0.0;
+  double _yearlyDistance = 0.0;
   String? _lastDistanceUpdateStr;
 
   double get totalDistance => _totalDistance;
   double get weeklyDistance => _weeklyDistance;
   double get monthlyDistance => _monthlyDistance;
+  double get yearlyDistance => _yearlyDistance;
 
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     _totalDistance = prefs.getDouble(_distanceKey) ?? 0.0;
     _weeklyDistance = prefs.getDouble('weeklyDistance') ?? 0.0;
     _monthlyDistance = prefs.getDouble('monthlyDistance') ?? 0.0;
+    _yearlyDistance = prefs.getDouble('yearlyDistance') ?? 0.0;
     _lastDistanceUpdateStr = prefs.getString('lastDistanceUpdate');
 
-    // Check if we need to reset weekly/monthly distances on startup
+    // Check if we need to reset weekly/monthly/yearly distances on startup
     final now = DateTime.now();
     if (_lastDistanceUpdateStr != null) {
       final lastUpdate = DateTime.tryParse(_lastDistanceUpdateStr!);
@@ -42,6 +45,10 @@ class DistanceManager {
         if (now.month != lastUpdate.month || now.year != lastUpdate.year) {
           _monthlyDistance = 0.0;
           await prefs.setDouble('monthlyDistance', 0.0);
+        }
+        if (now.year != lastUpdate.year) {
+          _yearlyDistance = 0.0;
+          await prefs.setDouble('yearlyDistance', 0.0);
         }
       }
     }
@@ -71,11 +78,15 @@ class DistanceManager {
         if (now.month != lastUpdate.month || now.year != lastUpdate.year) {
           _monthlyDistance = 0.0;
         }
+        if (now.year != lastUpdate.year) {
+          _yearlyDistance = 0.0;
+        }
       }
     }
     
     _weeklyDistance += kilometers;
     _monthlyDistance += kilometers;
+    _yearlyDistance += kilometers;
     _lastDistanceUpdateStr = now.toIso8601String();
     
     final todayStr = now.toIso8601String().substring(0, 10);
@@ -86,13 +97,14 @@ class DistanceManager {
     await prefs.setDouble(_distanceKey, _totalDistance);
     await prefs.setDouble('weeklyDistance', _weeklyDistance);
     await prefs.setDouble('monthlyDistance', _monthlyDistance);
+    await prefs.setDouble('yearlyDistance', _yearlyDistance);
     await prefs.setString('lastDistanceUpdate', _lastDistanceUpdateStr!);
 
     // Sync to Firestore if logged in
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final limetky = prefs.getInt('limetkyBalance') ?? 0;
-      await AuthService().updateDistanceLocal(_totalDistance, _weeklyDistance, _monthlyDistance, limetky);
+      await AuthService().updateDistanceLocal(_totalDistance, _weeklyDistance, _monthlyDistance, _yearlyDistance, limetky);
     }
   }
 
@@ -114,23 +126,28 @@ class DistanceManager {
         if (now.month != lastUpdate.month || now.year != lastUpdate.year) {
           _monthlyDistance = 0.0;
         }
+        if (now.year != lastUpdate.year) {
+          _yearlyDistance = 0.0;
+        }
       }
     }
     
     _weeklyDistance += delta;
     _monthlyDistance += delta;
+    _yearlyDistance += delta;
     _lastDistanceUpdateStr = now.toIso8601String();
     
     await prefs.setDouble(_distanceKey, _totalDistance);
     await prefs.setDouble('weeklyDistance', _weeklyDistance);
     await prefs.setDouble('monthlyDistance', _monthlyDistance);
+    await prefs.setDouble('yearlyDistance', _yearlyDistance);
     await prefs.setString('lastDistanceUpdate', _lastDistanceUpdateStr!);
 
     // Sync to Firestore if logged in
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final limetky = prefs.getInt('limetkyBalance') ?? 0;
-      await AuthService().updateDistanceLocal(_totalDistance, _weeklyDistance, _monthlyDistance, limetky);
+      await AuthService().updateDistanceLocal(_totalDistance, _weeklyDistance, _monthlyDistance, _yearlyDistance, limetky);
     }
   }
 
@@ -138,11 +155,13 @@ class DistanceManager {
     _totalDistance = 0.0;
     _weeklyDistance = 0.0;
     _monthlyDistance = 0.0;
+    _yearlyDistance = 0.0;
     _lastDistanceUpdateStr = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_distanceKey);
     await prefs.remove('weeklyDistance');
     await prefs.remove('monthlyDistance');
+    await prefs.remove('yearlyDistance');
     await prefs.remove('lastDistanceUpdate');
   }
 }

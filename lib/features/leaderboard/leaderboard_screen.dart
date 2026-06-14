@@ -14,15 +14,37 @@ class LeaderboardScreen extends StatefulWidget {
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
-class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTickerProviderStateMixin {
+class _LeaderboardScreenState extends State<LeaderboardScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  int _selectedTab = 0; // 0 = Week, 1 = Month, 2 = Overall
+  int _selectedTimeFilter = 0; // 0 = Týden, 1 = Měsíc, 2 = Rok
+  int _selectedScopeFilter = 0; // 0 = Přátelé, 1 = Celá ČR, 2 = Můj kraj
+  String? _myKraj;
   bool _isSearching = false;
   Map<String, dynamic>? _searchResult;
   String? _searchError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMyKraj();
+  }
+
+  Future<void> _loadMyKraj() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      try {
+        final doc = await _firestore.collection('users').doc(user.uid).get();
+        if (doc.exists && mounted) {
+          setState(() {
+            _myKraj = doc.data()?['kraj'] as String?;
+          });
+        }
+      } catch (_) {}
+    }
+  }
 
   @override
   void dispose() {
@@ -263,16 +285,41 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     final currentUser = _auth.currentUser;
     if (currentUser == null) return Stream.value([]);
 
-    List<String> uids = [currentUser.uid, ...friendUids];
-    if (uids.length > 30) {
-      uids = uids.sublist(0, 30); // Firestore whereIn limit
+    if (_selectedScopeFilter == 1) {
+      // Celá ČR - order by selected field and limit to top 50
+      String orderField = 'weeklyDistance';
+      if (_selectedTimeFilter == 1) {
+        orderField = 'monthlyDistance';
+      } else if (_selectedTimeFilter == 2) {
+        orderField = 'yearlyDistance';
+      }
+      return _firestore
+          .collection('users')
+          .orderBy(orderField, descending: true)
+          .limit(50)
+          .snapshots()
+          .map((snap) => snap.docs);
+    } else if (_selectedScopeFilter == 2) {
+      // Můj kraj - filter by kraj and limit to 100, sorting will be client side
+      final queryKraj = _myKraj ?? 'Praha';
+      return _firestore
+          .collection('users')
+          .where('kraj', isEqualTo: queryKraj)
+          .limit(100)
+          .snapshots()
+          .map((snap) => snap.docs);
+    } else {
+      // Pouze přátelé
+      List<String> uids = [currentUser.uid, ...friendUids];
+      if (uids.length > 30) {
+        uids = uids.sublist(0, 30); // Firestore whereIn limit
+      }
+      return _firestore
+          .collection('users')
+          .where(FieldPath.documentId, whereIn: uids)
+          .snapshots()
+          .map((snap) => snap.docs);
     }
-
-    return _firestore
-        .collection('users')
-        .where(FieldPath.documentId, whereIn: uids)
-        .snapshots()
-        .map((snap) => snap.docs);
   }
 
   Widget _buildMedal(int index, Color textSecondary) {
@@ -282,7 +329,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     return Text('${index + 1}.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textSecondary));
   }
 
-  Widget _buildPodium(List<DocumentSnapshot> top3, String currentUid, Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
+  Widget _buildPodium(List<DocumentSnapshot> top3, String currentUid, Color cardColor, Color textColor, Color textSecondary, Color borderColor, bool isWhite) {
     if (top3.isEmpty) return const SizedBox();
 
     final List<DocumentSnapshot?> podiumList = List.filled(3, null);
@@ -291,27 +338,34 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     if (top3.length > 2) podiumList[2] = top3[2];
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(color: borderColor, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (podiumList[0] != null)
-            _buildPodiumCol(podiumList[0]!, 2, 60, Colors.grey.shade400, '🥈', currentUid, textColor, textSecondary)
+            _buildPodiumCol(podiumList[0]!, 2, 70, Colors.grey.shade400, '🥈', currentUid, textColor, textSecondary, isWhite)
           else
             const Expanded(child: SizedBox()),
           if (podiumList[1] != null)
-            _buildPodiumCol(podiumList[1]!, 1, 85, const Color(0xFFFFD700), '👑', currentUid, textColor, textSecondary)
+            _buildPodiumCol(podiumList[1]!, 1, 95, const Color(0xFFFFD700), '👑', currentUid, textColor, textSecondary, isWhite)
           else
             const Expanded(child: SizedBox()),
           if (podiumList[2] != null)
-            _buildPodiumCol(podiumList[2]!, 3, 45, const Color(0xFFCD7F32), '🥉', currentUid, textColor, textSecondary)
+            _buildPodiumCol(podiumList[2]!, 3, 45, const Color(0xFFCD7F32), '🥉', currentUid, textColor, textSecondary, isWhite)
           else
             const Expanded(child: SizedBox()),
         ],
@@ -323,11 +377,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     DocumentSnapshot doc,
     int rank,
     double height,
-    Color color,
+    Color rankColor,
     String badge,
     String currentUid,
     Color textColor,
     Color textSecondary,
+    bool isWhite,
   ) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     final username = data['username'] ?? 'Uživatel';
@@ -337,13 +392,25 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     final isMe = doc.id == currentUid;
 
     double dist = 0.0;
-    if (_selectedTab == 0) {
+    if (_selectedTimeFilter == 0) {
       dist = (data['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
-    } else if (_selectedTab == 1) {
+    } else if (_selectedTimeFilter == 1) {
       dist = (data['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
     } else {
-      dist = (data['totalDistance'] as num?)?.toDouble() ?? 0.0;
+      dist = (data['yearlyDistance'] as num?)?.toDouble() ?? 0.0;
     }
+
+    final List<Color> gradientColors = rank == 1
+        ? [const Color(0xFFFFD700).withOpacity(0.35), const Color(0xFFFFD700).withOpacity(0.05)]
+        : rank == 2
+            ? [const Color(0xFFC0C0C0).withOpacity(0.25), const Color(0xFFC0C0C0).withOpacity(0.03)]
+            : [const Color(0xFFCD7F32).withOpacity(0.20), const Color(0xFFCD7F32).withOpacity(0.02)];
+
+    final borderTopColor = rank == 1
+        ? const Color(0xFFFFD700)
+        : rank == 2
+            ? const Color(0xFFC0C0C0)
+            : const Color(0xFFCD7F32);
 
     return Expanded(
       child: Column(
@@ -353,76 +420,106 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-              CircleAvatar(
-                radius: rank == 1 ? 28 : 22,
-                backgroundColor: isMe ? const Color(0xFFBFFF00) : color,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: borderTopColor.withOpacity(0.3),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
                 child: CircleAvatar(
-                  radius: rank == 1 ? 25 : 19,
-                  backgroundColor: const Color(0xFF263238),
-                  child: Text(
-                    fullName.substring(0, 1).toUpperCase(),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: rank == 1 ? 16 : 13,
-                      color: Colors.white,
+                  radius: rank == 1 ? 32 : 26,
+                  backgroundColor: isMe ? const Color(0xFFBFFF00) : borderTopColor,
+                  child: CircleAvatar(
+                    radius: rank == 1 ? 29 : 23,
+                    backgroundColor: const Color(0xFF263238),
+                    child: Text(
+                      fullName.substring(0, 1).toUpperCase(),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: rank == 1 ? 18 : 15,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
               ),
               Positioned(
-                top: rank == 1 ? -16 : -10,
+                top: rank == 1 ? -20 : -14,
                 child: Text(
                   badge,
-                  style: TextStyle(fontSize: rank == 1 ? 22 : 16),
+                  style: TextStyle(fontSize: rank == 1 ? 24 : 18),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            isMe ? 'Ty' : fullName,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: rank == 1 ? 12 : 11,
-              color: textColor,
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Text(
+              isMe ? 'Ty' : fullName,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: rank == 1 ? 13 : 11,
+                color: textColor,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
           ),
           Text(
             '${dist.toStringAsFixed(1)} km',
             style: TextStyle(
-              fontSize: rank == 1 ? 11 : 10,
+              fontSize: rank == 1 ? 12 : 10,
               color: isMe ? const Color(0xFFBFFF00) : textSecondary,
               fontWeight: FontWeight.bold,
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
           Container(
             height: height,
             width: double.infinity,
-            margin: const EdgeInsets.symmetric(horizontal: 12),
+            margin: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  color.withOpacity(0.8),
-                  color.withOpacity(0.3),
-                ],
+                colors: gradientColors,
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-              border: Border.all(color: color.withOpacity(0.5), width: 1),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border(
+                top: BorderSide(color: borderTopColor, width: 3.0),
+                left: BorderSide(color: borderTopColor.withOpacity(0.3), width: 1.0),
+                right: BorderSide(color: borderTopColor.withOpacity(0.3), width: 1.0),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: borderTopColor.withOpacity(0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
+                ),
+              ],
             ),
             child: Center(
               child: Text(
-                '$rank.',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+                '$rank',
+                style: TextStyle(
+                  color: borderTopColor.withOpacity(0.85),
+                  fontWeight: FontWeight.w900,
+                  fontSize: rank == 1 ? 36 : 28,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black.withOpacity(0.2),
+                      offset: const Offset(1, 1),
+                      blurRadius: 4,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -659,27 +756,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
 
                 const SizedBox(height: 8),
 
-                // Tab Selector [ Tento týden ] [ Tento měsíc ] [ Celkově ]
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: borderColor, width: 1.5),
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: Row(
-                      children: [
-                        _buildTabButton(0, 'Tento týden', textSecondary),
-                        _buildTabButton(1, 'Tento měsíc', textSecondary),
-                        _buildTabButton(2, 'Celkově', textSecondary),
-                      ],
-                    ),
-                  ),
-                ),
+                // Time & Scope Filters
+                _buildTimeFilterRow(cardColor, textColor, textSecondary, borderColor),
+                _buildScopeFilterRow(cardColor, textColor, textSecondary, borderColor),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
 
                 // Leaderboard List
                 Expanded(
@@ -706,7 +787,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                           final userDocs = usersSnapshot.data ?? [];
 
                           if (userDocs.isEmpty) {
-                            return const Center(child: Text('Chyba při načítání žebříčku.'));
+                            return const Center(child: Text('Žádná data v tomto žebříčku.'));
                           }
 
                           // Dynamic Sorting
@@ -717,15 +798,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                             double valA = 0.0;
                             double valB = 0.0;
 
-                            if (_selectedTab == 0) {
+                            if (_selectedTimeFilter == 0) {
                               valA = (dataA['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
                               valB = (dataB['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
-                            } else if (_selectedTab == 1) {
+                            } else if (_selectedTimeFilter == 1) {
                               valA = (dataA['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
                               valB = (dataB['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
                             } else {
-                              valA = (dataA['totalDistance'] as num?)?.toDouble() ?? 0.0;
-                              valB = (dataB['totalDistance'] as num?)?.toDouble() ?? 0.0;
+                              valA = (dataA['yearlyDistance'] as num? ?? dataA['totalDistance'] as num?)?.toDouble() ?? 0.0;
+                              valB = (dataB['yearlyDistance'] as num? ?? dataB['totalDistance'] as num?)?.toDouble() ?? 0.0;
                             }
 
                             return valB.compareTo(valA);
@@ -736,7 +817,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
 
                           return Column(
                             children: [
-                              _buildPodium(top3, currentUser.uid, cardColor, textColor, textSecondary, borderColor),
+                              _buildPodium(top3, currentUser.uid, cardColor, textColor, textSecondary, borderColor, isWhite),
                               const SizedBox(height: 8),
                               Expanded(
                                 child: restUsers.isEmpty
@@ -763,12 +844,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                                           final fullName = '$firstName $lastName'.trim().isEmpty ? username : '$firstName $lastName';
 
                                           double dist = 0.0;
-                                          if (_selectedTab == 0) {
+                                          if (_selectedTimeFilter == 0) {
                                             dist = (data['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
-                                          } else if (_selectedTab == 1) {
+                                          } else if (_selectedTimeFilter == 1) {
                                             dist = (data['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
                                           } else {
-                                            dist = (data['totalDistance'] as num?)?.toDouble() ?? 0.0;
+                                            dist = (data['yearlyDistance'] as num? ?? data['totalDistance'] as num?)?.toDouble() ?? 0.0;
                                           }
 
                                           return Container(
@@ -845,13 +926,61 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     );
   }
 
-  Widget _buildTabButton(int index, String title, Color unselectedColor) {
-    final isSelected = _selectedTab == index;
+  Widget _buildTimeFilterRow(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: 1.5),
+        ),
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          children: [
+            _buildFilterButton(true, 0, 'Týden', textSecondary),
+            _buildFilterButton(true, 1, 'Měsíc', textSecondary),
+            _buildFilterButton(true, 2, 'Rok', textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScopeFilterRow(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: 1.5),
+        ),
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          children: [
+            _buildFilterButton(false, 0, 'Pouze přátelé', textSecondary),
+            _buildFilterButton(false, 1, 'Celá ČR', textSecondary),
+            _buildFilterButton(false, 2, 'Můj kraj', textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterButton(bool isTimeFilter, int index, String title, Color unselectedColor) {
+    final isSelected = isTimeFilter 
+        ? _selectedTimeFilter == index 
+        : _selectedScopeFilter == index;
     return Expanded(
       child: GestureDetector(
         onTap: () {
           setState(() {
-            _selectedTab = index;
+            if (isTimeFilter) {
+              _selectedTimeFilter = index;
+            } else {
+              _selectedScopeFilter = index;
+            }
           });
         },
         child: Container(
@@ -859,14 +988,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
             color: isSelected ? const Color(0xFFBFFF00) : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           alignment: Alignment.center,
           child: Text(
             title,
             style: TextStyle(
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
               color: isSelected ? Colors.black : unselectedColor,
-              fontSize: 14,
+              fontSize: 13,
             ),
           ),
         ),

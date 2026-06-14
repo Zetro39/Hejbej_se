@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
 import '../profile/profile_creation_screen.dart';
 import '../../widgets/app_logo.dart';
+import '../../widgets/czech_kraj_map_picker.dart';
 import '../../main_shell.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -33,6 +34,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   String _selectedTheme = 'grey';
+  String? _selectedKraj;
 
   @override
   void dispose() {
@@ -73,6 +75,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       'friend_code_clean': _cleanStringForSearch(friendCode),
       'phone_number': _useSmsVerification ? _phone.text.trim().replaceAll(' ', '') : null,
       'design_theme': _selectedTheme,
+      'kraj': _selectedKraj,
       'updated_at': FieldValue.serverTimestamp(),
     };
     
@@ -256,6 +259,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedKraj == null) {
+      setState(() {
+        _error = 'Vyberte prosím svůj kraj na mapě ČR.';
+      });
+      return;
+    }
     setState(() {
       _isSubmitting = true;
       _error = null;
@@ -630,6 +639,54 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                 return null;
                               },
                             ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8.0),
+                              child: Divider(height: 24, thickness: 1, color: Color(0xFFF1F1F1)),
+                            ),
+                            const Text(
+                              'Region (Kraj) v ČR',
+                              style: TextStyle(
+                                color: Color(0xFF263238),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Klepnutím na mapu zvolte svůj domovský kraj:',
+                              style: TextStyle(color: Colors.black54, fontSize: 13),
+                            ),
+                            const SizedBox(height: 12),
+                            CzechKrajMapPicker(
+                              selectedKraj: _selectedKraj,
+                              onKrajSelected: (kraj) {
+                                setState(() {
+                                  _selectedKraj = kraj;
+                                });
+                              },
+                              isDarkMode: false,
+                            ),
+                            if (_selectedKraj != null) ...[
+                              const SizedBox(height: 12),
+                              Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFBFFF00).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFFBFFF00), width: 1.5),
+                                  ),
+                                  child: Text(
+                                    'Vybraný kraj: $_selectedKraj',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1B5E20),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 8.0),
                               child: Divider(height: 24, thickness: 1, color: Color(0xFFF1F1F1)),
