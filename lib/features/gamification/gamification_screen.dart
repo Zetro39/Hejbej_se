@@ -11,6 +11,8 @@ import 'models/wheel_of_fortune_model.dart';
 import 'services/wheel_of_fortune_service.dart';
 import 'wheel_editor_screen.dart';
 import '../../main_shell.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -847,32 +849,36 @@ class _GameScreenState extends State<GameScreen> {
             children: [
               Expanded(
                 child: ChoiceChip(
+                  showCheckmark: false,
+                  backgroundColor: cardColor,
                   label: Center(
                     child: Text(
                       'Moje a stažené',
-                      style: TextStyle(color: !_showCommunityWheels ? Colors.black : textColor, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: !_showCommunityWheels ? Colors.black : textSecondary, fontWeight: FontWeight.bold),
                     ),
                   ),
                   selected: !_showCommunityWheels,
                   selectedColor: const Color(0xFFBFFF00),
                   onSelected: (val) {
-                    if (val) setState(() => _showCommunityWheels = false);
+                    setState(() => _showCommunityWheels = false);
                   },
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: ChoiceChip(
+                  showCheckmark: false,
+                  backgroundColor: cardColor,
                   label: Center(
                     child: Text(
                       'Top z komunity',
-                      style: TextStyle(color: _showCommunityWheels ? Colors.black : textColor, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: _showCommunityWheels ? Colors.black : textSecondary, fontWeight: FontWeight.bold),
                     ),
                   ),
                   selected: _showCommunityWheels,
                   selectedColor: const Color(0xFFBFFF00),
                   onSelected: (val) {
-                    if (val) setState(() => _showCommunityWheels = true);
+                    setState(() => _showCommunityWheels = true);
                   },
                 ),
               ),
@@ -1005,12 +1011,62 @@ class _GameScreenState extends State<GameScreen> {
             if (w.code.isEmpty)
               IconButton(
                 icon: const Icon(Icons.share, color: Colors.blue),
+                tooltip: 'Sdílet do komunity',
                 onPressed: () async {
-                  final code = await WheelOfFortuneService().shareWheelToCommunity(w, currentUser.uid, currentUser.displayName ?? 'Hráč');
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Hra sdílena! Kód: #$code')),
+                    const SnackBar(
+                      content: Row(
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Nahrávání a generování kódu...'),
+                        ],
+                      ),
+                      duration: Duration(days: 1),
+                    ),
                   );
-                  setState(() {});
+                  try {
+                    final code = await WheelOfFortuneService().shareWheelToCommunity(w, currentUser.uid, currentUser.displayName ?? 'Hráč');
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Hra sdílena! Kód #$code byl zkopírován do schránky.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                    await Clipboard.setData(ClipboardData(text: '#$code'));
+                    setState(() {});
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Chyba při sdílení: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.share, color: Colors.green),
+                tooltip: 'Sdílet kód s přáteli',
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: '#${w.code}'));
+                  await Share.share(
+                    'Ahoj! Přidej si moji hru "${w.name}" v aplikaci Hejbej se. Stačí zadat tento kód: #${w.code}',
+                    subject: 'Moje hra v Hejbej se',
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Kód #${w.code} zkopírován do schránky a sdílen!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
                 },
               ),
             IconButton(
