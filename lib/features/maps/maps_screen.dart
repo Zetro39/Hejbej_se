@@ -3404,15 +3404,15 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildAntiCheatOverlay() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: AntiCheatService().isCheatingNotifier,
-      builder: (context, isCheating, child) {
-        if (!isCheating) return const SizedBox.shrink();
-        return Positioned(
-          top: MediaQuery.of(context).padding.top + 80,
-          left: 16,
-          right: 16,
-          child: Container(
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 80,
+      left: 16,
+      right: 16,
+      child: ValueListenableBuilder<bool>(
+        valueListenable: AntiCheatService().isCheatingNotifier,
+        builder: (context, isCheating, child) {
+          if (!isCheating) return const SizedBox.shrink();
+          return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: const Color(0xFFD32F2F).withOpacity(0.92), // Solid premium crimson red
@@ -3481,9 +3481,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 ),
               ],
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
