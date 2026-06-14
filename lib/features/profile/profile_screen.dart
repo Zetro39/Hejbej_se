@@ -861,7 +861,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     }
     achievementItems.add({
-      'title': 'Amulet',
+      'title': 'Cesta živlů',
       'unlocked': _storyAmuletCompleted,
       'type': 'story',
       'value': 99999.0,

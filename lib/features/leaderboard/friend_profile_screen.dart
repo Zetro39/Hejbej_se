@@ -90,8 +90,8 @@ class FriendProfileScreen extends StatelessWidget {
           }
           final completedLostAmulet = data['achievement_hero_lost_amulet'] as bool? ?? false;
           achievements.add({
-            'title': 'Ztracený amulet',
-            'subtitle': 'Dokončit příběh Ztracený amulet',
+            'title': 'Cesta živlů',
+            'subtitle': 'Dokončit příběh Cesta živlů',
             'unlocked': completedLostAmulet,
             'icon': Icons.auto_stories,
           });

@@ -380,7 +380,7 @@ class _GameScreenState extends State<GameScreen> {
                         ),
                       );
                     } else if (type == 'story_completion') {
-                      final storyName = details['storyName'] as String? ?? 'Ztracený amulet';
+                      final storyName = details['storyName'] as String? ?? 'Cesta živlů';
                       icon = Icons.auto_stories;
                       iconColor = Colors.deepPurple;
                       content = RichText(
@@ -630,9 +630,9 @@ class _GameScreenState extends State<GameScreen> {
         scrollDirection: Axis.horizontal,
         children: [
           _buildSpecialGameCard(
-            title: 'Ztracený amulet 💎',
-            description: 'Příběhové RPG. Ujdi 6 km a vyřeš záhadu ztraceného amuletu.',
-            icon: Icons.auto_awesome,
+            title: 'Cesta živlů 🔮',
+            description: 'Příběhové RPG. Ujdi 6 km, ovládni sílu čtyř živlů a obnov rovnováhu přírody.',
+            icon: Icons.blur_circular,
             color: Colors.purple.shade50,
             iconColor: Colors.purple.shade700,
             is18Plus: false,
@@ -640,6 +640,7 @@ class _GameScreenState extends State<GameScreen> {
             textColor: textColor,
             textSecondary: textSecondary,
             borderColor: borderColor,
+            backgroundImage: 'assets/images/amulet_zivlu_bg.png',
             onTap: () {
               Navigator.push(
                 context,
@@ -648,32 +649,6 @@ class _GameScreenState extends State<GameScreen> {
                 ),
               );
             },
-          ),
-          const SizedBox(width: 12),
-          _buildSpecialGameCard(
-            title: 'Zámecká stezka',
-            description: 'Objev historické zámky and parky ve svém okolí.',
-            icon: Icons.fort,
-            color: Colors.amber.shade50,
-            iconColor: Colors.amber.shade700,
-            is18Plus: false,
-            cardColor: cardColor,
-            textColor: textColor,
-            textSecondary: textSecondary,
-            borderColor: borderColor,
-          ),
-          const SizedBox(width: 12),
-          _buildSpecialGameCard(
-            title: 'Krakonošův okruh',
-            description: 'Náročný výšlap horskou přírodou za bájným pánem hor.',
-            icon: Icons.landscape,
-            color: Colors.green.shade50,
-            iconColor: Colors.green.shade700,
-            is18Plus: false,
-            cardColor: cardColor,
-            textColor: textColor,
-            textSecondary: textSecondary,
-            borderColor: borderColor,
           ),
           if (show18Plus) ...[
             const SizedBox(width: 12),
@@ -1780,6 +1755,7 @@ class _GameScreenState extends State<GameScreen> {
     required Color textColor,
     required Color textSecondary,
     required Color borderColor,
+    String? backgroundImage,
     VoidCallback? onTap,
   }) {
     return GestureDetector(
@@ -1790,7 +1766,20 @@ class _GameScreenState extends State<GameScreen> {
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: borderColor, width: 1.5),
+          border: Border.all(
+            color: backgroundImage != null ? Colors.white.withOpacity(0.15) : borderColor,
+            width: 1.5,
+          ),
+          image: backgroundImage != null
+              ? DecorationImage(
+                  image: AssetImage(backgroundImage),
+                  fit: BoxFit.cover,
+                  colorFilter: ColorFilter.mode(
+                    Colors.black.withOpacity(0.55),
+                    BlendMode.darken,
+                  ),
+                )
+              : null,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
@@ -1808,10 +1797,16 @@ class _GameScreenState extends State<GameScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.6),
+                    color: backgroundImage != null
+                        ? Colors.white.withOpacity(0.25)
+                        : color.withOpacity(0.6),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(icon, color: iconColor, size: 24),
+                  child: Icon(
+                    icon,
+                    color: backgroundImage != null ? Colors.white : iconColor,
+                    size: 24,
+                  ),
                 ),
                 if (is18Plus)
                   Container(
@@ -1831,12 +1826,20 @@ class _GameScreenState extends State<GameScreen> {
             const Spacer(),
             Text(
               title,
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                color: backgroundImage != null ? Colors.white : textColor,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               description,
-              style: TextStyle(fontSize: 11, color: textSecondary, height: 1.3),
+              style: TextStyle(
+                fontSize: 11,
+                color: backgroundImage != null ? Colors.white.withOpacity(0.8) : textSecondary,
+                height: 1.3,
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

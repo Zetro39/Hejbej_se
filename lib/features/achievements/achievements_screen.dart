@@ -380,7 +380,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> with TickerProv
                 ),
               ),
               title: Text(
-                'Ztracený amulet',
+                'Cesta živlů',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -388,7 +388,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> with TickerProv
                 ),
               ),
               subtitle: Text(
-                'Dokonči celou příběhovou linku a získej legendární odznak.',
+                'Dokonči celou příběhovou linku Cesta živlů a získej legendární odznak.',
                 style: TextStyle(
                   color: _storyAmuletCompleted ? Colors.white70 : Colors.black54,
                   fontSize: 12,

@@ -497,8 +497,8 @@ class StoryGameService {
       if (!list.contains(title)) {
         list.add(title);
       }
-      if (!list.contains('Ztracený amulet')) {
-        list.add('Ztracený amulet');
+      if (!list.contains('Cesta živlů')) {
+        list.add('Cesta živlů');
       }
       await prefs.setStringList('daily_achievements_$todayStr', list);
 
@@ -521,7 +521,7 @@ class StoryGameService {
           'timestamp': FieldValue.serverTimestamp(),
           'details': {
             'storyId': 'lost_amulet',
-            'storyName': 'Ztracený amulet',
+            'storyName': 'Cesta živlů',
             'difficulty': diff,
           },
         });
