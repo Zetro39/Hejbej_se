@@ -44,9 +44,19 @@ class PlacePrediction {
   }
 }
 
-/// Modul Mapy – Live GPS tracking s Google Maps.
 class MapsScreen extends StatefulWidget {
-  const MapsScreen({super.key});
+  final bool showMapType;
+  final bool showMapStyle;
+  final bool showShareLocation;
+  final bool showArNav;
+
+  const MapsScreen({
+    super.key,
+    this.showMapType = true,
+    this.showMapStyle = true,
+    this.showShareLocation = true,
+    this.showArNav = true,
+  });
 
   static final ValueNotifier<String?> pendingSharedRouteNotifier = ValueNotifier<String?>(null);
 
@@ -3476,57 +3486,64 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               ),
             ),
           Positioned(
-            bottom: fabBaseOffset + 76 + 76 + 76,
-            right: 20,
-            child: FloatingActionButton(
-              heroTag: 'map_type_button',
-              onPressed: _toggleMapType,
-              backgroundColor: _mapType != MapType.normal ? const Color(0xFFBFFF00) : Colors.white,
-              foregroundColor: Colors.black,
-              child: const Icon(Icons.layers, size: 28),
-            ),
-          ),
-          Positioned(
-            bottom: fabBaseOffset + 76 + 76,
-            right: 20,
-            child: FloatingActionButton(
-              heroTag: 'map_style_button',
-              onPressed: _toggleMapStyle,
-              backgroundColor: _currentMapStyle != 'default' ? const Color(0xFFBFFF00) : Colors.white,
-              foregroundColor: Colors.black,
-              child: Icon(
-                _currentMapStyle == 'default'
-                    ? Icons.map
-                    : _currentMapStyle == 'light'
-                        ? Icons.light_mode
-                        : Icons.dark_mode,
-                size: 28,
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: fabBaseOffset + 76,
-            right: 20,
-            child: FloatingActionButton(
-              heroTag: 'share_location_button',
-              onPressed: _toggleLocationSharing,
-              backgroundColor: _shareLocation ? Colors.lime : Colors.white,
-              foregroundColor: _shareLocation ? Colors.black : Colors.black54,
-              child: Icon(
-                _shareLocation ? Icons.location_on : Icons.location_off_outlined,
-                size: 28,
-              ),
-            ),
-          ),
-          Positioned(
             bottom: fabBaseOffset,
             right: 20,
-            child: FloatingActionButton(
-              heroTag: 'ar_nav_button',
-              onPressed: _onArPressed,
-              backgroundColor: const Color(0xFFBFFF00),
-              foregroundColor: Colors.black,
-              child: const Icon(Icons.remove_red_eye, size: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (widget.showMapType) ...[
+                  FloatingActionButton(
+                    heroTag: 'map_type_button',
+                    onPressed: _toggleMapType,
+                    backgroundColor: _mapType != MapType.normal ? const Color(0xFFBFFF00) : Colors.white,
+                    foregroundColor: Colors.black,
+                    child: const Icon(Icons.layers, size: 28),
+                  ),
+                  if (widget.showMapStyle || widget.showShareLocation || widget.showArNav)
+                    const SizedBox(height: 16),
+                ],
+                if (widget.showMapStyle) ...[
+                  FloatingActionButton(
+                    heroTag: 'map_style_button',
+                    onPressed: _toggleMapStyle,
+                    backgroundColor: _currentMapStyle != 'default' ? const Color(0xFFBFFF00) : Colors.white,
+                    foregroundColor: Colors.black,
+                    child: Icon(
+                      _currentMapStyle == 'default'
+                          ? Icons.map
+                          : _currentMapStyle == 'light'
+                              ? Icons.light_mode
+                              : Icons.dark_mode,
+                      size: 28,
+                    ),
+                  ),
+                  if (widget.showShareLocation || widget.showArNav)
+                    const SizedBox(height: 16),
+                ],
+                if (widget.showShareLocation) ...[
+                  FloatingActionButton(
+                    heroTag: 'share_location_button',
+                    onPressed: _toggleLocationSharing,
+                    backgroundColor: _shareLocation ? Colors.lime : Colors.white,
+                    foregroundColor: _shareLocation ? Colors.black : Colors.black54,
+                    child: Icon(
+                      _shareLocation ? Icons.location_on : Icons.location_off_outlined,
+                      size: 28,
+                    ),
+                  ),
+                  if (widget.showArNav)
+                    const SizedBox(height: 16),
+                ],
+                if (widget.showArNav)
+                  FloatingActionButton(
+                    heroTag: 'ar_nav_button',
+                    onPressed: _onArPressed,
+                    backgroundColor: const Color(0xFFBFFF00),
+                    foregroundColor: Colors.black,
+                    child: const Icon(Icons.remove_red_eye, size: 28),
+                  ),
+              ],
             ),
           ),
           // Top Notification Bell Button

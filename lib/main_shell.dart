@@ -31,12 +31,25 @@ class _MainShellState extends State<MainShell> {
   late final AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSubscription;
 
+  bool _showMapType = true;
+  bool _showMapStyle = true;
+  bool _showShareLocation = true;
+  bool _showArNav = true;
+
   @override
   void initState() {
     super.initState();
     SharedPreferences.getInstance().then((prefs) {
       final savedTheme = prefs.getString('design_theme') ?? 'grey';
       MainShell.themeNotifier.value = savedTheme;
+      if (mounted) {
+        setState(() {
+          _showMapType = prefs.getBool('show_map_type') ?? true;
+          _showMapStyle = prefs.getBool('show_map_style') ?? true;
+          _showShareLocation = prefs.getBool('show_share_location') ?? true;
+          _showArNav = prefs.getBool('show_ar_nav') ?? true;
+        });
+      }
     });
     _checkBlocked();
     _verifyTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
@@ -53,6 +66,18 @@ class _MainShellState extends State<MainShell> {
         ),
       );
     });
+  }
+
+  void _loadMapPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _showMapType = prefs.getBool('show_map_type') ?? true;
+        _showMapStyle = prefs.getBool('show_map_style') ?? true;
+        _showShareLocation = prefs.getBool('show_share_location') ?? true;
+        _showArNav = prefs.getBool('show_ar_nav') ?? true;
+      });
+    }
   }
 
   @override
@@ -244,7 +269,12 @@ class _MainShellState extends State<MainShell> {
         final List<Widget> _screens = [
           const GameScreen(),
           ProfileScreen(userName: widget.userName),
-          const MapsScreen(),
+          MapsScreen(
+            showMapType: _showMapType,
+            showMapStyle: _showMapStyle,
+            showShareLocation: _showShareLocation,
+            showArNav: _showArNav,
+          ),
           const LeaderboardScreen(),
           const ShopScreen(),
         ];
@@ -270,36 +300,11 @@ class _MainShellState extends State<MainShell> {
                   },
                 )
               : _screens[_index],
-          floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-          floatingActionButton: Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFBFFF00).withOpacity(0.4),
-                    blurRadius: 16,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: FloatingActionButton(
-                onPressed: () => setState(() => _index = 2),
-                backgroundColor: const Color(0xFFBFFF00),
-                elevation: 0,
-                shape: const CircleBorder(),
-                child: const Icon(Icons.map_rounded, size: 30, color: Color(0xFF1B5E20)),
-              ),
-            ),
-          ),
           bottomNavigationBar: BottomAppBar(
             elevation: 8,
             color: navBgColor,
             surfaceTintColor: navBgColor,
-            shape: const CircularNotchedRectangle(),
-            notchMargin: 8,
+            padding: EdgeInsets.zero,
             child: SafeArea(
               child: SizedBox(
                 height: 72,
@@ -324,7 +329,37 @@ class _MainShellState extends State<MainShell> {
                       onTap: () => setState(() => _index = 3),
                       theme: theme,
                     ),
-                    const SizedBox(width: 56), // space for FAB
+                    GestureDetector(
+                      onTap: () {
+                        _loadMapPreferences();
+                        setState(() => _index = 2);
+                      },
+                      child: Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: _index == 2 ? const Color(0xFFBFFF00) : (isWhiteTheme ? Colors.grey.shade200 : const Color(0xFF263238)),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _index == 2 ? const Color(0xFFBFFF00) : (isWhiteTheme ? Colors.grey.shade300 : Colors.white10),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFBFFF00).withOpacity(_index == 2 ? 0.35 : 0.0),
+                              blurRadius: 10,
+                              spreadRadius: 1,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.map_rounded,
+                          size: 26,
+                          color: _index == 2 ? const Color(0xFF1B5E20) : (isWhiteTheme ? Colors.black54 : Colors.white70),
+                        ),
+                      ),
+                    ),
                     _NavButton(
                       icon: Icons.shopping_bag_outlined,
                       activeIcon: Icons.shopping_bag_rounded,

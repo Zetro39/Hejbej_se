@@ -373,7 +373,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return buffer.toString().replaceAll('#', '');
   }
 
-  void _showEditProfileDialog() {
+  void _showEditProfileDialog() async {
+    final prefsInstance = await SharedPreferences.getInstance();
+    bool showMapType = prefsInstance.getBool('show_map_type') ?? true;
+    bool showMapStyle = prefsInstance.getBool('show_map_style') ?? true;
+    bool showShareLocation = prefsInstance.getBool('show_share_location') ?? true;
+    bool showArNav = prefsInstance.getBool('show_ar_nav') ?? true;
+
     final usernameController = TextEditingController(text: _username);
     int tempGoal = _dailyStepsGoal;
     bool isSaving = false;
@@ -544,6 +550,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '🗺️ Zobrazení tlačítek na mapě',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      title: const Text('Vrstvy mapy', style: TextStyle(fontSize: 14)),
+                      value: showMapType,
+                      activeColor: Colors.lightBlue,
+                      onChanged: (val) {
+                        setDialogState(() {
+                          showMapType = val ?? true;
+                        });
+                      },
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    CheckboxListTile(
+                      title: const Text('Styl mapy (Světlý/Tmavý)', style: TextStyle(fontSize: 14)),
+                      value: showMapStyle,
+                      activeColor: Colors.lightBlue,
+                      onChanged: (val) {
+                        setDialogState(() {
+                          showMapStyle = val ?? true;
+                        });
+                      },
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    CheckboxListTile(
+                      title: const Text('Sdílení polohy', style: TextStyle(fontSize: 14)),
+                      value: showShareLocation,
+                      activeColor: Colors.lightBlue,
+                      onChanged: (val) {
+                        setDialogState(() {
+                          showShareLocation = val ?? true;
+                        });
+                      },
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    CheckboxListTile(
+                      title: const Text('AR navigace', style: TextStyle(fontSize: 14)),
+                      value: showArNav,
+                      activeColor: Colors.lightBlue,
+                      onChanged: (val) {
+                        setDialogState(() {
+                          showArNav = val ?? true;
+                        });
+                      },
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
                     if (isSaving) ...[
                       const SizedBox(height: 16),
                       const Center(child: CircularProgressIndicator(color: Colors.lightBlue)),
@@ -605,6 +669,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setInt('daily_steps_goal', tempGoal);
                       await prefs.setString('design_theme', tempTheme);
+                      await prefs.setBool('show_map_type', showMapType);
+                      await prefs.setBool('show_map_style', showMapStyle);
+                      await prefs.setBool('show_share_location', showShareLocation);
+                      await prefs.setBool('show_ar_nav', showArNav);
                       MainShell.themeNotifier.value = tempTheme;
                       
                       if (usernameChanged) {
