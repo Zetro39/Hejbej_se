@@ -234,7 +234,10 @@ class _CzechMapPainter extends CustomPainter {
     final prahaPath = paths['Praha'];
     if (prahaPath != null) {
       final isPrahaSelected = selectedKraj == 'Praha';
-      canvas.drawPath(prahaPath, isPrahaSelected ? prahaSelectedFillPaint : (isDarkMode ? const Color(0xFF5C727D) : Colors.grey.shade400));
+      final prahaDefaultFillPaint = Paint()
+        ..color = isDarkMode ? const Color(0xFF5C727D) : Colors.grey.shade400
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(prahaPath, isPrahaSelected ? prahaSelectedFillPaint : prahaDefaultFillPaint);
       canvas.drawPath(prahaPath, isPrahaSelected ? selectedBorderPaint : borderPaint);
     }
 

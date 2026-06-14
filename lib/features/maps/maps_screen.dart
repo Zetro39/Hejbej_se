@@ -21,7 +21,7 @@ import '../../services/auth_service.dart';
 import '../../services/notification_manager.dart';
 import '../../services/step_tracker_service.dart';
 import '../../services/anticheat_service.dart';
-import '../../main_shell.dart';
+import '../../theme_config.dart';
 import '../profile/notification_inbox_screen.dart';
 import '../leaderboard/friend_profile_screen.dart';
 import 'qr_scanner_screen.dart';
@@ -582,7 +582,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     required LatLng latLng,
     required DateTime lastUpdate,
   }) {
-    final isWhiteTheme = MainShell.themeNotifier.value == 'white';
+    final isWhiteTheme = appThemeNotifier.value == 'white';
     final bgColor = isWhiteTheme ? Colors.white : const Color(0xFF1E272C);
     final textColor = isWhiteTheme ? Colors.black87 : Colors.white;
     final subTextColor = isWhiteTheme ? Colors.black54 : Colors.white70;
@@ -1476,7 +1476,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _showCancelRouteDialog() async {
-    final isWhite = MainShell.themeNotifier.value == 'white';
+    final isWhite = appThemeNotifier.value == 'white';
     final dialogBg = isWhite ? Colors.white : const Color(0xFF37474F);
     final textColor = isWhite ? Colors.black : Colors.white;
     final textSecondary = isWhite ? Colors.black54 : Colors.white70;
@@ -1526,7 +1526,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   }
 
   void _showActiveAssignmentsDialog() {
-    final isWhite = MainShell.themeNotifier.value == 'white';
+    final isWhite = appThemeNotifier.value == 'white';
     final dialogBg = isWhite ? Colors.white : const Color(0xFF37474F);
     final textColor = isWhite ? Colors.black : Colors.white;
     final textSecondary = isWhite ? Colors.black54 : Colors.white70;
@@ -3068,7 +3068,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   }
 
   void _showNavigationMenu() {
-    final theme = MainShell.themeNotifier.value;
+    final theme = appThemeNotifier.value;
     final isWhite = theme == 'white';
     final cardColor = isWhite ? Colors.white : const Color(0xFF1E272C);
     final textColor = isWhite ? const Color(0xFF263238) : Colors.white;

@@ -7,6 +7,7 @@ import 'package:app_links/app_links.dart';
 import 'services/auth_service.dart';
 import 'services/notification_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'theme_config.dart';
 
 
 import 'features/maps/maps_screen.dart';
@@ -19,7 +20,7 @@ class MainShell extends StatefulWidget {
   const MainShell({super.key, required this.userName});
 
   final String userName;
-  static final ValueNotifier<String> themeNotifier = ValueNotifier<String>('grey');
+  static final ValueNotifier<String> themeNotifier = appThemeNotifier;
 
   @override
   State<MainShell> createState() => _MainShellState();
