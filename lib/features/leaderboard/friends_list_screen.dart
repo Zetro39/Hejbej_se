@@ -112,6 +112,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           'Zvedej se z gauče, lenochu! 🛋️🏃‍♂️',
           'Už ti dýchám na záda! 💨',
           'Dneska spíš? Koukej hejbnout zadkem! 😜',
+          '✍️ Vlastní zpráva...',
         ];
         return AlertDialog(
           backgroundColor: dialogBg,
@@ -137,7 +138,77 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                 child: ListTile(
                   title: Text(opt, style: TextStyle(fontSize: 14, color: textColor)),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFFBFFF00)),
-                  onTap: () => Navigator.pop(context, opt),
+                  onTap: () async {
+                    if (opt == '✍️ Vlastní zpráva...') {
+                      final customText = await showDialog<String>(
+                        context: context,
+                        builder: (context) {
+                          final controller = TextEditingController();
+                          return StatefulBuilder(
+                            builder: (context, setDialogState) {
+                              final textLength = controller.text.length;
+                              return AlertDialog(
+                                backgroundColor: dialogBg,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  side: BorderSide(color: borderColor),
+                                ),
+                                title: Text(
+                                  '✍️ Napiš vlastní zprávu',
+                                  style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+                                ),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    TextField(
+                                      controller: controller,
+                                      autofocus: true,
+                                      maxLength: 60,
+                                      style: TextStyle(color: textColor),
+                                      onChanged: (val) {
+                                        setDialogState(() {});
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText: 'Aktivuj svého kamaráda...',
+                                        hintStyle: const TextStyle(color: Colors.white30),
+                                        counterText: '$textLength / 60',
+                                        counterStyle: TextStyle(color: textSecondary, fontSize: 11),
+                                        focusedBorder: const UnderlineInputBorder(
+                                          borderSide: BorderSide(color: Color(0xFFBFFF00)),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, null),
+                                    child: Text('Zpět', style: TextStyle(color: textSecondary)),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: controller.text.trim().isEmpty
+                                        ? null
+                                        : () => Navigator.pop(context, controller.text.trim()),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFBFFF00),
+                                      foregroundColor: Colors.black,
+                                    ),
+                                    child: const Text('Potvrdit'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      );
+                      if (customText != null && customText.isNotEmpty) {
+                        Navigator.pop(context, customText);
+                      }
+                    } else {
+                      Navigator.pop(context, opt);
+                    }
+                  },
                 ),
               );
             }).toList(),

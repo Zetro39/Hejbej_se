@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:app_links/app_links.dart';
 import 'services/auth_service.dart';
+import 'services/notification_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 
@@ -28,6 +30,7 @@ class _MainShellState extends State<MainShell> {
   bool _blocked = false;
   Timer? _verifyTimer;
   StreamSubscription? _incomingFriendsSubscription;
+  StreamSubscription<QuerySnapshot>? _activitiesSubscription;
   late final AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSubscription;
 
@@ -39,6 +42,7 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    _setupActivitiesListener();
     SharedPreferences.getInstance().then((prefs) {
       final savedTheme = prefs.getString('design_theme') ?? 'grey';
       MainShell.themeNotifier.value = savedTheme;
@@ -84,8 +88,81 @@ class _MainShellState extends State<MainShell> {
   void dispose() {
     _verifyTimer?.cancel();
     _incomingFriendsSubscription?.cancel();
+    _activitiesSubscription?.cancel();
     _linkSubscription?.cancel();
     super.dispose();
+  }
+
+  void _setupActivitiesListener() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+    
+    await NotificationManager.updateUnreadCount();
+
+    final prefs = await SharedPreferences.getInstance();
+    int lastTimeMs = prefs.getInt('last_activity_listener_timestamp') ?? DateTime.now().millisecondsSinceEpoch;
+
+    _activitiesSubscription = FirebaseFirestore.instance
+        .collection('activities')
+        .where('uid', isEqualTo: currentUser.uid)
+        .snapshots()
+        .listen((snapshot) async {
+      final prefsInst = await SharedPreferences.getInstance();
+      int currentSavedMs = prefsInst.getInt('last_activity_listener_timestamp') ?? lastTimeMs;
+
+      for (final change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          final data = change.doc.data();
+          if (data == null) continue;
+
+          final ts = data['timestamp'] as Timestamp?;
+          if (ts == null) continue;
+
+          final ms = ts.millisecondsSinceEpoch;
+          if (ms <= currentSavedMs) continue;
+
+          final type = data['type'] as String?;
+          final details = data['details'] as Map<String, dynamic>? ?? {};
+          final message = details['message'] as String? ?? 'Nové upozornění';
+
+          String title = 'Nové oznámení';
+          if (type == 'nudge') {
+            title = '👉 Šťouchnutí';
+          } else if (type == 'friend_request') {
+            title = '👥 Žádost o přátelství';
+          } else if (type == 'challenge') {
+            title = '🏆 Nová výzva';
+          }
+
+          await NotificationManager.saveNotification(title, message);
+
+          if (ms > currentSavedMs) {
+            currentSavedMs = ms;
+            await prefsInst.setInt('last_activity_listener_timestamp', ms);
+          }
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$title: $message', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: const Color(0xFFBFFF00),
+                duration: const Duration(seconds: 4),
+                action: SnackBarAction(
+                  label: 'ZOBRAZIT',
+                  textColor: Colors.blue.shade900,
+                  onPressed: () {
+                    setState(() {
+                      _index = 2; // Switch to Maps tab where the bell is
+                    });
+                  },
+                ),
+              ),
+            );
+          }
+        }
+      }
+    });
   }
 
   void _listenForIncomingFriends() {

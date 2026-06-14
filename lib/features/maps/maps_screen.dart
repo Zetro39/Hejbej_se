@@ -288,12 +288,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadUnreadNotificationsCount() async {
-    final count = await NotificationManager.getUnreadCount();
-    if (mounted) {
-      setState(() {
-        _unreadNotificationsCount = count;
-      });
-    }
+    await NotificationManager.updateUnreadCount();
   }
 
   Future<void> _cacheActiveRoute(List<LatLng> points, String title, double distance, int eta) async {
@@ -3853,58 +3848,63 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           Positioned(
             top: topPadding + 16,
             right: 16,
-            child: Stack(
-              children: [
-                GestureDetector(
-                  onTap: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const NotificationInboxScreen()),
-                    );
-                    _loadUnreadNotificationsCount();
-                  },
-                  child: Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+            child: ValueListenableBuilder<int>(
+              valueListenable: NotificationManager.unreadCountNotifier,
+              builder: (context, count, child) {
+                return Stack(
+                  children: [
+                    GestureDetector(
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(builder: (context) => const NotificationInboxScreen()),
+                        );
+                        _loadUnreadNotificationsCount();
+                      },
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: const Icon(Icons.notifications_active, color: Colors.lightBlue, size: 26),
-                  ),
-                ),
-                if (_unreadNotificationsCount > 0)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.redAccent,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
-                      child: Text(
-                        '$_unreadNotificationsCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
+                        child: const Icon(Icons.notifications_active, color: Colors.lightBlue, size: 26),
                       ),
                     ),
-                  ),
-              ],
+                    if (count > 0)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.redAccent,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
+                          child: Text(
+                            '$count',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         ],

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 
 class NotificationInboxItem {
   final String id;
@@ -35,6 +36,11 @@ class NotificationInboxItem {
 
 class NotificationManager {
   static const String _keyNotifications = 'local_notifications_inbox';
+  static final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
+
+  static Future<void> updateUnreadCount() async {
+    unreadCountNotifier.value = await getUnreadCount();
+  }
 
   static Future<void> saveNotification(String title, String body) async {
     try {
@@ -56,6 +62,7 @@ class NotificationManager {
       }
       
       await prefs.setStringList(_keyNotifications, listJson);
+      await updateUnreadCount();
     } catch (_) {}
   }
 
@@ -84,6 +91,7 @@ class NotificationManager {
         updated.add(jsonEncode(map));
       }
       await prefs.setStringList(_keyNotifications, updated);
+      await updateUnreadCount();
     } catch (_) {}
   }
 
@@ -99,6 +107,7 @@ class NotificationManager {
         }
       }
       await prefs.setStringList(_keyNotifications, updated);
+      await updateUnreadCount();
     } catch (_) {}
   }
 
@@ -106,6 +115,7 @@ class NotificationManager {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_keyNotifications);
+      await updateUnreadCount();
     } catch (_) {}
   }
   
