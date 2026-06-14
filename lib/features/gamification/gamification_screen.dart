@@ -343,7 +343,7 @@ class _GameScreenState extends State<GameScreen> {
                             style: const TextStyle(color: Colors.black87, fontSize: 14),
                             children: [
                               TextSpan(text: username, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              const TextSpan(text: ' vyhrál/a 1v1 výzvu na '),
+                              const TextSpan(text: ' vyhrál/a výzvu na '),
                               TextSpan(text: '${targetKm.toInt()} km', style: const TextStyle(fontWeight: FontWeight.bold)),
                               const TextSpan(text: ' proti '),
                               TextSpan(text: opponentName, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -526,7 +526,7 @@ class _GameScreenState extends State<GameScreen> {
                               const Icon(Icons.bolt_rounded, color: Colors.orange, size: 24),
                               const SizedBox(width: 8),
                               Text(
-                                '1v1 Výzvy na míru',
+                                'Výzvy na míru',
                                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
                               ),
                             ],
@@ -631,7 +631,7 @@ class _GameScreenState extends State<GameScreen> {
         children: [
           _buildSpecialGameCard(
             title: 'Cesta živlů 🔮',
-            description: 'Příběhové RPG. Ujdi 6 km, ovládni sílu čtyř živlů a obnov rovnováhu přírody.',
+            description: 'Pomoz vrátit světu ztracené živly. Ovládni sílu ohně, vody, země a vzduchu a obnov harmonii české přírody!',
             icon: Icons.blur_circular,
             color: Colors.purple.shade50,
             iconColor: Colors.purple.shade700,
@@ -1713,7 +1713,7 @@ class _GameScreenState extends State<GameScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Nemáš žádné přátele'),
-          content: const Text('Pro vytvoření 1v1 výzvy si nejprve přidej přítele na obrazovce Žebříčku.'),
+          content: const Text('Pro vytvoření výzvy si nejprve přidej přítele na obrazovce Žebříčku.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -1866,7 +1866,7 @@ class _CreateChallengeBottomSheet extends StatefulWidget {
 }
 
 class _CreateChallengeBottomSheetState extends State<_CreateChallengeBottomSheet> {
-  Map<String, dynamic>? _selectedFriend;
+  final Set<Map<String, dynamic>> _selectedFriends = {};
   double _selectedKm = 10.0;
   int _selectedDays = 7;
   final TextEditingController _betController = TextEditingController();
@@ -1875,7 +1875,7 @@ class _CreateChallengeBottomSheetState extends State<_CreateChallengeBottomSheet
   void initState() {
     super.initState();
     if (widget.friends.isNotEmpty) {
-      _selectedFriend = widget.friends.first;
+      _selectedFriends.add(widget.friends.first);
     }
   }
 
@@ -1899,35 +1899,45 @@ class _CreateChallengeBottomSheetState extends State<_CreateChallengeBottomSheet
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Vytvořit 1v1 výzvu',
+            'Vytvořit výzvu',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
           
           // Friend Picker
-          const Text('Vyber přítele:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const Text('Vyberte přátele k vyzvání:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            constraints: const BoxConstraints(maxHeight: 150),
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<Map<String, dynamic>>(
-                value: _selectedFriend,
-                items: widget.friends.map((f) {
-                  return DropdownMenuItem<Map<String, dynamic>>(
-                    value: f,
-                    child: Text(f['username'] as String),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  setState(() {
-                    _selectedFriend = val;
-                  });
-                },
-              ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: widget.friends.length,
+              itemBuilder: (context, index) {
+                final friend = widget.friends[index];
+                final isSelected = _selectedFriends.contains(friend);
+                return CheckboxListTile(
+                  title: Text(friend['username'] as String, style: const TextStyle(fontSize: 14)),
+                  value: isSelected,
+                  onChanged: (bool? checked) {
+                    setState(() {
+                      if (checked == true) {
+                        _selectedFriends.add(friend);
+                      } else {
+                        _selectedFriends.remove(friend);
+                      }
+                    });
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  dense: true,
+                  activeColor: Colors.lime,
+                  checkColor: Colors.black,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                );
+              },
             ),
           ),
           const SizedBox(height: 16),
@@ -2000,28 +2010,46 @@ class _CreateChallengeBottomSheetState extends State<_CreateChallengeBottomSheet
           // Submit
           ElevatedButton(
             onPressed: () async {
-              if (_selectedFriend == null) return;
+              if (_selectedFriends.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Vyberte alespoň jednoho přítele.')),
+                );
+                return;
+              }
               
               try {
                 final currentDoc = await widget.firestore.collection('users').doc(widget.currentUid).get();
                 final currentUsername = currentDoc.data()?['username'] as String? ?? 'Uživatel';
 
-                await widget.firestore.collection('challenges').add({
-                  'creatorUid': widget.currentUid,
-                  'creatorUsername': currentUsername,
-                  'opponentUid': _selectedFriend!['uid'],
-                  'opponentUsername': _selectedFriend!['username'],
-                  'participants': [widget.currentUid, _selectedFriend!['uid']],
-                  'targetKm': _selectedKm,
-                  'durationDays': _selectedDays,
-                  'status': 'pending',
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'bet': _betController.text.trim(),
-                });
+                final batch = widget.firestore.batch();
+                for (final friend in _selectedFriends) {
+                  final newChallengeRef = widget.firestore.collection('challenges').doc();
+                  batch.set(newChallengeRef, {
+                    'creatorUid': widget.currentUid,
+                    'creatorUsername': currentUsername,
+                    'opponentUid': friend['uid'],
+                    'opponentUsername': friend['username'],
+                    'participants': [widget.currentUid, friend['uid']],
+                    'targetKm': _selectedKm,
+                    'durationDays': _selectedDays,
+                    'status': 'pending',
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'bet': _betController.text.trim(),
+                  });
+                }
+                await batch.commit();
                 
                 if (context.mounted) {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Výzva byla odeslána.')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _selectedFriends.length == 1
+                            ? 'Výzva byla odeslána.'
+                            : 'Výzvy byly odeslány.',
+                      ),
+                    ),
+                  );
                 }
               } catch (e) {
                 if (context.mounted) {
