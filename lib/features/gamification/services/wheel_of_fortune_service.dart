@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/wheel_of_fortune_model.dart';
 
@@ -45,7 +47,7 @@ class WheelOfFortuneService {
     }
   }
 
-  /// Save a custom wheel locally
+  /// Save a custom wheel locally and backup to Firestore
   Future<void> saveCustomWheel(WheelOfFortune wheel) async {
     final list = await getCustomWheels();
     final index = list.indexWhere((w) => w.id == wheel.id);
@@ -56,14 +58,76 @@ class WheelOfFortuneService {
     }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_localPrefsKey, jsonEncode(list.map((w) => w.toJson()).toList()));
+
+    // Backup to Firestore
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('custom_wheels')
+            .doc(wheel.id)
+            .set(wheel.toJson());
+      } catch (e) {
+        debugPrint('Failed to backup wheel to Firestore: $e');
+      }
+    }
   }
 
-  /// Delete a custom wheel locally
+  /// Delete a custom wheel locally and from Firestore
   Future<void> deleteCustomWheel(String id) async {
     final list = await getCustomWheels();
     list.removeWhere((w) => w.id == id);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_localPrefsKey, jsonEncode(list.map((w) => w.toJson()).toList()));
+
+    // Delete from Firestore
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('custom_wheels')
+            .doc(id)
+            .delete();
+      } catch (e) {
+        debugPrint('Failed to delete wheel from Firestore: $e');
+      }
+    }
+  }
+
+  /// Sync custom wheels from Firestore backup
+  Future<void> syncCustomWheelsFromFirestore() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final query = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('custom_wheels')
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        final firestoreWheels = query.docs.map((doc) => WheelOfFortune.fromJson(doc.data())).toList();
+        final localWheels = await getCustomWheels();
+
+        final Map<String, WheelOfFortune> merged = {};
+        for (var w in localWheels) {
+          merged[w.id] = w;
+        }
+        for (var w in firestoreWheels) {
+          merged[w.id] = w;
+        }
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_localPrefsKey, jsonEncode(merged.values.map((w) => w.toJson()).toList()));
+      }
+    } catch (e) {
+      debugPrint('Failed to sync custom wheels from Firestore: $e');
+    }
   }
 
   /// Share wheel to Firestore, generating a unique code like K15746

@@ -56,6 +56,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<int> last7DaysSteps = List.filled(7, 0);
   static const List<String> _dayNames = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'];
 
+  bool _isLocalDataLoaded = false;
+
+  TextEditingController? _usernameController;
+  int? _tempGoal;
+  String? _tempTheme;
+  bool? _tempShowMapType;
+  bool? _tempShowMapStyle;
+  bool? _tempShowShareLocation;
+  bool? _tempShowArNav;
+  bool _isSavingSettings = false;
+  String? _settingsErrorText;
+
   String _getDayName(DateTime date) {
     return _dayNames[date.weekday - 1];
   }
@@ -76,10 +88,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _usernameController = TextEditingController(text: _username);
+    _loadData().then((_) {
+      _tempGoal = _dailyStepsGoal;
+      _tempTheme = MainShell.themeNotifier.value;
+      SharedPreferences.getInstance().then((prefs) {
+        if (mounted) {
+          setState(() {
+            _tempShowMapType = prefs.getBool('show_map_type') ?? true;
+            _tempShowMapStyle = prefs.getBool('show_map_style') ?? true;
+            _tempShowShareLocation = prefs.getBool('show_share_location') ?? true;
+            _tempShowArNav = prefs.getBool('show_ar_nav') ?? true;
+          });
+        }
+      });
+    });
     _loadSelectedAvatar();
     _displayName = widget.userName;
-    _loadProfileFromFirestore();
+    _loadProfileFromFirestore().then((_) {
+      _usernameController?.text = _username;
+      _tempGoal = _dailyStepsGoal;
+    });
+  }
+
+  @override
+  void dispose() {
+    _usernameController?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadProfileFromFirestore() async {
@@ -103,9 +138,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _stepsStreak = firestoreStreak;
         }
 
+        _usernameController?.text = _username;
+
         SharedPreferences.getInstance().then((prefs) {
           prefs.setStringList('steps_goal_history', _stepsGoalHistory);
           prefs.setInt('steps_streak', _stepsStreak);
+          prefs.setInt('daily_steps_goal', _dailyStepsGoal);
+          prefs.setString('profile_username', _username);
+          prefs.setString('profile_first_name', _firstName);
+          prefs.setString('profile_last_name', _lastName);
         });
 
         if (data['first_name'] != null || data['last_name'] != null) {
@@ -200,6 +241,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       _hasOwnedPremium = everOwned;
       _premiumForYear = premForYear;
+
+      // Caching read:
+      _dailyStepsGoal = prefs.getInt('daily_steps_goal') ?? 10000;
+      _username = prefs.getString('profile_username') ?? '';
+      _firstName = prefs.getString('profile_first_name') ?? '';
+      _lastName = prefs.getString('profile_last_name') ?? '';
+      if (_firstName.isNotEmpty || _lastName.isNotEmpty) {
+        _displayName = '$_firstName $_lastName'.trim();
+      } else if (_username.isNotEmpty) {
+        _displayName = _username;
+      }
+
+      _isLocalDataLoaded = true;
     });
     _updateAchievements();
   }
@@ -423,20 +477,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return buffer.toString().replaceAll('#', '');
   }
 
-  void _showEditProfileDialog() async {
-    final prefsInstance = await SharedPreferences.getInstance();
-    bool showMapType = prefsInstance.getBool('show_map_type') ?? true;
-    bool showMapStyle = prefsInstance.getBool('show_map_style') ?? true;
-    bool showShareLocation = prefsInstance.getBool('show_share_location') ?? true;
-    bool showArNav = prefsInstance.getBool('show_ar_nav') ?? true;
-
-    final usernameController = TextEditingController(text: _username);
-    int tempGoal = _dailyStepsGoal;
-    bool isSaving = false;
-    String? errorText;
-    String tempTheme = MainShell.themeNotifier.value;
-
-    // Check if username change is locked
+  Widget _buildSettingsTab(bool isWhite, Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
     final now = DateTime.now();
     bool canChangeUsername = true;
     DateTime? nextChangePossible;
@@ -457,306 +498,366 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              title: const Text('⚙️ Upravit profil', style: TextStyle(fontWeight: FontWeight.bold)),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: TextEditingController(text: _firstName),
-                      decoration: const InputDecoration(
-                        labelText: 'Jméno (nelze měnit)',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                      enabled: false,
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: TextEditingController(text: _lastName),
-                      decoration: const InputDecoration(
-                        labelText: 'Příjmení (nelze měnit)',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                      enabled: false,
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: usernameController,
-                      decoration: InputDecoration(
-                        labelText: 'Herní přezdívka',
-                        prefixIcon: const Icon(Icons.alternate_email),
-                        errorText: errorText,
-                        helperText: inGracePeriod
-                            ? 'Ochranná lhůta na opravu překlepů je aktivní.'
-                            : !canChangeUsername
-                                ? 'Změna bude možná od ${nextChangePossible?.day}. ${nextChangePossible?.month}. ${nextChangePossible?.year}'
-                                : 'Lze změnit jednou za 30 dní.',
-                      ),
-                      enabled: canChangeUsername || inGracePeriod,
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      '🎯 Denní cíl kroků: ${tempGoal.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} ")}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                    Slider(
-                      value: tempGoal.toDouble(),
-                      min: 1000.0,
-                      max: 30000.0,
-                      divisions: 29,
-                      activeColor: Colors.lightBlue,
-                      inactiveColor: Colors.lightBlue.shade100,
-                      onChanged: (v) {
-                        setDialogState(() {
-                          tempGoal = v.toInt();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      '🌓 Vzhled aplikace',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setDialogState(() {
-                                tempTheme = 'grey';
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF263238),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: tempTheme == 'grey' ? const Color(0xFFBFFF00) : Colors.transparent,
-                                  width: 2.5,
-                                ),
-                              ),
-                              child: Column(
-                                children: const [
-                                  Icon(Icons.dark_mode_rounded, color: Colors.white, size: 22),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    'Šedá',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setDialogState(() {
-                                tempTheme = 'white';
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF9FBFC),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: tempTheme == 'white' ? const Color(0xFFBFFF00) : Colors.grey.shade300,
-                                  width: 2.5,
-                                ),
-                              ),
-                              child: Column(
-                                children: [
-                                  Icon(Icons.light_mode_rounded, color: Colors.amber.shade700, size: 22),
-                                  const SizedBox(height: 6),
-                                  const Text(
-                                    'Bílá',
-                                    style: TextStyle(
-                                      color: Color(0xFF263238),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      '🗺️ Zobrazení tlačítek na mapě',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                    const SizedBox(height: 8),
-                    CheckboxListTile(
-                      title: const Text('Vrstvy mapy', style: TextStyle(fontSize: 14)),
-                      value: showMapType,
-                      activeColor: Colors.lightBlue,
-                      onChanged: (val) {
-                        setDialogState(() {
-                          showMapType = val ?? true;
-                        });
-                      },
-                      controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                    ),
-                    CheckboxListTile(
-                      title: const Text('Styl mapy (Světlý/Tmavý)', style: TextStyle(fontSize: 14)),
-                      value: showMapStyle,
-                      activeColor: Colors.lightBlue,
-                      onChanged: (val) {
-                        setDialogState(() {
-                          showMapStyle = val ?? true;
-                        });
-                      },
-                      controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                    ),
-                    CheckboxListTile(
-                      title: const Text('Sdílení polohy', style: TextStyle(fontSize: 14)),
-                      value: showShareLocation,
-                      activeColor: Colors.lightBlue,
-                      onChanged: (val) {
-                        setDialogState(() {
-                          showShareLocation = val ?? true;
-                        });
-                      },
-                      controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                    ),
-                    CheckboxListTile(
-                      title: const Text('AR navigace', style: TextStyle(fontSize: 14)),
-                      value: showArNav,
-                      activeColor: Colors.lightBlue,
-                      onChanged: (val) {
-                        setDialogState(() {
-                          showArNav = val ?? true;
-                        });
-                      },
-                      controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                    ),
-                    if (isSaving) ...[
-                      const SizedBox(height: 16),
-                      const Center(child: CircularProgressIndicator(color: Colors.lightBlue)),
-                    ],
-                  ],
-                ),
+    final helperText = inGracePeriod
+        ? 'Ochranná lhůta na opravu překlepů je aktivní.'
+        : !canChangeUsername
+            ? 'Změna bude možná od ${nextChangePossible?.day}. ${nextChangePossible?.month}. ${nextChangePossible?.year}'
+            : 'Lze změnit jednou za 30 dní.';
+
+    _tempGoal ??= _dailyStepsGoal;
+    _tempTheme ??= MainShell.themeNotifier.value;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24.0),
+      child: Card(
+        color: cardColor,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: borderColor, width: 1.5),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Osobní údaje',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF5C9E00)),
               ),
-              actions: [
-                TextButton(
-                  onPressed: isSaving ? null : () => Navigator.pop(context),
-                  child: const Text('Zrušit', style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: TextEditingController(text: _firstName),
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  labelText: 'Jméno (nelze měnit)',
+                  labelStyle: TextStyle(color: textSecondary),
+                  prefixIcon: Icon(Icons.person_outline, color: textSecondary),
+                  border: const OutlineInputBorder(),
                 ),
-                ElevatedButton(
-                  onPressed: isSaving ? null : () async {
-                    final enteredUsername = usernameController.text.trim();
-                    if (enteredUsername.isEmpty) {
-                      setDialogState(() {
-                        errorText = 'Přezdívka nesmí být prázdná';
-                      });
-                      return;
-                    }
-
-                    setDialogState(() {
-                      isSaving = true;
-                      errorText = null;
-                    });
-
-                    try {
-                      final user = FirebaseAuth.instance.currentUser;
-                      if (user == null) throw Exception('Nepřihlášený uživatel');
-
-                      final updates = <String, dynamic>{
-                        'daily_steps_goal': tempGoal,
-                        'design_theme': tempTheme,
-                        'updated_at': FieldValue.serverTimestamp(),
-                      };
-
-                      final usernameChanged = enteredUsername != _username;
-                      if (usernameChanged) {
-                        if (!inGracePeriod) {
-                          updates['last_username_change'] = FieldValue.serverTimestamp();
-                          updates['username_grace_period_end'] = Timestamp.fromDate(
-                            DateTime.now().add(const Duration(minutes: 10)),
-                          );
-                        }
-                        updates['username'] = enteredUsername;
-                        updates['username_clean'] = _cleanStringForSearch(enteredUsername);
-                        
-                        final friendCode = '#${enteredUsername.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}';
-                        updates['friend_code'] = friendCode;
-                        updates['friend_code_clean'] = _cleanStringForSearch(friendCode);
-                      }
-
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(user.uid)
-                          .update(updates);
-
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.setInt('daily_steps_goal', tempGoal);
-                      await prefs.setString('design_theme', tempTheme);
-                      await prefs.setBool('show_map_type', showMapType);
-                      await prefs.setBool('show_map_style', showMapStyle);
-                      await prefs.setBool('show_share_location', showShareLocation);
-                      await prefs.setBool('show_ar_nav', showArNav);
-                      MainShell.themeNotifier.value = tempTheme;
-                      
-                      if (usernameChanged) {
-                        const storage = FlutterSecureStorage();
-                        await storage.write(key: 'user_name', value: enteredUsername);
-                      }
-
-                      await StepTrackerService().setStepsGoal(tempGoal);
-                      await _loadProfileFromFirestore();
-
-                      if (!mounted) return;
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Profil byl úspěšně upraven.')),
-                      );
-                    } catch (e) {
-                      setDialogState(() {
-                        isSaving = false;
-                        errorText = 'Chyba: ${e.toString()}';
-                      });
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.lime,
-                    foregroundColor: Colors.black,
+                enabled: false,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: TextEditingController(text: _lastName),
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  labelText: 'Příjmení (nelze měnit)',
+                  labelStyle: TextStyle(color: textSecondary),
+                  prefixIcon: Icon(Icons.person_outline, color: textSecondary),
+                  border: const OutlineInputBorder(),
+                ),
+                enabled: false,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _usernameController,
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  labelText: 'Herní přezdívka',
+                  labelStyle: TextStyle(color: textSecondary),
+                  prefixIcon: Icon(Icons.alternate_email, color: textSecondary),
+                  errorText: _settingsErrorText,
+                  helperText: helperText,
+                  helperStyle: TextStyle(color: textSecondary, fontSize: 11),
+                  border: const OutlineInputBorder(),
+                ),
+                enabled: canChangeUsername || inGracePeriod,
+              ),
+              const SizedBox(height: 24),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 12),
+              Text(
+                '🎯 Denní cíl kroků: ${_tempGoal.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} ")}',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+              ),
+              Slider(
+                value: _tempGoal!.toDouble(),
+                min: 1000.0,
+                max: 30000.0,
+                divisions: 29,
+                activeColor: Colors.lightBlue,
+                inactiveColor: Colors.lightBlue.shade100,
+                onChanged: (v) {
+                  setState(() {
+                    _tempGoal = v.toInt();
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 12),
+              Text(
+                '🌓 Vzhled aplikace',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _tempTheme = 'grey';
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF263238),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: _tempTheme == 'grey' ? const Color(0xFFBFFF00) : Colors.transparent,
+                            width: 2.5,
+                          ),
+                        ),
+                        child: Column(
+                          children: const [
+                            Icon(Icons.dark_mode_rounded, color: Colors.white, size: 22),
+                            SizedBox(height: 6),
+                            Text(
+                              'Šedá',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                  child: const Text('Uložit'),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _tempTheme = 'white';
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FBFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: _tempTheme == 'white' ? const Color(0xFFBFFF00) : Colors.grey.shade300,
+                            width: 2.5,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(Icons.light_mode_rounded, color: Colors.amber.shade700, size: 22),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Bílá',
+                              style: TextStyle(
+                                color: const Color(0xFF263238),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 12),
+              Text(
+                '🗺️ Zobrazení tlačítek na mapě',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+              ),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                title: Text('Vrstvy mapy', style: TextStyle(fontSize: 14, color: textColor)),
+                value: _tempShowMapType ?? true,
+                activeColor: Colors.lightBlue,
+                onChanged: (val) {
+                  setState(() {
+                    _tempShowMapType = val ?? true;
+                  });
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+              CheckboxListTile(
+                title: Text('Styl mapy (Světlý/Tmavý)', style: TextStyle(fontSize: 14, color: textColor)),
+                value: _tempShowMapStyle ?? true,
+                activeColor: Colors.lightBlue,
+                onChanged: (val) {
+                  setState(() {
+                    _tempShowMapStyle = val ?? true;
+                  });
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+              CheckboxListTile(
+                title: Text('Sdílení polohy', style: TextStyle(fontSize: 14, color: textColor)),
+                value: _tempShowShareLocation ?? true,
+                activeColor: Colors.lightBlue,
+                onChanged: (val) {
+                  setState(() {
+                    _tempShowShareLocation = val ?? true;
+                  });
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+              CheckboxListTile(
+                title: Text('AR navigace', style: TextStyle(fontSize: 14, color: textColor)),
+                value: _tempShowArNav ?? true,
+                activeColor: Colors.lightBlue,
+                onChanged: (val) {
+                  setState(() {
+                    _tempShowArNav = val ?? true;
+                  });
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+              const SizedBox(height: 24),
+              if (_isSavingSettings) ...[
+                const Center(child: CircularProgressIndicator(color: Colors.lightBlue)),
+                const SizedBox(height: 16),
               ],
-            );
-          },
-        );
-      },
+              ElevatedButton(
+                onPressed: _isSavingSettings ? null : _saveSettingsForm,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFBFFF00),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text('ULOŽIT ZMĚNY', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: _logout,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.redAccent,
+                  side: const BorderSide(color: Colors.redAccent),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text('ODHLÁSIT SE', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
+  }
+
+  Future<void> _saveSettingsForm() async {
+    final enteredUsername = _usernameController?.text.trim() ?? '';
+    if (enteredUsername.isEmpty) {
+      setState(() {
+        _settingsErrorText = 'Přezdívka nesmí být prázdná';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSavingSettings = true;
+      _settingsErrorText = null;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('Nepřihlášený uživatel');
+
+      final updates = <String, dynamic>{
+        'daily_steps_goal': _tempGoal ?? _dailyStepsGoal,
+        'design_theme': _tempTheme ?? MainShell.themeNotifier.value,
+        'updated_at': FieldValue.serverTimestamp(),
+      };
+
+      final usernameChanged = enteredUsername != _username;
+      
+      final now = DateTime.now();
+      bool canChangeUsername = true;
+      bool inGracePeriod = false;
+
+      if (_lastUsernameChange != null) {
+        final lastChange = _lastUsernameChange!.toDate();
+        final graceEnd = _usernameGracePeriodEnd?.toDate() ?? lastChange.add(const Duration(minutes: 10));
+        
+        if (now.isBefore(graceEnd)) {
+          inGracePeriod = true;
+        } else {
+          final daysSinceChange = now.difference(lastChange).inDays;
+          if (daysSinceChange < 30) {
+            canChangeUsername = false;
+          }
+        }
+      }
+
+      if (usernameChanged) {
+        if (!canChangeUsername && !inGracePeriod) {
+          throw Exception('Přezdívku nelze změnit. Lze ji změnit pouze jednou za 30 dní.');
+        }
+
+        if (!inGracePeriod) {
+          updates['last_username_change'] = FieldValue.serverTimestamp();
+          updates['username_grace_period_end'] = Timestamp.fromDate(
+            DateTime.now().add(const Duration(minutes: 10)),
+          );
+        }
+        updates['username'] = enteredUsername;
+        updates['username_clean'] = _cleanStringForSearch(enteredUsername);
+        
+        final friendCode = '#${enteredUsername.toUpperCase()}${(100 + DateTime.now().millisecondsSinceEpoch % 900)}';
+        updates['friend_code'] = friendCode;
+        updates['friend_code_clean'] = _cleanStringForSearch(friendCode);
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update(updates);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('daily_steps_goal', _tempGoal ?? _dailyStepsGoal);
+      await prefs.setString('design_theme', _tempTheme ?? MainShell.themeNotifier.value);
+      await prefs.setBool('show_map_type', _tempShowMapType ?? true);
+      await prefs.setBool('show_map_style', _tempShowMapStyle ?? true);
+      await prefs.setBool('show_share_location', _tempShowShareLocation ?? true);
+      await prefs.setBool('show_ar_nav', _tempShowArNav ?? true);
+      MainShell.themeNotifier.value = _tempTheme ?? MainShell.themeNotifier.value;
+      
+      if (usernameChanged) {
+        const storage = FlutterSecureStorage();
+        await storage.write(key: 'user_name', value: enteredUsername);
+      }
+
+      await StepTrackerService().setStepsGoal(_tempGoal ?? _dailyStepsGoal);
+      await _loadProfileFromFirestore();
+
+      setState(() {
+        _isSavingSettings = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nastavení bylo úspěšně uloženo.'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isSavingSettings = false;
+        _settingsErrorText = 'Chyba: ${e.toString()}';
+      });
+    }
   }
 
 
@@ -1081,13 +1182,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isLocalDataLoaded) {
+      final isWhiteTheme = MainShell.themeNotifier.value == 'white';
+      return Scaffold(
+        backgroundColor: isWhiteTheme ? const Color(0xFFF9FBFC) : const Color(0xFF263238),
+        body: Center(
+          child: CircularProgressIndicator(color: isWhiteTheme ? const Color(0xFF1B5E20) : const Color(0xFFBFFF00)),
+        ),
+      );
+    }
+
     final achievementItems = <Map<String, dynamic>>[];
     for (int i = 0; i < distanceMilestones.length; i++) {
       achievementItems.add({
         'title': '${distanceMilestones[i]} km',
         'unlocked': distanceAchievements[i],
         'type': 'distance',
-        'value': distanceMilestones[i],
+        'value': distanceMilestones[i].toDouble(),
         'icon': Icons.directions_walk,
       });
     }
@@ -1096,75 +1207,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'title': '${loyaltyMilestones[i]} dnů',
         'unlocked': loyaltyAchievements[i],
         'type': 'loyalty',
-        'value': loyaltyMilestones[i].toDouble(),
-        'icon': Icons.calendar_today,
+        'value': loyaltyMilestones[i] * 100.0,
+        'icon': Icons.event_available,
+      });
+    }
+    for (int i = 1; i <= 5; i++) {
+      achievementItems.add({
+        'title': 'Milník $i',
+        'unlocked': _checkpointAchievements[i - 1],
+        'type': 'story',
+        'value': 20000.0 + i,
+        'icon': Icons.terrain,
+      });
+    }
+    final stepsMilestones = [5, 10, 25, 50, 100, 365];
+    final stepsMilestonesTitles = [
+      '5 dní cíl',
+      '10 dní cíl',
+      '25 dní cíl',
+      '50 dní cíl',
+      '100 dní cíl',
+      'Roční cíl'
+    ];
+    for (int i = 0; i < stepsMilestones.length; i++) {
+      achievementItems.add({
+        'title': stepsMilestonesTitles[i],
+        'unlocked': _stepsAchievements[i],
+        'type': 'steps',
+        'value': 30000.0 + stepsMilestones[i],
+        'icon': Icons.bolt,
       });
     }
     achievementItems.add({
-      'title': 'Cesta živlů',
+      'title': 'Hrdina z příběhu',
       'unlocked': _storyAmuletCompleted,
       'type': 'story',
       'value': 99999.0,
-      'icon': Icons.auto_stories,
+      'icon': Icons.explore,
     });
     achievementItems.add({
-      'title': 'Lehká trasa',
+      'title': 'Poutník - Lehká',
       'unlocked': _storyDifficultyEasy,
-      'type': 'story_difficulty',
+      'type': 'story',
       'value': 99998.0,
-      'icon': Icons.explore,
+      'icon': Icons.child_care,
     });
     achievementItems.add({
-      'title': 'Střední trasa',
+      'title': 'Poutník - Střední',
       'unlocked': _storyDifficultyMedium,
-      'type': 'story_difficulty',
+      'type': 'story',
       'value': 99997.0,
-      'icon': Icons.explore,
+      'icon': Icons.directions_run,
     });
     achievementItems.add({
-      'title': 'Těžká trasa',
+      'title': 'Poutník - Těžká',
       'unlocked': _storyDifficultyHard,
-      'type': 'story_difficulty',
+      'type': 'story',
       'value': 99996.0,
-      'icon': Icons.explore,
+      'icon': Icons.fitness_center,
     });
     achievementItems.add({
-      'title': 'Hardcore trasa',
+      'title': 'Poutník - Hardcore',
       'unlocked': _storyDifficultyHardcore,
-      'type': 'story_difficulty',
+      'type': 'story',
       'value': 99995.0,
-      'icon': Icons.explore,
+      'icon': Icons.dangerous,
     });
-
-    final stepMilestones = [5, 10, 25, 50, 100, 365];
-    for (int i = 0; i < stepMilestones.length; i++) {
-      achievementItems.add({
-        'title': 'Svědomitý ${stepMilestones[i]} d.',
-        'unlocked': _stepsAchievements[i],
-        'type': 'steps',
-        'value': stepMilestones[i].toDouble(),
-        'icon': Icons.check_circle_outline,
-      });
-    }
-    for (int i = 0; i < 5; i++) {
-      achievementItems.add({
-        'title': 'Checkpoint ${i + 1}',
-        'unlocked': _checkpointAchievements[i],
-        'type': 'checkpoint',
-        'value': (i + 1).toDouble(),
-        'icon': Icons.location_on,
-      });
-    }
-    final friendMilestones = [1, 5, 10];
-    for (int i = 0; i < friendMilestones.length; i++) {
-      achievementItems.add({
-        'title': 'Nová krev ${friendMilestones[i]}',
-        'unlocked': _invitedFriendsCount >= friendMilestones[i],
-        'type': 'invitation',
-        'value': friendMilestones[i].toDouble(),
-        'icon': Icons.person_add,
-      });
-    }
     achievementItems.add({
       'title': 'Věrný sponzor',
       'unlocked': _hasOwnedPremium,
@@ -1205,59 +1313,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final appBarBg = isWhite ? Colors.white : const Color(0xFF1E272C);
         final appBarFg = isWhite ? const Color(0xFF263238) : Colors.white;
 
-        return Scaffold(
-          backgroundColor: bgColor,
-          appBar: AppBar(
-            title: Text(
-              'Profil',
-              style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: appBarFg),
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            backgroundColor: bgColor,
+            appBar: AppBar(
+              title: Text(
+                'Nastavení',
+                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: appBarFg),
+              ),
+              centerTitle: true,
+              backgroundColor: appBarBg,
+              foregroundColor: appBarFg,
+              elevation: 0,
+              iconTheme: IconThemeData(color: appBarFg),
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.emoji_events_outlined, color: appBarFg.withOpacity(0.7)),
+                  tooltip: 'Úspěchy',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const AchievementsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+              bottom: TabBar(
+                tabs: const [
+                  Tab(icon: Icon(Icons.person_rounded), text: 'Můj profil'),
+                  Tab(icon: Icon(Icons.tune_rounded), text: 'Nastavení'),
+                ],
+                labelColor: isWhite ? const Color(0xFF1B5E20) : const Color(0xFFBFFF00),
+                unselectedLabelColor: isWhite ? Colors.black54 : Colors.white60,
+                indicatorColor: isWhite ? const Color(0xFF1B5E20) : const Color(0xFFBFFF00),
+              ),
             ),
-            centerTitle: true,
-            backgroundColor: appBarBg,
-            foregroundColor: appBarFg,
-            elevation: 0,
-            iconTheme: IconThemeData(color: appBarFg),
-            actions: [
-              IconButton(
-                icon: Icon(Icons.settings_outlined, color: appBarFg.withOpacity(0.7)),
-                tooltip: 'Upravit profil',
-                onPressed: _showEditProfileDialog,
-              ),
-              IconButton(
-                icon: Icon(Icons.emoji_events_outlined, color: appBarFg.withOpacity(0.7)),
-                tooltip: 'Úspěchy',
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const AchievementsScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          body: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: _changeAvatar,
-                      child: Stack(
+            body: TabBarView(
+              children: [
+                // TAB 1: MŮJ PROFIL
+                SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
                         children: [
-                          CircleAvatar(
-                            radius: 70,
-                            backgroundColor: cardColor,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFFBFFF00), width: 3),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFFBFFF00).withOpacity(0.15),
+                          const SizedBox(height: 10),
+                          GestureDetector(
+                            onTap: _changeAvatar,
+                            child: Stack(
+                              children: [
+                                CircleAvatar(
+                                  radius: 70,
+                                  backgroundColor: cardColor,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: const Color(0xFFBFFF00), width: 3),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFBFFF00).withOpacity(0.15),
                                     blurRadius: 16,
                                     spreadRadius: 2,
                                   ),
@@ -1536,7 +1653,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'v1.2.3+134',
+                      'v1.2.3+148',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                     ),
                     const SizedBox(height: 20),
@@ -1545,7 +1662,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-        );
+          _buildSettingsTab(isWhite, cardColor, textColor, textSecondary, borderColor),
+        ],
+      ),
+    ),
+  );
       },
     );
   }

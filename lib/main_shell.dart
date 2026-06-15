@@ -452,9 +452,9 @@ class _MainShellState extends State<MainShell> {
                       theme: theme,
                     ),
                     _NavButton(
-                      icon: Icons.person_outline_rounded,
-                      activeIcon: Icons.person_rounded,
-                      label: 'Profil',
+                      icon: Icons.settings_outlined,
+                      activeIcon: Icons.settings_rounded,
+                      label: 'Nastavení',
                       index: 1,
                       selected: _index == 1,
                       onTap: () => setState(() => _index = 1),

@@ -39,6 +39,9 @@ class _GameScreenState extends State<GameScreen> {
     StepTrackerService().goalCompletedToday.addListener(_onGoalCompletedChange);
     _loadUserAge();
     _loadSelectedAvatar();
+    WheelOfFortuneService().syncCustomWheelsFromFirestore().then((_) {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showWidgetPromoIfNeeded();
     });
@@ -2233,8 +2236,6 @@ class _MascotWidgetState extends State<MascotWidget> with TickerProviderStateMix
 
     return Image.asset(
       'assets/images/$assetName',
-      color: widget.cardColor,
-      colorBlendMode: widget.cardColor != null ? BlendMode.multiply : null,
       fit: BoxFit.contain,
       width: 80,
       height: 80,

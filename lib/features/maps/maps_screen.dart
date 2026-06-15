@@ -110,6 +110,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   bool _showRouteSearch = false;
   late final PageController _routePageController;
   StreamSubscription<StepCount>? _stepCountSubscription;
+  StreamSubscription<QuerySnapshot>? _activeChallengeSubscription;
+  Map<String, dynamic>? _activeChallengeData;
+  String? _activeChallengeId;
 
   // Removed dummy Prague checkpoints left from testing.
   static const List<Map<String, dynamic>> _checkpoints = [];
@@ -181,6 +184,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _loadPremiumStatus();
     _loadLocationSharingPreference();
     _fetchPartners();
+    _listenToActiveChallenges();
     StepTrackerService().stepsNotifier.addListener(_updateDistanceBySteps);
     _updateDistanceBySteps();
     MapsScreen.pendingSharedRouteNotifier.addListener(_handlePendingSharedRoute);
@@ -233,6 +237,37 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         }
       });
     }
+  }
+
+  void _listenToActiveChallenges() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _activeChallengeSubscription = FirebaseFirestore.instance
+        .collection('challenges')
+        .where('participants', arrayContains: user.uid)
+        .where('status', isEqualTo: 'active')
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.docs.isNotEmpty) {
+        final doc = snapshot.docs.first;
+        if (mounted) {
+          setState(() {
+            _activeChallengeData = doc.data();
+            _activeChallengeId = doc.id;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _activeChallengeData = null;
+            _activeChallengeId = null;
+          });
+        }
+      }
+    }, onError: (err) {
+      debugPrint('Error listening to active challenges: $err');
+    });
   }
 
   Future<void> _savePersistentData() async {
@@ -402,6 +437,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _mapController?.dispose();
     _positionSubscription?.cancel();
     _friendsLocationsSubscription?.cancel();
+    _activeChallengeSubscription?.cancel();
     _destinationController.dispose();
     _routePageController.dispose();
     _stepCountSubscription?.cancel();
@@ -3233,6 +3269,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                             _activeRouteGame = null;
                           }
                         });
+                        _startRoute();
                       }
                     },
                   ),
@@ -3366,6 +3403,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                             _activeRouteGame = null;
                           }
                         });
+                        _startRoute();
                       }
                     },
                   ),
@@ -3551,102 +3589,169 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
               right: 80,
               child: GestureDetector(
                 onTap: () => setState(() => _taskCardExpanded = !_taskCardExpanded),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  height: _taskCardExpanded ? 170 : 72,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
+                child: Builder(
+                  builder: (context) {
+                    final hasActiveChallenge = _activeChallengeData != null;
+                    final IconData taskIcon;
+                    final String taskTitle;
+                    final String taskSubtitle;
+                    final bool isCompleted;
+                    final double progressValue;
+
+                    if (hasActiveChallenge) {
+                      final challenge = _activeChallengeData!;
+                      final user = FirebaseAuth.instance.currentUser;
+                      final isCreator = challenge['creatorUid'] == user?.uid;
+                      final otherPlayerName = isCreator
+                          ? challenge['opponentUsername'] as String? ?? 'Soupeř'
+                          : challenge['creatorUsername'] as String? ?? 'Soupeř';
+                      final startDistance = isCreator
+                          ? (challenge['creatorStartDistance'] as num?)?.toDouble() ?? 0.0
+                          : (challenge['opponentStartDistance'] as num?)?.toDouble() ?? 0.0;
+                      final targetKm = (challenge['targetKm'] as num?)?.toDouble() ?? 5.0;
+                      final userProgressKm = (_totalDistance - startDistance).clamp(0.0, targetKm);
+
+                      taskIcon = Icons.emoji_events_rounded;
+                      taskTitle = 'Výzva: $otherPlayerName';
+                      taskSubtitle = 'Ujít ${targetKm.toStringAsFixed(1)} km (pokrok: ${userProgressKm.toStringAsFixed(1)} / ${targetKm.toStringAsFixed(1)} km)';
+                      isCompleted = userProgressKm >= targetKm;
+                      progressValue = targetKm > 0 ? (userProgressKm / targetKm) : 0.0;
+                    } else {
+                      final stepsToday = StepTrackerService().stepsNotifier.value;
+                      final targetSteps = StepTrackerService().goalNotifier.value;
+
+                      taskIcon = Icons.directions_walk_rounded;
+                      taskTitle = 'Denní cíl kroků';
+                      taskSubtitle = 'Kroky: $stepsToday / $targetSteps';
+                      isCompleted = stepsToday >= targetSteps;
+                      progressValue = targetSteps > 0 ? (stepsToday / targetSteps).clamp(0.0, 1.0) : 0.0;
+                    }
+
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      height: _taskCardExpanded ? 180 : 72,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 16,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.directions_walk_rounded, color: Color(0xFF5C9E00), size: 26),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Úkol: Ujdi 1 km dnes',
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: const Color(0xFF263238),
+                              Row(
+                                children: [
+                                  Icon(taskIcon, color: const Color(0xFF5C9E00), size: 26),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          taskTitle,
+                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: const Color(0xFF263238),
+                                              ),
+                                        ),
+                                        if (!_taskCardExpanded) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            taskSubtitle,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.black54,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: isCompleted ? const Color(0xFF5C9E00) : const Color(0xFFE8F5E9),
+                                    child: Icon(
+                                      isCompleted ? Icons.check : Icons.timer_outlined,
+                                      color: isCompleted ? Colors.white : const Color(0xFF5C9E00),
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(_taskCardExpanded ? Icons.expand_less : Icons.expand_more, color: Colors.grey.shade600),
+                                ],
+                              ),
+                              if (_taskCardExpanded) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  taskSubtitle,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black54,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: LinearProgressIndicator(
+                                    value: progressValue,
+                                    minHeight: 8,
+                                    backgroundColor: Colors.grey.shade100,
+                                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFBFFF00)),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFBFFF00).withOpacity(0.3),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Color(0xFFD4FF00),
+                                          Color(0xFFBFFF00),
+                                        ],
                                       ),
+                                    ),
+                                    child: ElevatedButton.icon(
+                                      onPressed: _showNavigationMenu,
+                                      icon: const Icon(Icons.menu_rounded, color: Color(0xFF1B5E20)),
+                                      label: const Text('Výběr trasy', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundColor: _todayDistance >= _dailyTargetKm * 1000 ? const Color(0xFF5C9E00) : const Color(0xFFE8F5E9),
-                                child: Icon(
-                                  _todayDistance >= _dailyTargetKm * 1000 ? Icons.check : Icons.timer_outlined,
-                                  color: _todayDistance >= _dailyTargetKm * 1000 ? Colors.white : const Color(0xFF5C9E00),
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(_taskCardExpanded ? Icons.expand_less : Icons.expand_more, color: Colors.grey.shade600),
+                              ]
                             ],
                           ),
-                          if (_taskCardExpanded) ...[
-                            const SizedBox(height: 12),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: LinearProgressIndicator(
-                                value: min(_todayDistance / 1000.0 / _dailyTargetKm, 1.0),
-                                minHeight: 8,
-                                backgroundColor: Colors.grey.shade100,
-                                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFBFFF00)),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFFBFFF00).withOpacity(0.3),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFFD4FF00),
-                                      Color(0xFFBFFF00),
-                                    ],
-                                  ),
-                                ),
-                                child: ElevatedButton.icon(
-                                  onPressed: _showNavigationMenu,
-                                  icon: const Icon(Icons.menu_rounded, color: Color(0xFF1B5E20)),
-                                  label: const Text('Výběr trasy', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    shadowColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ]
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ),

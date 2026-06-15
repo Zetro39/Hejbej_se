@@ -162,7 +162,13 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
           final data = doc.data() as Map<String, dynamic>? ?? {};
           final isPremDb = data['isPremium'] as bool? ?? false;
           final tierDb = data['premiumTier'] as String?;
-          final addressDb = data['premiumShippingAddress'] as String?;
+          final rawAddress = data['premiumShippingAddress'];
+          String? addressDb;
+          if (rawAddress is Map) {
+            addressDb = rawAddress['formattedAddress'] as String?;
+          } else if (rawAddress is String) {
+            addressDb = rawAddress;
+          }
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('isPremium', isPremDb);
           if (tierDb != null) {
@@ -413,10 +419,11 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Simulated checkout bottom sheet for Premium Subscription
   void _openSimulatedPaymentSheet(double price, String tierName) {
     if (price == 500.0) {
-      final addressController = TextEditingController();
+      final streetController = TextEditingController();
+      final cityController = TextEditingController();
+      final zipController = TextEditingController();
       showDialog(
         context: context,
         builder: (context) {
@@ -424,25 +431,51 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
             backgroundColor: const Color(0xFF1E272C),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: const Text('Zadejte doručovací adresu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Pro zasílání měsíčního dárku s logem HEJBEJ potřebujeme vaši doručovací adresu v ČR.',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: addressController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'Doručovací adresa (ulice, č.p., město, PSČ)',
-                    labelStyle: TextStyle(color: Colors.white70),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white30)),
-                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFBFFF00))),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Pro zasílání měsíčního dárku s logem HEJBEJ potřebujeme vaši doručovací adresu v ČR.',
+                    style: TextStyle(color: Colors.white70, fontSize: 13),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: streetController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      labelText: 'Ulice a číslo popisné / orientační',
+                      labelStyle: TextStyle(color: Colors.white70),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white30)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFBFFF00))),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: cityController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      labelText: 'Město / obec',
+                      labelStyle: TextStyle(color: Colors.white70),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white30)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFBFFF00))),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: zipController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      labelText: 'PSČ (Směrovací číslo - 5 číslic)',
+                      labelStyle: TextStyle(color: Colors.white70),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white30)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFBFFF00))),
+                    ),
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -451,15 +484,38 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
               ),
               ElevatedButton(
                 onPressed: () {
-                  final addr = addressController.text.trim();
-                  if (addr.isEmpty) {
+                  final street = streetController.text.trim();
+                  final city = cityController.text.trim();
+                  final zip = zipController.text.replaceAll(RegExp(r'\s+'), '');
+
+                  if (street.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Zadejte prosím platnou adresu.')),
+                      const SnackBar(content: Text('Vyplňte prosím ulici a číslo popisné.')),
                     );
                     return;
                   }
+                  if (city.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Vyplňte prosím město / obec.')),
+                    );
+                    return;
+                  }
+                  if (zip.isEmpty || zip.length != 5 || int.tryParse(zip) == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Vyplňte prosím platné 5místné PSČ.')),
+                    );
+                    return;
+                  }
+
+                  final addressMap = {
+                    'street': street,
+                    'city': city,
+                    'zip': zip,
+                    'country': 'Czech Republic',
+                    'formattedAddress': '$street, $zip $city, Czech Republic'
+                  };
                   Navigator.pop(context);
-                  _launchSimulatedPayment(price, tierName, shippingAddress: addr);
+                  _launchSimulatedPayment(price, tierName, shippingAddress: addressMap);
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFFF00), foregroundColor: Colors.black),
                 child: const Text('Pokračovat k platbě'),
@@ -473,7 +529,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _launchSimulatedPayment(double price, String tierName, {String? shippingAddress}) {
+  void _launchSimulatedPayment(double price, String tierName, {dynamic shippingAddress}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -483,6 +539,13 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
           amount: price.toStringAsFixed(2),
           title: 'Podpora Hejbej se ($tierName)',
           onSuccess: () async {
+            String? formattedAddress;
+            if (shippingAddress is Map) {
+              formattedAddress = shippingAddress['formattedAddress'] as String?;
+            } else if (shippingAddress is String) {
+              formattedAddress = shippingAddress;
+            }
+
             final prefs = await SharedPreferences.getInstance();
             await prefs.setBool('isPremium', true);
             await prefs.setString('premiumTier', tierName);
@@ -490,8 +553,8 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
             if (prefs.getString('premium_start_time') == null) {
               await prefs.setString('premium_start_time', DateTime.now().toIso8601String());
             }
-            if (shippingAddress != null) {
-              await prefs.setString('premiumShippingAddress', shippingAddress);
+            if (formattedAddress != null) {
+              await prefs.setString('premiumShippingAddress', formattedAddress);
             }
 
             final user = FirebaseAuth.instance.currentUser;
@@ -512,7 +575,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
             setState(() {
               _isPremium = true;
               _premiumTier = tierName;
-              _premiumShippingAddress = shippingAddress;
+              _premiumShippingAddress = formattedAddress;
             });
             await _loadLimetkyAndCompanions();
           },
