@@ -11,7 +11,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:hejbej_se/services/route_elevation_service.dart';
 import 'package:hejbej_se/features/gamification/models/wheel_of_fortune_model.dart';
 import 'package:hejbej_se/features/gamification/services/wheel_of_fortune_service.dart';
-import 'package:firebase_ai/firebase_ai.dart';
+import 'package:firebase_ai/firebase_ai.dart' hide LatLng;
 import 'package:hejbej_se/services/remote_config_service.dart';
 
 class PlacePrediction {
