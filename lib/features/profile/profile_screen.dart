@@ -59,7 +59,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLocalDataLoaded = false;
 
   TextEditingController? _usernameController;
-  TextEditingController? _geminiApiKeyController;
   int? _tempGoal;
   String? _tempTheme;
   bool? _tempShowMapType;
@@ -94,10 +93,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _usernameController = TextEditingController(text: _username);
-    _geminiApiKeyController = TextEditingController();
     SharedPreferences.getInstance().then((prefs) {
       if (mounted) {
-        _geminiApiKeyController?.text = prefs.getString('gemini_api_key') ?? '';
         setState(() {
           _tempWalkMin = prefs.getDouble('walk_range_min') ?? 2.0;
           _tempWalkMax = prefs.getDouble('walk_range_max') ?? 5.0;
@@ -131,7 +128,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     _usernameController?.dispose();
-    _geminiApiKeyController?.dispose();
     super.dispose();
   }
 
@@ -995,56 +991,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
 
-          // CARD 5: Umělá inteligence (AI)
-          Card(
-            color: cardColor,
-            elevation: 1,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: borderColor, width: 1.2),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.psychology_outlined, color: accentColor),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Umělá inteligence (AI)',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Klíč pro generování AI tras na míru. Pokud nemáte klíč ve Firestore, můžete si zde nastavit svůj vlastní z Google AI Studio.',
-                    style: TextStyle(fontSize: 12, color: textSecondary),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _geminiApiKeyController,
-                    style: TextStyle(color: textColor),
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: 'Gemini API Klíč',
-                      labelStyle: TextStyle(color: textSecondary, fontSize: 13),
-                      prefixIcon: Icon(Icons.vpn_key_outlined, color: textSecondary),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: accentColor, width: 2),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
           // CARD 6: Preference délky tras
           Card(
             color: cardColor,
@@ -1283,7 +1229,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await prefs.setBool('show_map_style', _tempShowMapStyle ?? true);
       await prefs.setBool('show_share_location', _tempShowShareLocation ?? true);
       await prefs.setBool('show_ar_nav', _tempShowArNav ?? true);
-      await prefs.setString('gemini_api_key', _geminiApiKeyController?.text.trim() ?? '');
       await prefs.setDouble('walk_range_min', _tempWalkMin ?? 2.0);
       await prefs.setDouble('walk_range_max', _tempWalkMax ?? 5.0);
       await prefs.setDouble('bike_range_min', _tempBikeMin ?? 10.0);
