@@ -137,7 +137,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (user == null) return;
 
       try {
-        await AuthService().syncStatsFromFirestore();
+        await AuthService().syncFirestoreToLocal();
       } catch (_) {}
 
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
