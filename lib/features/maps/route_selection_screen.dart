@@ -442,7 +442,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
 
       final response = await model.generateContent([
         Content.text(prompt),
-      ]).timeout(const Duration(seconds: 10));
+      ]).timeout(const Duration(seconds: 30));
 
       final text = response.text;
       if (text != null && text.isNotEmpty) {
