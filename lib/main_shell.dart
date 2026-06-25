@@ -381,7 +381,10 @@ class _MainShellState extends State<MainShell> {
                     }
                   },
                 )
-              : _screens[_index],
+              : IndexedStack(
+                  index: _index,
+                  children: _screens,
+                ),
           bottomNavigationBar: BottomAppBar(
             elevation: 8,
             color: navBgColor,
@@ -452,9 +455,9 @@ class _MainShellState extends State<MainShell> {
                       theme: theme,
                     ),
                     _NavButton(
-                      icon: Icons.settings_outlined,
-                      activeIcon: Icons.settings_rounded,
-                      label: 'Nastavení',
+                      icon: Icons.person_outline_rounded,
+                      activeIcon: Icons.person_rounded,
+                      label: 'Profil',
                       index: 1,
                       selected: _index == 1,
                       onTap: () => setState(() => _index = 1),

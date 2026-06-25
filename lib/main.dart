@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
 import 'main_shell.dart';
 import 'services/location_service.dart';
-import 'features/auth/avatar_selection_screen.dart';
 import 'services/auth_service.dart';
 import 'features/profile/profile_creation_screen.dart';
 import 'services/notification_manager.dart';
@@ -123,7 +122,6 @@ void main() async {
   }
 
   runApp(HejbejSeApp(
-    hasSelectedAvatar: selectedAvatar != null,
     initialUserName: savedUser,
     isProfileCompleted: isProfileCompleted,
   ));
@@ -132,12 +130,10 @@ void main() async {
 class HejbejSeApp extends StatefulWidget {
   const HejbejSeApp({
     super.key,
-    required this.hasSelectedAvatar,
     this.initialUserName,
     required this.isProfileCompleted,
   });
 
-  final bool hasSelectedAvatar;
   final String? initialUserName;
   final bool isProfileCompleted;
 
@@ -282,7 +278,7 @@ class _HejbejSeAppState extends State<HejbejSeApp> {
       ],
       home: widget.initialUserName != null
           ? (widget.isProfileCompleted ? MainShell(userName: widget.initialUserName!) : const ProfileCreationScreen())
-          : (widget.hasSelectedAvatar ? const LoginScreen() : const AvatarSelectionScreen()),
+          : const LoginScreen(),
     );
   }
 }

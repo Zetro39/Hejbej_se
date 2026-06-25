@@ -729,8 +729,8 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
         else
           '${start.longitude},${start.latitude}'
       ];
-      final profile = _usingBike ? 'bicycle' : 'foot';
-      final url = Uri.parse('https://router.project-osrm.org/route/v1/$profile/${coords.join(';')}?overview=full&geometries=geojson');
+      final service = _usingBike ? 'routed-bike' : 'routed-foot';
+      final url = Uri.parse('https://routing.openstreetmap.de/$service/route/v1/driving/${coords.join(';')}?overview=full&geometries=geojson');
       final res = await http.get(url).timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {

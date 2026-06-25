@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_service.dart';
 import 'anticheat_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:home_widget/home_widget.dart';
 
 
 const String _distanceKey = 'totalDistance';
@@ -104,10 +106,26 @@ class DistanceManager {
 
     // Sync to Firestore if logged in
     final user = FirebaseAuth.instance.currentUser;
+    final streakVal = prefs.getInt('streak') ?? 0;
     if (user != null) {
       final limetky = prefs.getInt('limetkyBalance') ?? 0;
       await AuthService().updateDistanceLocal(_totalDistance, _weeklyDistance, _monthlyDistance, _yearlyDistance, limetky);
     }
+    await _syncToHomeWidget(_totalDistance, streakVal);
+  }
+
+  Future<void> _syncToHomeWidget(double totalDistance, int streak) async {
+    try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        await HomeWidget.setAppGroupId('group.com.zetro39.hejbejse');
+      }
+      await HomeWidget.saveWidgetData<double>('totalDistance', totalDistance);
+      await HomeWidget.saveWidgetData<int>('streak', streak);
+      await HomeWidget.updateWidget(
+        name: 'HejbejSeWidgetProvider',
+        androidName: 'HejbejSeWidgetProvider',
+      );
+    } catch (_) {}
   }
 
   Future<void> setDistance(double kilometers) async {
@@ -147,10 +165,12 @@ class DistanceManager {
 
     // Sync to Firestore if logged in
     final user = FirebaseAuth.instance.currentUser;
+    final streakVal = prefs.getInt('streak') ?? 0;
     if (user != null) {
       final limetky = prefs.getInt('limetkyBalance') ?? 0;
       await AuthService().updateDistanceLocal(_totalDistance, _weeklyDistance, _monthlyDistance, _yearlyDistance, limetky);
     }
+    await _syncToHomeWidget(_totalDistance, streakVal);
   }
 
   Future<void> reset() async {

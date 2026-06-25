@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../profile/distance_preference_setup_screen.dart';
+import '../profile/profile_creation_screen.dart';
 import '../../widgets/app_logo.dart';
 
 class EmailVerificationWaiting extends StatefulWidget {
@@ -83,7 +83,7 @@ class _EmailVerificationWaitingState extends State<EmailVerificationWaiting> wit
   Widget build(BuildContext context) {
     if (_verified) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const DistancePreferenceSetupScreen()));
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const ProfileCreationScreen()));
       });
     }
 
@@ -148,7 +148,7 @@ class _EmailVerificationWaitingState extends State<EmailVerificationWaiting> wit
                                 fontSize: 13.5,
                                 color: Colors.black54,
                                 height: 1.45,
-                              ),
+                                          ),
                             ),
                             const SizedBox(height: 24),
                             const Row(
@@ -203,6 +203,23 @@ class _EmailVerificationWaitingState extends State<EmailVerificationWaiting> wit
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: const Text('ODHLÁSIT SE', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () {
+                        _timer?.cancel();
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(builder: (_) => const ProfileCreationScreen()),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF5C9E00),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        'PŘESKOČIT OVĚŘENÍ (Zkušební verze)',
+                        style: TextStyle(fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
+                      ),
                     ),
                   ],
                 ),

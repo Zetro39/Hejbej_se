@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
 import '../profile/profile_creation_screen.dart';
 import '../../widgets/app_logo.dart';
-import '../../widgets/czech_kraj_map_picker.dart';
 import '../../main_shell.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -35,6 +34,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   bool _obscureConfirm = true;
   String _selectedTheme = 'grey';
   String? _selectedKraj;
+  String? _selectedGender;
 
   @override
   void dispose() {
@@ -76,8 +76,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       'phone_number': _useSmsVerification ? _phone.text.trim().replaceAll(' ', '') : null,
       'design_theme': _selectedTheme,
       'kraj': _selectedKraj,
+      'gender': _selectedGender,
       'updated_at': FieldValue.serverTimestamp(),
     };
+    
+    try {
+      if (_selectedGender != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('gender', _selectedGender!);
+      }
+    } catch (_) {}
     
     try {
       await AuthService().saveProfile(user.uid, profile)
@@ -261,7 +269,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedKraj == null) {
       setState(() {
-        _error = 'Vyberte prosím svůj kraj na mapě ČR.';
+        _error = 'Vyberte prosím svůj kraj.';
       });
       return;
     }
@@ -639,6 +647,30 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                 return null;
                               },
                             ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              value: _selectedGender,
+                              decoration: InputDecoration(
+                                labelText: 'Pohlaví (nepovinné)',
+                                labelStyle: const TextStyle(color: Colors.black54),
+                                prefixIcon: const Icon(Icons.face_outlined, color: Colors.grey),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
+                                ),
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: 'male', child: Text('Muž')),
+                                DropdownMenuItem(value: 'female', child: Text('Žena')),
+                                DropdownMenuItem(value: 'other', child: Text('Neuvedeno')),
+                              ],
+                              onChanged: (val) {
+                                setState(() {
+                                  _selectedGender = (val == 'other' ? null : val);
+                                });
+                              },
+                            ),
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 8.0),
                               child: Divider(height: 24, thickness: 1, color: Color(0xFFF1F1F1)),
@@ -651,42 +683,42 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                 fontSize: 15,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Klepnutím na mapu zvolte svůj domovský kraj:',
-                              style: TextStyle(color: Colors.black54, fontSize: 13),
-                            ),
                             const SizedBox(height: 12),
-                            CzechKrajMapPicker(
-                              selectedKraj: _selectedKraj,
-                              onKrajSelected: (kraj) {
-                                setState(() {
-                                  _selectedKraj = kraj;
-                                });
-                              },
-                              isDarkMode: false,
-                            ),
-                            if (_selectedKraj != null) ...[
-                              const SizedBox(height: 12),
-                              Center(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFBFFF00).withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFFBFFF00), width: 1.5),
-                                  ),
-                                  child: Text(
-                                    'Vybraný kraj: $_selectedKraj',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1B5E20),
-                                      fontSize: 14,
-                                    ),
-                                  ),
+                            DropdownButtonFormField<String>(
+                              value: _selectedKraj,
+                              decoration: InputDecoration(
+                                labelText: 'Vyberte svůj domovský kraj',
+                                labelStyle: const TextStyle(color: Colors.black54),
+                                prefixIcon: const Icon(Icons.map_outlined, color: Colors.grey),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: Color(0xFFBFFF00), width: 2),
                                 ),
                               ),
-                            ],
+                              validator: (v) => v == null ? 'Vyberte prosím svůj kraj' : null,
+                              items: const [
+                                DropdownMenuItem(value: 'Praha', child: Text('Hlavní město Praha')),
+                                DropdownMenuItem(value: 'Středočeský', child: Text('Středočeský kraj')),
+                                DropdownMenuItem(value: 'Jihočeský', child: Text('Jihočeský kraj')),
+                                DropdownMenuItem(value: 'Plzeňský', child: Text('Plzeňský kraj')),
+                                DropdownMenuItem(value: 'Karlovarský', child: Text('Karlovarský kraj')),
+                                DropdownMenuItem(value: 'Ústecký', child: Text('Ústecký kraj')),
+                                DropdownMenuItem(value: 'Liberecký', child: Text('Liberecký kraj')),
+                                DropdownMenuItem(value: 'Královéhradecký', child: Text('Královéhradecký kraj')),
+                                DropdownMenuItem(value: 'Pardubický', child: Text('Pardubický kraj')),
+                                DropdownMenuItem(value: 'Vysočina', child: Text('Kraj Vysočina')),
+                                DropdownMenuItem(value: 'Jihomoravský', child: Text('Jihomoravský kraj')),
+                                DropdownMenuItem(value: 'Olomoucký', child: Text('Olomoucký kraj')),
+                                DropdownMenuItem(value: 'Zlínský', child: Text('Zlínský kraj')),
+                                DropdownMenuItem(value: 'Moravskoslezský', child: Text('Moravskoslezský kraj')),
+                              ],
+                              onChanged: (val) {
+                                setState(() {
+                                  _selectedKraj = val;
+                                });
+                              },
+                            ),
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 8.0),
                               child: Divider(height: 24, thickness: 1, color: Color(0xFFF1F1F1)),

@@ -18,11 +18,20 @@ class HejbejSeWidgetProvider : HomeWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.hejbej_se_widget).apply {
                 var totalDistance = 0.0
                 try {
-                    totalDistance = widgetData.getFloat("totalDistance", 0.0f).toDouble()
+                    val rawVal = widgetData.all["totalDistance"]
+                    if (rawVal != null) {
+                        totalDistance = when (rawVal) {
+                            is Float -> rawVal.toDouble()
+                            is Double -> rawVal
+                            is Int -> rawVal.toDouble()
+                            is Long -> rawVal.toDouble()
+                            is String -> rawVal.toDoubleOrNull() ?: 0.0
+                            else -> 0.0
+                        }
+                    }
                 } catch (e: Exception) {
                     try {
-                        val strVal = widgetData.getString("totalDistance", "0.0")
-                        totalDistance = strVal?.toDouble() ?: 0.0
+                        totalDistance = widgetData.getFloat("totalDistance", 0.0f).toDouble()
                     } catch (ex: Exception) {}
                 }
 

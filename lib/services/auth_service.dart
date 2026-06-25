@@ -109,41 +109,8 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
 
   Future<bool> isBlockedDueToUnverified() async {
-    final user = _auth.currentUser;
-    if (user == null) return false;
-    
-    try {
-      await user.reload().timeout(const Duration(seconds: 4));
-    } catch (_) {}
-
-    final updatedUser = _auth.currentUser;
-    if (updatedUser == null) return false;
-    if (updatedUser.emailVerified) return false;
-
-    // Check registration date. If registered less than 1 hour ago, do not block yet
-    try {
-      final doc = await _firestore
-          .collection('users')
-          .doc(updatedUser.uid)
-          .get()
-          .timeout(const Duration(seconds: 4));
-      if (doc.exists) {
-        final data = doc.data() ?? {};
-        final regDate = data['registration_date'] as Timestamp?;
-        if (regDate != null) {
-          final regTime = regDate.toDate();
-          final diff = DateTime.now().difference(regTime);
-          if (diff.inHours < 1) {
-            return false; // grace period of 1 hour
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error checking verification blocked status: $e');
-      // If offline/error, let them pass for now instead of hard blocking
-      return false; 
-    }
-    return true; // blocked if not verified after 1 hour
+    // Disabled email verification block-wall because verification emails are not reliably delivered.
+    return false;
   }
 
   Future<void> saveProfile(String uid, Map<String, dynamic> profile) async {

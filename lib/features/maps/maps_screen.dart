@@ -12,6 +12,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:pedometer/pedometer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart' hide GeoPoint;
@@ -185,6 +186,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     _loadLocationSharingPreference();
     _fetchPartners();
     _listenToActiveChallenges();
+    _loadBreadcrumbs();
     StepTrackerService().stepsNotifier.addListener(_updateDistanceBySteps);
     _updateDistanceBySteps();
     MapsScreen.pendingSharedRouteNotifier.addListener(_handlePendingSharedRoute);
@@ -325,6 +327,76 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       });
     } catch (e) {
       debugPrint('Failed to load companion icon: $e');
+    }
+  }
+
+  Future<void> _saveBreadcrumbs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final listData = _breadcrumbsCoordinates.map((latLng) => {
+        'lat': latLng.latitude,
+        'lng': latLng.longitude,
+      }).toList();
+      await prefs.setString('breadcrumbs_date', todayStr);
+      await prefs.setString('breadcrumbs_data', jsonEncode(listData));
+    } catch (e) {
+      debugPrint('Error saving breadcrumbs: $e');
+    }
+  }
+
+  Future<void> _loadBreadcrumbs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final savedDate = prefs.getString('breadcrumbs_date');
+      if (savedDate == todayStr) {
+        final rawData = prefs.getString('breadcrumbs_data');
+        if (rawData != null) {
+          final list = jsonDecode(rawData) as List<dynamic>;
+          setState(() {
+            _breadcrumbsCoordinates.clear();
+            for (final item in list) {
+              final map = item as Map<String, dynamic>;
+              _breadcrumbsCoordinates.add(LatLng(map['lat'] as double, map['lng'] as double));
+            }
+          });
+          await _snapBreadcrumbsToRoads();
+          _updateBreadcrumbsPolyline();
+        }
+      } else {
+        await prefs.remove('breadcrumbs_date');
+        await prefs.remove('breadcrumbs_data');
+        setState(() {
+          _breadcrumbsCoordinates.clear();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading breadcrumbs: $e');
+    }
+  }
+
+  double _calculateBreadcrumbsDistance() {
+    double dist = 0.0;
+    for (int i = 1; i < _breadcrumbsCoordinates.length; i++) {
+      dist += Geolocator.distanceBetween(
+        _breadcrumbsCoordinates[i - 1].latitude,
+        _breadcrumbsCoordinates[i - 1].longitude,
+        _breadcrumbsCoordinates[i].latitude,
+        _breadcrumbsCoordinates[i].longitude,
+      );
+    }
+    return dist / 1000.0;
+  }
+
+  void _shareDailyProgress() async {
+    final km = _calculateBreadcrumbsDistance();
+    final count = _breadcrumbsCoordinates.length;
+    final text = 'Dnes jsem s mobilní aplikací Hejbej se ušel ${km.toStringAsFixed(2)} km! 🏃 Moje dnešní stopa má $count bodů. Sleduj moje pokroky a hejbni se taky! 🌟';
+    try {
+      await Share.share(text, subject: 'Moje dnešní stopa');
+    } catch (e) {
+      debugPrint('Error sharing daily progress: $e');
     }
   }
 
@@ -2708,6 +2780,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 ..clear()
                 ..addAll(snappedPoints);
             });
+            _saveBreadcrumbs();
           }
         }
       }
@@ -2770,35 +2843,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     setState(() {
       _markers.removeWhere((m) => m.markerId == userMarkerId);
       _markers.add(marker);
+      // Ensure the companion marker is removed as we decided to remove it from the map.
+      _markers.removeWhere((m) => m.markerId == const MarkerId('companion_location'));
     });
-
-    // Add companion marker if active
-    if (_activeCompanionId != null && _companionIcon != null) {
-      final companionMarkerId = const MarkerId('companion_location');
-      final compPosition = LatLng(position.latitude + 0.00006, position.longitude + 0.00006);
-      final String compName = _activeCompanionId == 'bear' ? 'Medvěd' :
-                              _activeCompanionId == 'fox' ? 'Liška' :
-                              _activeCompanionId == 'wolf' ? 'Vlk' : 'Jelen';
-      final compMarker = Marker(
-        markerId: companionMarkerId,
-        position: compPosition,
-        rotation: position.heading,
-        anchor: const Offset(0.5, 0.5),
-        icon: _companionIcon!,
-        infoWindow: InfoWindow(
-          title: compName,
-          snippet: 'Tvůj společník',
-        ),
-      );
-      setState(() {
-        _markers.removeWhere((m) => m.markerId == companionMarkerId);
-        _markers.add(compMarker);
-      });
-    } else {
-      setState(() {
-        _markers.removeWhere((m) => m.markerId == const MarkerId('companion_location'));
-      });
-    }
   }
 
   double _calculatePolylineDistance() {
@@ -2914,6 +2961,13 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
     _positionSubscription = _positionStream.listen((position) async {
       if (!mounted) return;
+
+      // Ignore inaccurate position updates
+      if (position.accuracy > 20.0) {
+        debugPrint('Ignoring inaccurate position update: accuracy=${position.accuracy}');
+        return;
+      }
+
       final newPoint = LatLng(position.latitude, position.longitude);
 
       // Sync position to Firestore for friends location map tracking
@@ -2968,6 +3022,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         setState(() {
           _breadcrumbsCoordinates.add(newPoint);
         });
+        await _saveBreadcrumbs();
         _snapBreadcrumbsToRoads();
         _updateBreadcrumbsPolyline();
       }
@@ -3586,7 +3641,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
             Positioned(
               top: topPadding + 12,
               left: 16,
-              right: 80,
+              right: 136,
               child: GestureDetector(
                 onTap: () => setState(() => _taskCardExpanded = !_taskCardExpanded),
                 child: Builder(
@@ -4182,6 +4237,30 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                     child: const Icon(Icons.remove_red_eye, size: 28),
                   ),
               ],
+            ),
+          ),
+          // Top Share Button
+          Positioned(
+            top: topPadding + 16,
+            right: 76,
+            child: GestureDetector(
+              onTap: _shareDailyProgress,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.share, color: Colors.lightBlue, size: 26),
+              ),
             ),
           ),
           // Top Notification Bell Button

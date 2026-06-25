@@ -112,7 +112,15 @@ class _GameScreenState extends State<GameScreen> {
     final shown = prefs.getBool('widget_setup_prompt_shown') ?? false;
     if (shown) return;
 
+    final lastShownMs = prefs.getInt('widget_promo_last_shown_time') ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - lastShownMs < 24 * 60 * 60 * 1000) {
+      return;
+    }
+
     if (!mounted) return;
+
+    await prefs.setInt('widget_promo_last_shown_time', now);
 
     showDialog(
       context: context,
@@ -180,6 +188,15 @@ class _GameScreenState extends State<GameScreen> {
               Navigator.pop(context);
             },
             child: const Text('Připomenout později', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () async {
+              await prefs.setBool('widget_setup_prompt_shown', true);
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Už nezobrazovat', style: TextStyle(color: Colors.redAccent)),
           ),
           ElevatedButton(
             onPressed: () async {

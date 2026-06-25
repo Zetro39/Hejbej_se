@@ -430,6 +430,136 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _toggleStreakFreezeWithDialogue() async {
+    if (!isStreakFrozen) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Row(
+            children: [
+              Icon(Icons.ac_unit_rounded, color: Colors.blueAccent),
+              SizedBox(width: 8),
+              Text('Zmrazit sérii', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'Chceš si zmrazit svou sérii na dnešek za 10 limetek? 🍋\n\nTato ochrana zajistí, že pokud dnes nesplníš svůj cíl, o svou sérii nepřijdeš.',
+            style: TextStyle(fontSize: 15, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Zrušit', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                if (limetkyBalance >= 10) {
+                  setState(() {
+                    limetkyBalance -= 10;
+                    isStreakFrozen = true;
+                  });
+                  await _saveData();
+                  
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+                      'limetky': limetkyBalance,
+                      'isStreakFrozen': true,
+                    });
+                  }
+                  
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Série byla zmrazena za 10 limetek! ❄️'),
+                        backgroundColor: Colors.blueAccent,
+                      ),
+                    );
+                  }
+                } else {
+                  if (mounted) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                        title: const Text('Nedostatek limetek 🍋', style: TextStyle(fontWeight: FontWeight.bold)),
+                        content: const Text('K zakoupení zmrazení série potřebuješ alespoň 10 limetek. Pokračuj v chůzi a sbírej body!'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Koupit za 10 🍋', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Row(
+            children: [
+              Icon(Icons.wb_sunny_rounded, color: Colors.orangeAccent),
+              SizedBox(width: 8),
+              Text('Rozmrazit sérii', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text('Chceš rozmrazit svou sérii? (Bude to zdarma, ale limetky za zmrazení se nevrací).'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Zrušit', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                setState(() {
+                  isStreakFrozen = false;
+                });
+                await _saveData();
+                final user = FirebaseAuth.instance.currentUser;
+                if (user != null) {
+                  await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+                    'isStreakFrozen': false,
+                  });
+                }
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Série byla rozmrazena.'),
+                      backgroundColor: Colors.orangeAccent,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orangeAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Rozmrazit', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   void _updateAchievements() {
     // Update distance achievements
     for (int i = 0; i < distanceMilestones.length; i++) {
@@ -506,254 +636,342 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     _tempGoal ??= _dailyStepsGoal;
     _tempTheme ??= MainShell.themeNotifier.value;
+    final accentColor = isWhite ? const Color(0xFF1B5E20) : const Color(0xFFBFFF00);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
-      child: Card(
-        color: cardColor,
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: borderColor, width: 1.5),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Osobní údaje',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF5C9E00)),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: TextEditingController(text: _firstName),
-                style: TextStyle(color: textColor),
-                decoration: InputDecoration(
-                  labelText: 'Jméno (nelze měnit)',
-                  labelStyle: TextStyle(color: textSecondary),
-                  prefixIcon: Icon(Icons.person_outline, color: textSecondary),
-                  border: const OutlineInputBorder(),
-                ),
-                enabled: false,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: TextEditingController(text: _lastName),
-                style: TextStyle(color: textColor),
-                decoration: InputDecoration(
-                  labelText: 'Příjmení (nelze měnit)',
-                  labelStyle: TextStyle(color: textSecondary),
-                  prefixIcon: Icon(Icons.person_outline, color: textSecondary),
-                  border: const OutlineInputBorder(),
-                ),
-                enabled: false,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _usernameController,
-                style: TextStyle(color: textColor),
-                decoration: InputDecoration(
-                  labelText: 'Herní přezdívka',
-                  labelStyle: TextStyle(color: textSecondary),
-                  prefixIcon: Icon(Icons.alternate_email, color: textSecondary),
-                  errorText: _settingsErrorText,
-                  helperText: helperText,
-                  helperStyle: TextStyle(color: textSecondary, fontSize: 11),
-                  border: const OutlineInputBorder(),
-                ),
-                enabled: canChangeUsername || inGracePeriod,
-              ),
-              const SizedBox(height: 24),
-              const Divider(color: Colors.white10),
-              const SizedBox(height: 12),
-              Text(
-                '🎯 Denní cíl kroků: ${_tempGoal.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} ")}',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
-              ),
-              Slider(
-                value: _tempGoal!.toDouble(),
-                min: 1000.0,
-                max: 30000.0,
-                divisions: 29,
-                activeColor: Colors.lightBlue,
-                inactiveColor: Colors.lightBlue.shade100,
-                onChanged: (v) {
-                  setState(() {
-                    _tempGoal = v.toInt();
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              const Divider(color: Colors.white10),
-              const SizedBox(height: 12),
-              Text(
-                '🌓 Vzhled aplikace',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
-              ),
-              const SizedBox(height: 12),
-              Row(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // CARD 1: Osobní údaje
+          Card(
+            color: cardColor,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: borderColor, width: 1.2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _tempTheme = 'grey';
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF263238),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _tempTheme == 'grey' ? const Color(0xFFBFFF00) : Colors.transparent,
-                            width: 2.5,
-                          ),
-                        ),
-                        child: Column(
-                          children: const [
-                            Icon(Icons.dark_mode_rounded, color: Colors.white, size: 22),
-                            SizedBox(height: 6),
-                            Text(
-                              'Šedá',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
+                  Row(
+                    children: [
+                      Icon(Icons.person_outline_rounded, color: accentColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Osobní údaje',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
                       ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _tempTheme = 'white';
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9FBFC),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _tempTheme == 'white' ? const Color(0xFFBFFF00) : Colors.grey.shade300,
-                            width: 2.5,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(Icons.light_mode_rounded, color: Colors.amber.shade700, size: 22),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Bílá',
-                              style: TextStyle(
-                                color: const Color(0xFF263238),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: TextEditingController(text: _firstName),
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      labelText: 'Jméno (nelze měnit)',
+                      labelStyle: TextStyle(color: textSecondary, fontSize: 13),
+                      prefixIcon: Icon(Icons.person, color: textSecondary),
+                      filled: true,
+                      fillColor: Colors.black.withOpacity(0.02),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                    enabled: false,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: TextEditingController(text: _lastName),
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      labelText: 'Příjmení (nelze měnit)',
+                      labelStyle: TextStyle(color: textSecondary, fontSize: 13),
+                      prefixIcon: Icon(Icons.person, color: textSecondary),
+                      filled: true,
+                      fillColor: Colors.black.withOpacity(0.02),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    enabled: false,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _usernameController,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      labelText: 'Herní přezdívka',
+                      labelStyle: TextStyle(color: textSecondary, fontSize: 13),
+                      prefixIcon: Icon(Icons.alternate_email, color: textSecondary),
+                      errorText: _settingsErrorText,
+                      helperText: helperText,
+                      helperStyle: TextStyle(color: textSecondary, fontSize: 11),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    enabled: canChangeUsername || inGracePeriod,
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              const Divider(color: Colors.white10),
-              const SizedBox(height: 12),
-              Text(
-                '🗺️ Zobrazení tlačítek na mapě',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
-              ),
-              const SizedBox(height: 8),
-              CheckboxListTile(
-                title: Text('Vrstvy mapy', style: TextStyle(fontSize: 14, color: textColor)),
-                value: _tempShowMapType ?? true,
-                activeColor: Colors.lightBlue,
-                onChanged: (val) {
-                  setState(() {
-                    _tempShowMapType = val ?? true;
-                  });
-                },
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-              ),
-              CheckboxListTile(
-                title: Text('Styl mapy (Světlý/Tmavý)', style: TextStyle(fontSize: 14, color: textColor)),
-                value: _tempShowMapStyle ?? true,
-                activeColor: Colors.lightBlue,
-                onChanged: (val) {
-                  setState(() {
-                    _tempShowMapStyle = val ?? true;
-                  });
-                },
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-              ),
-              CheckboxListTile(
-                title: Text('Sdílení polohy', style: TextStyle(fontSize: 14, color: textColor)),
-                value: _tempShowShareLocation ?? true,
-                activeColor: Colors.lightBlue,
-                onChanged: (val) {
-                  setState(() {
-                    _tempShowShareLocation = val ?? true;
-                  });
-                },
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-              ),
-              CheckboxListTile(
-                title: Text('AR navigace', style: TextStyle(fontSize: 14, color: textColor)),
-                value: _tempShowArNav ?? true,
-                activeColor: Colors.lightBlue,
-                onChanged: (val) {
-                  setState(() {
-                    _tempShowArNav = val ?? true;
-                  });
-                },
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-              ),
-              const SizedBox(height: 24),
-              if (_isSavingSettings) ...[
-                const Center(child: CircularProgressIndicator(color: Colors.lightBlue)),
-                const SizedBox(height: 16),
-              ],
-              ElevatedButton(
-                onPressed: _isSavingSettings ? null : _saveSettingsForm,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFBFFF00),
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: const Text('ULOŽIT ZMĚNY', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: _logout,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.redAccent,
-                  side: const BorderSide(color: Colors.redAccent),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: const Text('ODHLÁSIT SE', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 16),
+
+          // CARD 2: Krokový cíl
+          Card(
+            color: cardColor,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: borderColor, width: 1.2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.directions_walk_rounded, color: accentColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Denní aktivita',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '🎯 Denní cíl kroků: ${_tempGoal.toString().replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]} ")}',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
+                  ),
+                  const SizedBox(height: 8),
+                  Slider(
+                    value: _tempGoal!.toDouble(),
+                    min: 1000.0,
+                    max: 30000.0,
+                    divisions: 29,
+                    activeColor: isWhite ? const Color(0xFF1B5E20) : const Color(0xFFBFFF00),
+                    inactiveColor: isWhite ? Colors.green.shade100 : Colors.green.shade900,
+                    onChanged: (v) {
+                      setState(() {
+                        _tempGoal = v.toInt();
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // CARD 3: Vzhled aplikace
+          Card(
+            color: cardColor,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: borderColor, width: 1.2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.palette_outlined, color: accentColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Vzhled aplikace',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _tempTheme = 'grey';
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF263238),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _tempTheme == 'grey' ? const Color(0xFFBFFF00) : Colors.transparent,
+                                width: 2.5,
+                              ),
+                            ),
+                            child: Column(
+                              children: const [
+                                Icon(Icons.dark_mode_rounded, color: Colors.white, size: 22),
+                                SizedBox(height: 6),
+                                Text(
+                                  'Šedá',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _tempTheme = 'white';
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF9FBFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _tempTheme == 'white' ? const Color(0xFFBFFF00) : Colors.grey.shade300,
+                                width: 2.5,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(Icons.light_mode_rounded, color: Colors.amber.shade700, size: 22),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Bílá',
+                                  style: TextStyle(
+                                    color: const Color(0xFF263238),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // CARD 4: Nastavení mapy
+          Card(
+            color: cardColor,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: borderColor, width: 1.2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.map_outlined, color: accentColor),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Nastavení mapy',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SwitchListTile(
+                    title: Text('Vrstvy mapy', style: TextStyle(fontSize: 14, color: textColor)),
+                    value: _tempShowMapType ?? true,
+                    activeColor: accentColor,
+                    onChanged: (val) {
+                      setState(() {
+                        _tempShowMapType = val;
+                      });
+                    },
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  SwitchListTile(
+                    title: Text('Styl mapy (Světlý/Tmavý)', style: TextStyle(fontSize: 14, color: textColor)),
+                    value: _tempShowMapStyle ?? true,
+                    activeColor: accentColor,
+                    onChanged: (val) {
+                      setState(() {
+                        _tempShowMapStyle = val;
+                      });
+                    },
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  SwitchListTile(
+                    title: Text('Sdílení polohy s přáteli', style: TextStyle(fontSize: 14, color: textColor)),
+                    value: _tempShowShareLocation ?? true,
+                    activeColor: accentColor,
+                    onChanged: (val) {
+                      setState(() {
+                        _tempShowShareLocation = val;
+                      });
+                    },
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  SwitchListTile(
+                    title: Text('AR navigace', style: TextStyle(fontSize: 14, color: textColor)),
+                    value: _tempShowArNav ?? true,
+                    activeColor: accentColor,
+                    onChanged: (val) {
+                      setState(() {
+                        _tempShowArNav = val;
+                      });
+                    },
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          if (_isSavingSettings) ...[
+            Center(child: CircularProgressIndicator(color: accentColor)),
+            const SizedBox(height: 16),
+          ],
+
+          ElevatedButton(
+            onPressed: _isSavingSettings ? null : _saveSettingsForm,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFBFFF00),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 2,
+            ),
+            child: const Text('ULOŽIT ZMĚNY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.5)),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: _logout,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.redAccent,
+              side: const BorderSide(color: Colors.redAccent, width: 1.5),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            child: const Text('ODHLÁSIT SE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          ),
+          const SizedBox(height: 80),
+        ],
       ),
     );
   }
@@ -1319,7 +1537,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             backgroundColor: bgColor,
             appBar: AppBar(
               title: Text(
-                'Nastavení',
+                'Profil',
                 style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5, color: appBarFg),
               ),
               centerTitle: true,
@@ -1404,7 +1622,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                           Positioned(
-                            bottom: 0,
+                            top: 0,
                             right: 4,
                             child: Container(
                               padding: const EdgeInsets.all(8),
@@ -1422,6 +1640,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF1B5E20)),
                             ),
                           ),
+                          if (_activeCompanion != null)
+                            Positioned(
+                              bottom: 0,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: cardColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0xFFBFFF00), width: 2),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Image.asset(
+                                  'assets/images/$_activeCompanion.png',
+                                  width: 24,
+                                  height: 24,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -1485,23 +1728,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   ],
                                 ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      'SÉRIE 🔥',
-                                      style: TextStyle(fontSize: 12, color: textMuted, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '$streak dnů',
-                                      style: TextStyle(
-                                        fontSize: 26,
-                                        fontWeight: FontWeight.bold,
-                                        color: textColor,
+                                GestureDetector(
+                                  onTap: _toggleStreakFreezeWithDialogue,
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        isStreakFrozen ? 'ZMRAZENO ❄️' : 'SÉRIE 🔥',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isStreakFrozen ? Colors.blueAccent : textMuted,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 0.5,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '$streak dnů',
+                                        style: TextStyle(
+                                          fontSize: 26,
+                                          fontWeight: FontWeight.bold,
+                                          color: isStreakFrozen ? Colors.blueAccent : textColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -1509,13 +1761,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const SizedBox(height: 12),
                               Divider(height: 1, color: borderColor),
                               const SizedBox(height: 12),
-                              const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.ac_unit_rounded, color: Colors.blueAccent, size: 18),
-                                  SizedBox(width: 8),
-                                  Text('Streak je momentálně zmrazený', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w600, fontSize: 13)),
-                                ],
+                              GestureDetector(
+                                onTap: _toggleStreakFreezeWithDialogue,
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.ac_unit_rounded, color: Colors.blueAccent, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Streak je momentálně zmrazený', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w600, fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                            ] else ...[
+                              const SizedBox(height: 12),
+                              Divider(height: 1, color: borderColor),
+                              const SizedBox(height: 12),
+                              GestureDetector(
+                                onTap: _toggleStreakFreezeWithDialogue,
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.ac_unit_outlined, color: Colors.grey, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Zmrazit sérii na dnes (10 limetek 🍋)', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 13)),
+                                  ],
+                                ),
                               ),
                             ],
                           ],
@@ -1653,7 +1923,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'v1.2.3+148',
+                      'v1.2.3+149',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                     ),
                     const SizedBox(height: 20),

@@ -78,6 +78,7 @@ class FriendProfileScreen extends StatelessWidget {
               final premiumTier = data['premiumTier'] as String?;
 
               final avatar = data['selected_avatar'] as String?;
+              final activeCompanion = data['selected_companion'] as String?;
               final birthDateTs = data['birth_date'] as Timestamp?;
               
               String ageText = 'Věk: neuveden';
@@ -149,64 +150,93 @@ class FriendProfileScreen extends StatelessWidget {
                   children: [
                     // Avatar container with Neon Lime glowing border
                     Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isPremium
-                                ? (premiumTier == '500' ? Colors.pinkAccent :
-                                   premiumTier == '100' ? Colors.cyanAccent :
-                                   premiumTier == '50' ? Colors.amberAccent :
-                                   const Color(0xFFBFFF00))
-                                : const Color(0xFFBFFF00),
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (isPremium
-                                  ? (premiumTier == '500' ? Colors.pinkAccent :
-                                     premiumTier == '100' ? Colors.cyanAccent :
-                                     premiumTier == '50' ? Colors.amberAccent :
-                                     const Color(0xFFBFFF00))
-                                  : const Color(0xFFBFFF00)).withOpacity(0.15),
-                              blurRadius: 16,
-                              spreadRadius: 2,
+                      child: Stack(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isPremium
+                                    ? (premiumTier == '500' ? Colors.pinkAccent :
+                                       premiumTier == '100' ? Colors.cyanAccent :
+                                       premiumTier == '50' ? Colors.amberAccent :
+                                       const Color(0xFFBFFF00))
+                                    : const Color(0xFFBFFF00),
+                                width: 3,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: (isPremium
+                                      ? (premiumTier == '500' ? Colors.pinkAccent :
+                                         premiumTier == '100' ? Colors.cyanAccent :
+                                         premiumTier == '50' ? Colors.amberAccent :
+                                         const Color(0xFFBFFF00))
+                                      : const Color(0xFFBFFF00)).withOpacity(0.15),
+                                  blurRadius: 16,
+                                  spreadRadius: 2,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 64,
-                          backgroundColor: cardColor,
-                          child: ClipOval(
-                            child: avatar != null
-                                ? (avatar.startsWith('base64:')
-                                    ? Image.memory(
-                                        base64Decode(avatar.substring(7)),
-                                        fit: BoxFit.cover,
-                                        width: 128,
-                                        height: 128,
-                                      )
-                                    : Image.asset(
-                                        'assets/images/$avatar.png',
-                                        fit: BoxFit.cover,
-                                        width: 128,
-                                        height: 128,
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return Icon(
-                                            Icons.person,
-                                            size: 80,
-                                            color: textSecondary,
-                                          );
-                                        },
-                                      ))
-                                : Icon(
-                                    Icons.person,
-                                    size: 80,
-                                    color: textSecondary,
-                                  ),
+                            child: CircleAvatar(
+                              radius: 64,
+                              backgroundColor: cardColor,
+                              child: ClipOval(
+                                child: avatar != null
+                                    ? (avatar.startsWith('base64:')
+                                        ? Image.memory(
+                                            base64Decode(avatar.substring(7)),
+                                            fit: BoxFit.cover,
+                                            width: 128,
+                                            height: 128,
+                                          )
+                                        : Image.asset(
+                                            'assets/images/$avatar.png',
+                                            fit: BoxFit.cover,
+                                            width: 128,
+                                            height: 128,
+                                            errorBuilder: (context, error, stackTrace) {
+                                              return Icon(
+                                                Icons.person,
+                                                size: 80,
+                                                color: textSecondary,
+                                              );
+                                            },
+                                          ))
+                                    : Icon(
+                                        Icons.person,
+                                        size: 80,
+                                        color: textSecondary,
+                                      ),
+                              ),
+                            ),
                           ),
-                        ),
+                          if (activeCompanion != null)
+                            Positioned(
+                              bottom: 0,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: cardColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0xFFBFFF00), width: 2),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Image.asset(
+                                  'assets/images/$activeCompanion.png',
+                                  width: 24,
+                                  height: 24,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     
