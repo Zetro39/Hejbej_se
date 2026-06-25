@@ -4028,6 +4028,15 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                       ),
               ),
             ),
+          if (!_isPremium && !_routeActive)
+            Positioned(
+              bottom: bottomOffset + 68,
+              left: 20,
+              right: 96,
+              child: _SimulatedAdBanner(
+                onUpgrade: _showPaywall,
+              ),
+            ),
           if (!_routeActive)
             Positioned(
               bottom: bottomOffset,
@@ -5023,6 +5032,110 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
           },
         );
       },
+    );
+  }
+}
+
+class _SimulatedAdBanner extends StatelessWidget {
+  const _SimulatedAdBanner({required this.onUpgrade});
+  final VoidCallback onUpgrade;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      decoration: BoxDecoration(
+        color: const Color(0xFF263238),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black38,
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -10,
+              top: -10,
+              child: Icon(
+                Icons.campaign_outlined,
+                size: 70,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'AD',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Alpine Pro: Sleva 20% s kódem HEJBEJSE20',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'Vybavení na turistiku a outdoorové aktivity.',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 10,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: onUpgrade,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Bez reklam',
+                      style: TextStyle(
+                        color: const Color(0xFFBFFF00),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

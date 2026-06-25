@@ -13,6 +13,7 @@ import 'package:hejbej_se/features/gamification/models/wheel_of_fortune_model.da
 import 'package:hejbej_se/features/gamification/services/wheel_of_fortune_service.dart';
 import 'package:firebase_ai/firebase_ai.dart' hide LatLng;
 import 'package:hejbej_se/services/remote_config_service.dart';
+import 'package:hejbej_se/features/shop/shop_screen.dart';
 
 class PlacePrediction {
   final String description;
@@ -66,6 +67,9 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
   double _selectedTargetKm = 8.0;
   MapType _mapType = MapType.normal;
   bool _isPremium = false;
+  bool _showSimulatedAd = false;
+  int _adCountdown = 10;
+  Timer? _adTimer;
 
   // Hover elevation states
   double? _hoverFraction;
@@ -130,6 +134,7 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
     _pageController.dispose();
     _searchController.dispose();
     _debounceTimer?.cancel();
+    _adTimer?.cancel();
     super.dispose();
   }
 
@@ -357,6 +362,82 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
       return;
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    final isPremium = prefs.getBool('isPremium') ?? false;
+    setState(() {
+      _isPremium = isPremium;
+    });
+
+    if (!isPremium) {
+      final todayStr = DateTime.now().toLocal().toString().substring(0, 10);
+      final lastGenDate = prefs.getString('last_route_generation_date');
+      if (lastGenDate == todayStr) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: const Color(0xFF263238),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Row(
+                children: [
+                  Icon(Icons.lock_clock, color: Colors.amber, size: 28),
+                  SizedBox(width: 10),
+                  Text('Limit vyčerpán', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: const Text(
+                'Jako neprémiový uživatel můžete generovat trasy pouze jednou denně. Pro neomezené generování a odstranění reklam si aktivujte Premium!',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Zavřít', style: TextStyle(color: Colors.white70)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.lime,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ShopScreen()),
+                    );
+                  },
+                  child: const Text('Koupit Premium', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      // Start full-screen loading ad countdown
+      setState(() {
+        _showSimulatedAd = true;
+        _adCountdown = 10;
+      });
+      _adTimer?.cancel();
+      _adTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          if (_adCountdown > 1) {
+            _adCountdown--;
+          } else {
+            _adCountdown = 0;
+            timer.cancel();
+          }
+        });
+      });
+    }
+
     setState(() {
       _isLoadingRouteOptions = true;
       _routeOptions.clear();
@@ -367,7 +448,7 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
       _hoverElevationIndex = null;
     });
 
-    final int count = _isPremium ? 10 : 5;
+    final int count = _isPremium ? 10 : 3;
 
     // 1. Try Gemini generation using Firebase AI SDK
     String? aiError;
@@ -381,7 +462,8 @@ Máš za úkol navrhnout 3 různé pěší/cyklistické trasy v České republic
 Aktivita je ${_usingBike ? 'cyklistika' : 'pěší chůze/běh'}.
 Vygeneruj přesně 3 různé alternativní trasy.
 Pro každou trasu navrhni 2 až 3 klíčové body (waypoints) mezi startem a cílem tak, aby každá trasa vedla jinudy (např. jedna nejkratší, druhá přes park/les, třetí kolem historických památek nebo vyhlídek). Body musí ležet geograficky rozumně na cestě mezi startem a cílem.
-Zkus zjistit, zda trasa nebo její část vede po nějaké oficiální turistické značce KČT (červená, modrá, zelená, žlutá) nebo po očíslované cyklotrase, a uveď to.
+Nezadávej body na stejné silnici tam a zpět.
+DŮLEŽITÉ UPOZORNĚNÍ: Nikdy si nevymýšlej turistické značení KČT ani čísla cyklotras. Pole "kct_color" a "cyklo_number" vyplň hodnotou null, pokud si nejsi 100% jistý z reálných mapových dat, že tam ta značka/cyklotrasa skutečně existuje. Raději uveď null než nepravdivý údaj.
 U každé trasy navrhni jednu zajímavou kvízovou otázku týkající se historie, geografie nebo zajímavostí okolí trasy (se zaručenou faktickou správností).
 
 Odpověz VÝHRADNĚ ve formátu JSON jako pole objektů s tímto schématem:
@@ -410,8 +492,9 @@ Typ okolí je ${_isUrban ? 'město' : 'vesnice/příroda'}.
 Cílová délka je ${_selectedTargetKm.toInt()} km.
 Aktivita je ${_usingBike ? 'cyklistika' : 'pěší chůze/běh'}.
 Vygeneruj přesně $count různých okruhů.
-Pro každý okruh navrhni 3 klíčové body (waypoints) mezi startem a cílem tak, aby vytvořily smyčku o celkové délce zhruba ${_selectedTargetKm.toInt()} km. Tyto body must být v okruhu maximálně ${_selectedTargetKm / 2} km od startu.
-Zkus zjistit, zda trasa nebo její část vede po nějaké oficiální turistické značce KČT (červená, modrá, zelená, žlutá) nebo po očíslované cyklotrase, a uveď to.
+Pro každý okruh navrhni 3 klíčové body (waypoints) tak, aby vytvořily geometrický okruh (trojúhelník nebo kruh) okolo startu o celkové délce zhruba ${_selectedTargetKm.toInt()} km. Tyto body musí být v okruhu maximálně ${_selectedTargetKm / 2} km od startu.
+DŮLEŽITÉ: Body musí mít odlišné směry (úhly) od startu (např. první bod na severozápad, druhý na severovýchod, třetí na jihovýchod), aby se trasa nevracela po stejné ulici zpět. Nesmí jít o tam-a-zpět trasu na jedné cestě!
+DŮLEŽITÉ UPOZORNĚNÍ: Nikdy si nevymýšlej turistické značení KČT ani čísla cyklotras. Pole "kct_color" a "cyklo_number" vyplň hodnotou null, pokud si nejsi 100% jistý z reálných mapových dat, že tam ta značka/cyklotrasa skutečně existuje. Raději uveď null než nepravdivý údaj.
 U každé trasy navrhni jednu zajímavou kvízovou otázku týkající se historie, geografie nebo zajímavostí okolí trasy (se zaručenou faktickou správností).
 
 Odpověz VÝHRADNĚ ve formátu JSON jako pole objektů s tímto schématem:
@@ -471,9 +554,33 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
             wps.addAll(wpsRaw);
           } else {
             final double targetWpDistance = _selectedTargetKm / 3.2; // Optimized loop distance
+            final List<double> rawBearings = wpsRaw.map((wp) => _bearingBetween(widget.startLocation, wp)).toList();
+            
+            bool tooClose = false;
+            if (rawBearings.length == 3) {
+              final diff01 = _angularDifference(rawBearings[0], rawBearings[1]);
+              final diff12 = _angularDifference(rawBearings[1], rawBearings[2]);
+              final diff20 = _angularDifference(rawBearings[2], rawBearings[0]);
+              if (diff01 < 40.0 || diff12 < 40.0 || diff20 < 40.0) {
+                tooClose = true;
+              }
+            }
+            
             for (int wIdx = 0; wIdx < wpsRaw.length; wIdx++) {
               final wp = wpsRaw[wIdx];
-              final bearing = _bearingBetween(widget.startLocation, wp);
+              double bearing = _bearingBetween(widget.startLocation, wp);
+              
+              if (tooClose && wpsRaw.length == 3) {
+                final double baseBearing = rawBearings[1];
+                if (wIdx == 0) {
+                  bearing = baseBearing - 60.0;
+                } else if (wIdx == 1) {
+                  bearing = baseBearing;
+                } else if (wIdx == 2) {
+                  bearing = baseBearing + 60.0;
+                }
+              }
+              
               final double factor = (wIdx == 1) ? 1.4 : 0.85;
               final scaledWp = _destinationFromDistanceBearing(
                 widget.startLocation,
@@ -505,6 +612,10 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
         }
 
         if (options.isNotEmpty) {
+          if (!_isPremium) {
+            final todayStr = DateTime.now().toLocal().toString().substring(0, 10);
+            await prefs.setString('last_route_generation_date', todayStr);
+          }
           setState(() {
             _routeOptions = options;
             _isLoadingRouteOptions = false;
@@ -572,6 +683,10 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
         },
       ];
 
+      if (!_isPremium) {
+        final todayStr = DateTime.now().toLocal().toString().substring(0, 10);
+        await prefs.setString('last_route_generation_date', todayStr);
+      }
       setState(() {
         _routeOptions = options;
         _isLoadingRouteOptions = false;
@@ -632,6 +747,10 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
       });
     }
 
+    if (!_isPremium) {
+      final todayStr = DateTime.now().toLocal().toString().substring(0, 10);
+      await prefs.setString('last_route_generation_date', todayStr);
+    }
     setState(() {
       _routeOptions = options;
       _isLoadingRouteOptions = false;
@@ -1353,28 +1472,45 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       // Header with Title & Badge
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              option['title'] as String,
-                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF263238)),
-                                              overflow: TextOverflow.ellipsis,
+                                      GestureDetector(
+                                        onTap: () => _showRouteDetailsDialog(option),
+                                        behavior: HitTestBehavior.opaque,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      option['title'] as String,
+                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF263238)),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  const Icon(Icons.info_outline, size: 16, color: Colors.black45),
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          if (kctColor != null) _buildKctBadge(kctColor),
-                                          if (cykloNum != null) _buildCykloBadge(cykloNum),
-                                        ],
+                                            const SizedBox(width: 8),
+                                            if (kctColor != null) _buildKctBadge(kctColor),
+                                            if (cykloNum != null) _buildCykloBadge(cykloNum),
+                                          ],
+                                        ),
                                       ),
                                       const SizedBox(height: 4),
                                       // Description
-                                      Text(
-                                        option['description'] as String,
-                                        style: const TextStyle(color: Colors.black54, fontSize: 12),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
+                                      GestureDetector(
+                                        onTap: () => _showRouteDetailsDialog(option),
+                                        behavior: HitTestBehavior.opaque,
+                                        child: Text(
+                                          option['description'] as String,
+                                          style: const TextStyle(color: Colors.black54, fontSize: 12),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                       const SizedBox(height: 8),
                                       // Row of statistics (distance, ETA, weather, surface)
@@ -1549,6 +1685,200 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
                 ),
               ),
             ),
+          if (!_isPremium && _routeOptions.isNotEmpty)
+            Positioned(
+              bottom: 295,
+              left: 16,
+              right: 16,
+              child: _SimulatedAdBanner(
+                onUpgrade: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ShopScreen()),
+                  );
+                },
+              ),
+            ),
+          if (_showSimulatedAd)
+            Positioned.fill(
+              child: Container(
+                color: const Color(0xFF161C20),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.amber,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'REKLAMA',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                            ),
+                            if (_adCountdown > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black45,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: Colors.white24),
+                                ),
+                                child: Text(
+                                  'Přeskočit za $_adCountdown s',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
+                              )
+                            else
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFBFFF00),
+                                  foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _showSimulatedAd = false;
+                                  });
+                                },
+                                icon: const Icon(Icons.close, size: 18),
+                                label: const Text('ZAVŘÍT REKLAMU', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Center(
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 400),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF263238),
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(color: Colors.lime.withOpacity(0.3), width: 2),
+                              boxShadow: const [
+                                BoxShadow(color: Colors.black54, blurRadius: 20, offset: Offset(0, 10)),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(28),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF1B5E20),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.campaign_rounded,
+                                    color: Color(0xFFBFFF00),
+                                    size: 56,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                const Text(
+                                  'ALPINE PRO',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'Česká značka outdoorového oblečení a obuvi. Vybavte se na výlety do přírody!',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
+                                ),
+                                const SizedBox(height: 24),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.white10),
+                                  ),
+                                  child: Column(
+                                    children: const [
+                                      Text(
+                                        'SPECIÁLNÍ KÓD NA 20% SLEVU:',
+                                        style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'HEJBEJSE20',
+                                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _showSimulatedAd = false;
+                            });
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const ShopScreen()),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF263238), Color(0xFF161C20)],
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.stars, color: Colors.amber, size: 28),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: const [
+                                      Text(
+                                        'Už žádné reklamy a limity?',
+                                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                      Text(
+                                        'Aktivujte si Hejbej se Premium ještě dnes.',
+                                        style: TextStyle(color: Colors.white70, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 14),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1650,6 +1980,67 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Zavřít', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double _angularDifference(double a, double b) {
+    double diff = (a - b).abs() % 360;
+    return diff > 180 ? 360 - diff : diff;
+  }
+
+  void _showRouteDetailsDialog(Map<String, dynamic> option) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF263238),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          option['title'] as String,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                option['description'] as String,
+                style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              if (option['surface'] != null) ...[
+                const Text('Povrch:', style: TextStyle(color: const Color(0xFFBFFF00), fontWeight: FontWeight.bold, fontSize: 12)),
+                Text(option['surface'] as String, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                const SizedBox(height: 12),
+              ],
+              if (option['environment'] != null) ...[
+                const Text('Prostředí:', style: TextStyle(color: const Color(0xFFBFFF00), fontWeight: FontWeight.bold, fontSize: 12)),
+                Text(option['environment'] as String, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                const SizedBox(height: 12),
+              ],
+              if (option['pois'] != null && (option['pois'] as List).isNotEmpty) ...[
+                const Text('Zajímavá místa:', style: TextStyle(color: const Color(0xFFBFFF00), fontWeight: FontWeight.bold, fontSize: 12)),
+                ...((option['pois'] as List).map((poi) => Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on, color: Colors.lime, size: 16),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text(poi.toString(), style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                    ],
+                  ),
+                ))),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Zavřít', style: TextStyle(color: const Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1769,5 +2160,109 @@ class ElevationProfilePainter extends CustomPainter {
     return oldDelegate.elevations != elevations ||
         oldDelegate.lineColor != lineColor ||
         oldDelegate.hoverFraction != hoverFraction;
+  }
+}
+
+class _SimulatedAdBanner extends StatelessWidget {
+  const _SimulatedAdBanner({required this.onUpgrade});
+  final VoidCallback onUpgrade;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      decoration: BoxDecoration(
+        color: const Color(0xFF263238),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black38,
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -10,
+              top: -10,
+              child: Icon(
+                Icons.campaign_outlined,
+                size: 70,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'AD',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Alpine Pro: Sleva 20% s kódem HEJBEJSE20',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'Vybavení na turistiku a outdoorové aktivity.',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 10,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: onUpgrade,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Bez reklam',
+                      style: TextStyle(
+                        color: const Color(0xFFBFFF00),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
