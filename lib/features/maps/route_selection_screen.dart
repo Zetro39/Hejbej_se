@@ -11,6 +11,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:hejbej_se/services/route_elevation_service.dart';
 import 'package:hejbej_se/features/gamification/models/wheel_of_fortune_model.dart';
 import 'package:hejbej_se/features/gamification/services/wheel_of_fortune_service.dart';
+import 'package:firebase_ai/firebase_ai.dart';
 
 class PlacePrediction {
   final String description;
@@ -81,8 +82,6 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
 
   final List<double> _walkDistances = [3.0, 5.0, 8.0, 10.0, 12.0, 15.0, 20.0, 30.0];
   final List<double> _bikeDistances = [15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 50.0];
-
-  static final String _geminiApiKey = 'QcsFxeU-_EwQibGzGE8TVvmjwlHBs7s1Cxn0KHvvVLL6NR8bA.QA'.split('').reversed.join('');
 
   // A-to-B navigation states
   LatLng? _destinationLocation;
@@ -369,31 +368,10 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
 
     final int count = _isPremium ? 10 : 5;
 
-    // Load API Key dynamically
-    String apiKey = '';
+    // 1. Try Gemini generation using Firebase AI SDK
     try {
-      final doc = await FirebaseFirestore.instance.collection('config').doc('gemini').get();
-      if (doc.exists && doc.data() != null) {
-        apiKey = doc.data()!['api_key'] as String? ?? '';
-      }
-    } catch (e) {
-      debugPrint('Firestore config API key fetch failed: $e');
-    }
-
-    if (apiKey.isEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      apiKey = prefs.getString('gemini_api_key') ?? '';
-    }
-
-    if (apiKey.isEmpty) {
-      apiKey = _geminiApiKey;
-    }
-
-    // 1. Try Gemini generation if API key is provided
-    if (apiKey.isNotEmpty) {
-      try {
-        final prompt = widget.isAtoBMode
-            ? '''
+      final prompt = widget.isAtoBMode
+          ? '''
 Máš za úkol navrhnout 3 různé pěší/cyklistické trasy v České republice začínající na GPS souřadnici (start: lat: ${widget.startLocation.latitude}, lng: ${widget.startLocation.longitude}) a končící na cílové GPS souřadnici (cíl: lat: ${_destinationLocation!.latitude}, lng: ${_destinationLocation!.longitude}).
 Aktivita je ${_usingBike ? 'cyklistika' : 'pěší chůze/běh'}.
 Vygeneruj přesně 3 různé alternativní trasy.
@@ -421,7 +399,7 @@ Odpověz VÝHRADNĚ ve formátu JSON jako pole objektů s tímto schématem:
 ]
 Nevkládej žádný doprovodný text, pouze čistý JSON.
 '''
-            : '''
+          : '''
 Máš za úkol navrhnout okružní turistické trasy v České republice začínající a končící na zadané GPS souřadnici (latitude: ${widget.startLocation.latitude}, longitude: ${widget.startLocation.longitude}).
 Typ okolí je ${_isUrban ? 'město' : 'vesnice/příroda'}.
 Cílová délka je ${_selectedTargetKm.toInt()} km.
@@ -453,93 +431,85 @@ Odpověz VÝHRADNĚ ve formátu JSON jako pole objektů s tímto schématem:
 Nevkládej žádný doprovodný text, pouze čistý JSON.
 ''';
 
-        final response = await http.post(
-          Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'contents': [{
-              'parts': [{'text': prompt}]
-            }],
-            'generationConfig': {
-              'responseMimeType': 'application/json'
-            }
-          }),
-        ).timeout(const Duration(seconds: 10));
+      final model = FirebaseAI.googleAI().generativeModel(
+        model: 'gemini-1.5-flash',
+      );
 
-        if (response.statusCode == 200) {
-          final resBody = jsonDecode(response.body) as Map<String, dynamic>;
-          final text = resBody['candidates'][0]['content']['parts'][0]['text'] as String;
+      final response = await model.generateContent([
+        Content.text(prompt),
+      ]).timeout(const Duration(seconds: 10));
 
-          String cleanedText = text.trim();
-          if (cleanedText.startsWith('```')) {
-            final firstNewline = cleanedText.indexOf('\n');
-            if (firstNewline != -1) {
-              cleanedText = cleanedText.substring(firstNewline + 1);
-            }
-            if (cleanedText.endsWith('```')) {
-              cleanedText = cleanedText.substring(0, cleanedText.length - 3);
-            }
-            cleanedText = cleanedText.trim();
+      final text = response.text;
+      if (text != null && text.isNotEmpty) {
+        String cleanedText = text.trim();
+        if (cleanedText.startsWith('```')) {
+          final firstNewline = cleanedText.indexOf('\n');
+          if (firstNewline != -1) {
+            cleanedText = cleanedText.substring(firstNewline + 1);
           }
-
-          final parsed = jsonDecode(cleanedText) as List<dynamic>;
-
-          final List<Map<String, dynamic>> options = [];
-          for (var item in parsed) {
-            final wpsRaw = (item['waypoints'] as List<dynamic>)
-                .map((w) => LatLng((w['lat'] as num).toDouble(), (w['lng'] as num).toDouble()))
-                .toList();
-
-            final List<LatLng> wps = [];
-            if (widget.isAtoBMode) {
-              wps.addAll(wpsRaw);
-            } else {
-              final double targetWpDistance = _selectedTargetKm / 3.2; // Optimized loop distance
-              for (int wIdx = 0; wIdx < wpsRaw.length; wIdx++) {
-                final wp = wpsRaw[wIdx];
-                final bearing = _bearingBetween(widget.startLocation, wp);
-                final double factor = (wIdx == 1) ? 1.4 : 0.85;
-                final scaledWp = _destinationFromDistanceBearing(
-                  widget.startLocation,
-                  targetWpDistance * factor,
-                  bearing,
-                );
-                wps.add(scaledWp);
-              }
-            }
-
-            options.add({
-              'title': item['title'] as String? ?? (widget.isAtoBMode ? 'Trasa k cíli' : 'Okruh'),
-              'description': item['description'] as String? ?? 'Zajímavá trasa',
-              'waypoints': wps,
-              'kct_color': item['kct_color'] as String?,
-              'cyklo_number': item['cyklo_number'] as String?,
-              'surface': item['surface'] as String? ?? 'smíšený',
-              'environment': item['environment'] as String? ?? 'příroda',
-              'pois': List<String>.from(item['pois'] ?? []),
-              'trivia_question': item['trivia_question'] as String? ?? 'Znáš historii tohoto místa?',
-              'trivia_answer': item['trivia_answer'] as String? ?? 'Více se dozvíš na trase!',
-              'exactDistance': widget.isAtoBMode
-                  ? (_distanceBetween(widget.startLocation, _destinationLocation!) / 1000.0)
-                  : _selectedTargetKm,
-              'estimatedDistance': widget.isAtoBMode
-                  ? (_distanceBetween(widget.startLocation, _destinationLocation!) / 1000.0)
-                  : _selectedTargetKm,
-            });
+          if (cleanedText.endsWith('```')) {
+            cleanedText = cleanedText.substring(0, cleanedText.length - 3);
           }
-
-          if (options.isNotEmpty) {
-            setState(() {
-              _routeOptions = options;
-              _isLoadingRouteOptions = false;
-            });
-            _fetchActiveOptionGeometry();
-            return;
-          }
+          cleanedText = cleanedText.trim();
         }
-      } catch (e) {
-        debugPrint('Gemini generation failed, using fallback: $e');
+
+        final parsed = jsonDecode(cleanedText) as List<dynamic>;
+
+        final List<Map<String, dynamic>> options = [];
+        for (var item in parsed) {
+          final wpsRaw = (item['waypoints'] as List<dynamic>)
+              .map((w) => LatLng((w['lat'] as num).toDouble(), (w['lng'] as num).toDouble()))
+              .toList();
+
+          final List<LatLng> wps = [];
+          if (widget.isAtoBMode) {
+            wps.addAll(wpsRaw);
+          } else {
+            final double targetWpDistance = _selectedTargetKm / 3.2; // Optimized loop distance
+            for (int wIdx = 0; wIdx < wpsRaw.length; wIdx++) {
+              final wp = wpsRaw[wIdx];
+              final bearing = _bearingBetween(widget.startLocation, wp);
+              final double factor = (wIdx == 1) ? 1.4 : 0.85;
+              final scaledWp = _destinationFromDistanceBearing(
+                widget.startLocation,
+                targetWpDistance * factor,
+                bearing,
+              );
+              wps.add(scaledWp);
+            }
+          }
+
+          options.add({
+            'title': item['title'] as String? ?? (widget.isAtoBMode ? 'Trasa k cíli' : 'Okruh'),
+            'description': item['description'] as String? ?? 'Zajímavá trasa',
+            'waypoints': wps,
+            'kct_color': item['kct_color'] as String?,
+            'cyklo_number': item['cyklo_number'] as String?,
+            'surface': item['surface'] as String? ?? 'smíšený',
+            'environment': item['environment'] as String? ?? 'příroda',
+            'pois': List<String>.from(item['pois'] ?? []),
+            'trivia_question': item['trivia_question'] as String? ?? 'Znáš historii tohoto místa?',
+            'trivia_answer': item['trivia_answer'] as String? ?? 'Více se dozvíš na trase!',
+            'exactDistance': widget.isAtoBMode
+                ? (_distanceBetween(widget.startLocation, _destinationLocation!) / 1000.0)
+                : _selectedTargetKm,
+            'estimatedDistance': widget.isAtoBMode
+                ? (_distanceBetween(widget.startLocation, _destinationLocation!) / 1000.0)
+                : _selectedTargetKm,
+          });
+        }
+
+        if (options.isNotEmpty) {
+          setState(() {
+            _routeOptions = options;
+            _isLoadingRouteOptions = false;
+          });
+          _fetchActiveOptionGeometry();
+          return;
+        }
       }
+    } catch (e) {
+      debugPrint('Firebase AI generation failed, using fallback: $e');
     }
 
     if (widget.isAtoBMode) {
