@@ -4,7 +4,7 @@
     android:initialLayout="@layout/hejbej_se_widget"
     android:minHeight="40dp"
     android:minWidth="110dp"
-    android:previewImage="@layout/hejbej_se_widget"
+    android:previewImage="@mipmap/ic_launcher"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen" />

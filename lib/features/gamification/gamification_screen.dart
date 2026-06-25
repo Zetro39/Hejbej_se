@@ -683,6 +683,31 @@ class _GameScreenState extends State<GameScreen> {
               textColor: textColor,
               textSecondary: textSecondary,
               borderColor: borderColor,
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    title: const Row(
+                      children: [
+                        Icon(Icons.sports_bar_rounded, color: Colors.orangeAccent),
+                        SizedBox(width: 8),
+                        Text('Připravujeme', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    content: const Text(
+                      'Tour de Bear (18+) – chmelový okruh po lokálních hospůdkách a pivovarech se momentálně připravuje a bude k dispozici v příští aktualizaci!',
+                      style: TextStyle(height: 1.4),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Rozumím'),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ],
         ],

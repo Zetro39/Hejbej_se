@@ -59,12 +59,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLocalDataLoaded = false;
 
   TextEditingController? _usernameController;
+  TextEditingController? _geminiApiKeyController;
   int? _tempGoal;
   String? _tempTheme;
   bool? _tempShowMapType;
   bool? _tempShowMapStyle;
   bool? _tempShowShareLocation;
   bool? _tempShowArNav;
+  double? _tempWalkMin;
+  double? _tempWalkMax;
+  double? _tempBikeMin;
+  double? _tempBikeMax;
   bool _isSavingSettings = false;
   String? _settingsErrorText;
 
@@ -89,6 +94,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _usernameController = TextEditingController(text: _username);
+    _geminiApiKeyController = TextEditingController();
+    SharedPreferences.getInstance().then((prefs) {
+      if (mounted) {
+        _geminiApiKeyController?.text = prefs.getString('gemini_api_key') ?? '';
+        setState(() {
+          _tempWalkMin = prefs.getDouble('walk_range_min') ?? 2.0;
+          _tempWalkMax = prefs.getDouble('walk_range_max') ?? 5.0;
+          _tempBikeMin = prefs.getDouble('bike_range_min') ?? 10.0;
+          _tempBikeMax = prefs.getDouble('bike_range_max') ?? 30.0;
+        });
+      }
+    });
     _loadData().then((_) {
       _tempGoal = _dailyStepsGoal;
       _tempTheme = MainShell.themeNotifier.value;
@@ -114,6 +131,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     _usernameController?.dispose();
+    _geminiApiKeyController?.dispose();
     super.dispose();
   }
 
@@ -121,6 +139,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
+
+      try {
+        await AuthService().syncStatsFromFirestore();
+      } catch (_) {}
+
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       final data = doc.data() ?? {};
       setState(() {
@@ -138,6 +161,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _stepsStreak = firestoreStreak;
         }
 
+        if (data['limetky'] != null) {
+          limetkyBalance = (data['limetky'] as num).toInt();
+        }
+        if (data['streak'] != null) {
+          streak = (data['streak'] as num).toInt();
+        }
+        if (data['isStreakFrozen'] != null) {
+          isStreakFrozen = data['isStreakFrozen'] as bool;
+        }
+        if (data['totalDistance'] != null) {
+          totalDistance = (data['totalDistance'] as num).toDouble();
+        }
+        if (data['walk_range_min'] != null) {
+          _tempWalkMin = (data['walk_range_min'] as num).toDouble();
+        }
+        if (data['walk_range_max'] != null) {
+          _tempWalkMax = (data['walk_range_max'] as num).toDouble();
+        }
+        if (data['bike_range_min'] != null) {
+          _tempBikeMin = (data['bike_range_min'] as num).toDouble();
+        }
+        if (data['bike_range_max'] != null) {
+          _tempBikeMax = (data['bike_range_max'] as num).toDouble();
+        }
+
         _usernameController?.text = _username;
 
         SharedPreferences.getInstance().then((prefs) {
@@ -147,6 +195,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           prefs.setString('profile_username', _username);
           prefs.setString('profile_first_name', _firstName);
           prefs.setString('profile_last_name', _lastName);
+          if (_tempWalkMin != null) prefs.setDouble('walk_range_min', _tempWalkMin!);
+          if (_tempWalkMax != null) prefs.setDouble('walk_range_max', _tempWalkMax!);
+          if (_tempBikeMin != null) prefs.setDouble('bike_range_min', _tempBikeMin!);
+          if (_tempBikeMax != null) prefs.setDouble('bike_range_max', _tempBikeMax!);
         });
 
         if (data['first_name'] != null || data['last_name'] != null) {
@@ -941,6 +993,182 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+
+          // CARD 5: Umělá inteligence (AI)
+          Card(
+            color: cardColor,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: borderColor, width: 1.2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.psychology_outlined, color: accentColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Umělá inteligence (AI)',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Klíč pro generování AI tras na míru. Pokud nemáte klíč ve Firestore, můžete si zde nastavit svůj vlastní z Google AI Studio.',
+                    style: TextStyle(fontSize: 12, color: textSecondary),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _geminiApiKeyController,
+                    style: TextStyle(color: textColor),
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'Gemini API Klíč',
+                      labelStyle: TextStyle(color: textSecondary, fontSize: 13),
+                      prefixIcon: Icon(Icons.vpn_key_outlined, color: textSecondary),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: accentColor, width: 2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // CARD 6: Preference délky tras
+          Card(
+            color: cardColor,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: borderColor, width: 1.2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.straighten_rounded, color: accentColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Preference délky tras',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Zvol si minimální a maximální délku pro generování okruhů a tras v okolí.',
+                    style: TextStyle(fontSize: 12, color: textSecondary),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Pěší okruhy
+                  Text(
+                    '🥾 Pěší okruhy (Min: ${(_tempWalkMin ?? 2.0).toStringAsFixed(0)} km, Max: ${(_tempWalkMax ?? 5.0).toStringAsFixed(0)} km)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
+                  ),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: accentColor,
+                      inactiveTrackColor: accentColor.withOpacity(0.15),
+                      thumbColor: accentColor,
+                      valueIndicatorColor: accentColor,
+                    ),
+                    child: Column(
+                      children: [
+                        Slider(
+                          value: _tempWalkMin ?? 2.0,
+                          min: 2.0,
+                          max: 8.0,
+                          divisions: 6,
+                          label: 'Min: ${(_tempWalkMin ?? 2.0).toStringAsFixed(0)} km',
+                          onChanged: (val) {
+                            setState(() {
+                              _tempWalkMin = val;
+                              if ((_tempWalkMax ?? 5.0) < val + 1) {
+                                _tempWalkMax = val + 1;
+                              }
+                            });
+                          },
+                        ),
+                        Slider(
+                          value: _tempWalkMax ?? 5.0,
+                          min: (_tempWalkMin ?? 2.0) + 1.0,
+                          max: 10.0,
+                          divisions: (10.0 - ((_tempWalkMin ?? 2.0) + 1.0)).round().clamp(1, 10),
+                          label: 'Max: ${(_tempWalkMax ?? 5.0).toStringAsFixed(0)} km',
+                          onChanged: (val) {
+                            setState(() {
+                              _tempWalkMax = val;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  // Cyklotrasy
+                  Text(
+                    '🚴 Cyklotrasy (Min: ${(_tempBikeMin ?? 10.0).toStringAsFixed(0)} km, Max: ${(_tempBikeMax ?? 30.0).toStringAsFixed(0)} km)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
+                  ),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: accentColor,
+                      inactiveTrackColor: accentColor.withOpacity(0.15),
+                      thumbColor: accentColor,
+                      valueIndicatorColor: accentColor,
+                    ),
+                    child: Column(
+                      children: [
+                        Slider(
+                          value: _tempBikeMin ?? 10.0,
+                          min: 5.0,
+                          max: 38.0,
+                          divisions: 33,
+                          label: 'Min: ${(_tempBikeMin ?? 10.0).toStringAsFixed(0)} km',
+                          onChanged: (val) {
+                            setState(() {
+                              _tempBikeMin = val;
+                              if ((_tempBikeMax ?? 30.0) < val + 2) {
+                                _tempBikeMax = val + 2;
+                              }
+                            });
+                          },
+                        ),
+                        Slider(
+                          value: _tempBikeMax ?? 30.0,
+                          min: (_tempBikeMin ?? 10.0) + 2.0,
+                          max: 40.0,
+                          divisions: (40.0 - ((_tempBikeMin ?? 10.0) + 2.0)).round().clamp(1, 40),
+                          label: 'Max: ${(_tempBikeMax ?? 30.0).toStringAsFixed(0)} km',
+                          onChanged: (val) {
+                            setState(() {
+                              _tempBikeMax = val;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
 
           if (_isSavingSettings) ...[
@@ -997,6 +1225,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final updates = <String, dynamic>{
         'daily_steps_goal': _tempGoal ?? _dailyStepsGoal,
         'design_theme': _tempTheme ?? MainShell.themeNotifier.value,
+        'walk_range_min': _tempWalkMin ?? 2.0,
+        'walk_range_max': _tempWalkMax ?? 5.0,
+        'bike_range_min': _tempBikeMin ?? 10.0,
+        'bike_range_max': _tempBikeMax ?? 30.0,
         'updated_at': FieldValue.serverTimestamp(),
       };
 
@@ -1051,6 +1283,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await prefs.setBool('show_map_style', _tempShowMapStyle ?? true);
       await prefs.setBool('show_share_location', _tempShowShareLocation ?? true);
       await prefs.setBool('show_ar_nav', _tempShowArNav ?? true);
+      await prefs.setString('gemini_api_key', _geminiApiKeyController?.text.trim() ?? '');
+      await prefs.setDouble('walk_range_min', _tempWalkMin ?? 2.0);
+      await prefs.setDouble('walk_range_max', _tempWalkMax ?? 5.0);
+      await prefs.setDouble('bike_range_min', _tempBikeMin ?? 10.0);
+      await prefs.setDouble('bike_range_max', _tempBikeMax ?? 30.0);
       MainShell.themeNotifier.value = _tempTheme ?? MainShell.themeNotifier.value;
       
       if (usernameChanged) {
