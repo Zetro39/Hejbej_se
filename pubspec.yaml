@@ -1,7 +1,7 @@
 name: hejbej_se
 description: Hejbej se – trasy v ČR s gamifikací.
 publish_to: "none"
-version: 1.2.3+152
+version: 1.2.3+153
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -23,6 +23,9 @@ dependencies:
   sign_in_with_apple: ^6.0.0
   firebase_core: ^4.10.0
   firebase_ai: any
+  firebase_crashlytics: any
+  firebase_remote_config: any
+  firebase_storage: any
   firebase_auth: ^6.5.2
   cloud_firestore: ^6.5.0
   firebase_messaging: any

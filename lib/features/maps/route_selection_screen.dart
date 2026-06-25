@@ -12,6 +12,7 @@ import 'package:hejbej_se/services/route_elevation_service.dart';
 import 'package:hejbej_se/features/gamification/models/wheel_of_fortune_model.dart';
 import 'package:hejbej_se/features/gamification/services/wheel_of_fortune_service.dart';
 import 'package:firebase_ai/firebase_ai.dart';
+import 'package:hejbej_se/services/remote_config_service.dart';
 
 class PlacePrediction {
   final String description;
@@ -370,6 +371,9 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
 
     // 1. Try Gemini generation using Firebase AI SDK
     try {
+      if (RemoteConfigService().useMathFallback) {
+        throw Exception("Vzdálená konfigurace (Remote Config) vynutila matematický generátor tras.");
+      }
       final prompt = widget.isAtoBMode
           ? '''
 Máš za úkol navrhnout 3 různé pěší/cyklistické trasy v České republice začínající na GPS souřadnici (start: lat: ${widget.startLocation.latitude}, lng: ${widget.startLocation.longitude}) a končící na cílové GPS souřadnici (cíl: lat: ${_destinationLocation!.latitude}, lng: ${_destinationLocation!.longitude}).
@@ -432,7 +436,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
 ''';
 
       final model = FirebaseAI.googleAI().generativeModel(
-        model: 'gemini-1.5-flash',
+        model: RemoteConfigService().geminiModel,
       );
 
       final response = await model.generateContent([

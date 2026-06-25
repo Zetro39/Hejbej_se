@@ -13,6 +13,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'services/remote_config_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -65,8 +67,21 @@ void main() async {
   
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    
+    // Nastavení Crashlytics pro automatické zachycení neošetřených chyb
+    FlutterError.onError = (errorDetails) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     await _initializeFirebaseMessaging();
+
+    // Inicializace Remote Config
+    await RemoteConfigService().initialize();
   } catch (e) {
     if (kDebugMode) {
       debugPrint('Firebase init error: $e');

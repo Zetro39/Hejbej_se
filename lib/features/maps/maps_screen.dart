@@ -22,6 +22,7 @@ import '../../services/auth_service.dart';
 import '../../services/notification_manager.dart';
 import '../../services/step_tracker_service.dart';
 import '../../services/anticheat_service.dart';
+import '../../services/storage_service.dart';
 import '../../theme_config.dart';
 import '../profile/notification_inbox_screen.dart';
 import '../leaderboard/friend_profile_screen.dart';
@@ -1897,7 +1898,14 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     try {
       String? photoUrl;
       if (photo != null) {
-        photoUrl = 'https://picsum.photos/300/200';
+        final user = FirebaseAuth.instance.currentUser;
+        final userId = user?.uid ?? 'anonymous';
+        photoUrl = await StorageService().uploadRouteImage(
+          localPath: photo.path,
+          userId: userId,
+        );
+        // Fallback na mock odkaz v případě selhání uploadu
+        photoUrl ??= 'https://picsum.photos/300/200';
       }
 
       final docRef = FirebaseFirestore.instance.collection('community_routes').doc(routeId);
