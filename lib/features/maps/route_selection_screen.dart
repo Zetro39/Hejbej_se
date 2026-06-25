@@ -370,6 +370,7 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
     final int count = _isPremium ? 10 : 5;
 
     // 1. Try Gemini generation using Firebase AI SDK
+    String? aiError;
     try {
       if (RemoteConfigService().useMathFallback) {
         throw Exception("Vzdálená konfigurace (Remote Config) vynutila matematický generátor tras.");
@@ -514,6 +515,7 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
       }
     } catch (e) {
       debugPrint('Firebase AI generation failed, using fallback: $e');
+      aiError = e.toString();
     }
 
     if (widget.isAtoBMode) {
@@ -582,8 +584,10 @@ Nevkládej žádný doprovodný text, pouze čistý JSON.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Generuji trasy záložním matematickým výpočtem.'),
+          SnackBar(
+            content: Text(aiError != null
+                ? 'AI selhalo ($aiError). Generuji trasy záložním matematickým výpočtem.'
+                : 'Generuji trasy záložním matematickým výpočtem.'),
             backgroundColor: Colors.orange,
           ),
         );

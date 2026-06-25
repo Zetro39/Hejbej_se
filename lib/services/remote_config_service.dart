@@ -31,5 +31,8 @@ class RemoteConfigService {
 
   // 4. Gettery pro snadný přístup k hodnotám
   bool get useMathFallback => _remoteConfig.getBool('use_math_fallback');
-  String get geminiModel => _remoteConfig.getString('gemini_model');
+  String get geminiModel {
+    final model = _remoteConfig.getString('gemini_model');
+    return model.isNotEmpty ? model : 'gemini-1.5-flash';
+  }
 }
