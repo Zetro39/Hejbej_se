@@ -242,7 +242,6 @@ class LocationService {
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationText: "Hejbej Se běží na pozadí a zaznamenává vaši aktivitu.",
           notificationTitle: "Sledování trasy aktivní",
-          enableWifiWorkaround: true,
         ),
       );
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {

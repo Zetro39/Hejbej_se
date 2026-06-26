@@ -7,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:hejbej_se/services/route_elevation_service.dart';
 import 'package:hejbej_se/features/gamification/models/wheel_of_fortune_model.dart';
@@ -1048,10 +1049,9 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
       }
     }
 
-    final todayStr = DateTime.now().toLocal().toString().substring(0, 10);
-    final String? cachedDate = prefs.getString('route_generation_date');
+    final String? cachedLimitDate = prefs.getString('route_generation_date');
     int currentCount = 0;
-    if (cachedDate == todayStr) {
+    if (cachedLimitDate == todayStr) {
       currentCount = prefs.getInt('route_generation_count') ?? 0;
     }
 
@@ -2347,6 +2347,7 @@ Odpověz POUZE JSON polem objektů (přesně $count prvků):
                           }
                         },
                       ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 8),

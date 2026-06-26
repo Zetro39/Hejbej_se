@@ -223,15 +223,15 @@ class _LaunchCountdownScreenState extends State<LaunchCountdownScreen> {
                             width: 1,
                           ),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.calendar_today_rounded, color: Color(0xFFBFFF00), size: 18),
-                            SizedBox(width: 10),
+                            const Icon(Icons.calendar_today_rounded, color: Color(0xFFBFFF00), size: 18),
+                            const SizedBox(width: 10),
                             Text(
                               'Oficiální spuštění: 1. července 2026',
                               style: TextStyle(
-                                color: Colors.white90,
+                                color: Colors.white.withOpacity(0.9),
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                               ),

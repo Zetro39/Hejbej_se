@@ -187,8 +187,8 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay> {
                   const SizedBox(height: 12),
                   Text(
                     step.description,
-                    style: const TextStyle(
-                      color: Colors.white87,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.87),
                       fontSize: 14,
                       height: 1.4,
                     ),
