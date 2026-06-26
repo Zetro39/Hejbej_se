@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-6543788544174221~6271858902</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -68,11 +70,11 @@
 	</array>
 	<!-- Location permissions for GPS/map functionality -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Potřebujeme tvou polohu pro mapu úkolů a GPS funkce</string>
+	<string>Tato aplikace vyžaduje přístup k poloze pro zobrazení vaší aktuální polohy na mapě a doporučení tras ve vašem okolí.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Potřebujeme tvou polohu pro mapu úkolů a GPS funkce</string>
+	<string>Tato aplikace vyžaduje přístup k poloze (i na pozadí) pro přesné měření a zaznamenávání vaší trasy na mapě, i když je displej vypnutý nebo máte telefon v kapse.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>Potřebujeme přístup k pohybovým senzorům pro sledování kroků a tras.</string>
+	<string>Tato aplikace vyžaduje přístup k pohybovým senzorům pro přesné automatické počítání kroků a detekci chůze či běhu.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Potřebujeme přístup k fotoaparátu pro zobrazení trasy v rozšířené realitě (AR).</string>
 	<key>NSPhotoLibraryUsageDescription</key>
@@ -82,6 +84,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
+		<string>location</string>
 		<string>remote-notification</string>
 	</array>
 	<key>FirebaseAppDelegateProxyEnabled</key>

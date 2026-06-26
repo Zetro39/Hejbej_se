@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
+import '../../services/achievement_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'add_friends_screen.dart';
 import 'friends_list_screen.dart';
 import 'friend_profile_screen.dart';
@@ -9,6 +11,8 @@ import '../../main_shell.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
+
+  static final ValueNotifier<bool> showAchievementsNotifier = ValueNotifier<bool>(false);
 
   @override
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
@@ -25,11 +29,83 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   bool _isSearching = false;
   Map<String, dynamic>? _searchResult;
   String? _searchError;
+  bool _isAchievementLeaderboard = false;
+  bool _isCollector = false;
 
   @override
   void initState() {
     super.initState();
     _loadMyKraj();
+    _loadOptInStatus();
+    LeaderboardScreen.showAchievementsNotifier.addListener(_onShowAchievementsChanged);
+    _isAchievementLeaderboard = LeaderboardScreen.showAchievementsNotifier.value;
+  }
+
+  void _onShowAchievementsChanged() {
+    if (mounted) {
+      setState(() {
+        _isAchievementLeaderboard = LeaderboardScreen.showAchievementsNotifier.value;
+      });
+    }
+  }
+
+  Future<void> _loadOptInStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _isCollector = prefs.getBool('is_achievement_collector') ?? false;
+      });
+    }
+
+    final user = _auth.currentUser;
+    if (user != null) {
+      try {
+        final doc = await _firestore.collection('users').doc(user.uid).get();
+        if (doc.exists) {
+          final dbCollector = doc.data()?['is_achievement_collector'] as bool? ?? false;
+          if (dbCollector != _isCollector) {
+            await prefs.setBool('is_achievement_collector', dbCollector);
+            if (mounted) {
+              setState(() {
+                _isCollector = dbCollector;
+              });
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _optInCollector() async {
+    setState(() {
+      _isSearching = true;
+    });
+    try {
+      await AchievementService.syncUserAchievements(optIn: true);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_achievement_collector', true);
+      if (mounted) {
+        setState(() {
+          _isCollector = true;
+          _isSearching = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Vítej mezi sběrateli úspěchů! 🎉'),
+            backgroundColor: Colors.lime,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Nebylo možné se zapojit: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _loadMyKraj() async {
@@ -48,6 +124,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   @override
   void dispose() {
+    LeaderboardScreen.showAchievementsNotifier.removeListener(_onShowAchievementsChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -285,6 +362,39 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return Stream.value([]);
 
+    if (_isAchievementLeaderboard) {
+      if (_selectedScopeFilter == 1) {
+        // Celá ČR - achievement collectors
+        return _firestore
+            .collection('users')
+            .where('is_achievement_collector', isEqualTo: true)
+            .limit(100)
+            .snapshots()
+            .map((snap) => snap.docs);
+      } else if (_selectedScopeFilter == 2) {
+        // Můj kraj - achievement collectors in my kraj
+        final queryKraj = _myKraj ?? 'Praha';
+        return _firestore
+            .collection('users')
+            .where('is_achievement_collector', isEqualTo: true)
+            .where('kraj', isEqualTo: queryKraj)
+            .limit(100)
+            .snapshots()
+            .map((snap) => snap.docs);
+      } else {
+        // Pouze přátelé
+        List<String> uids = [currentUser.uid, ...friendUids];
+        if (uids.length > 30) {
+          uids = uids.sublist(0, 30);
+        }
+        return _firestore
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: uids)
+            .snapshots()
+            .map((snap) => snap.docs);
+      }
+    }
+
     if (_selectedScopeFilter == 1) {
       // Celá ČR - order by selected field and limit to top 50
       String orderField = 'weeklyDistance';
@@ -473,7 +583,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             ),
           ),
           Text(
-            '${dist.toStringAsFixed(1)} km',
+            _isAchievementLeaderboard
+                ? '${((data['achievement_completion_ratio'] as num? ?? 0) * 100).toStringAsFixed(0)} %'
+                : '${dist.toStringAsFixed(1)} km',
             style: TextStyle(
               fontSize: rank == 1 ? 12 : 10,
               color: isMe ? const Color(0xFFBFFF00) : textSecondary,
@@ -756,167 +868,194 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
                 const SizedBox(height: 8),
 
+                // Leaderboard Type Toggle
+                _buildLeaderboardTypeToggle(cardColor, textColor, textSecondary, borderColor),
+
+                const SizedBox(height: 8),
+
                 // Time & Scope Filters
-                _buildTimeFilterRow(cardColor, textColor, textSecondary, borderColor),
+                if (!_isAchievementLeaderboard)
+                  _buildTimeFilterRow(cardColor, textColor, textSecondary, borderColor),
                 _buildScopeFilterRow(cardColor, textColor, textSecondary, borderColor),
 
                 const SizedBox(height: 8),
 
                 // Leaderboard List
                 Expanded(
-                  child: StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: _getFriendsListStream(),
-                    builder: (context, friendsSnapshot) {
-                      if (!friendsSnapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      final allConnections = friendsSnapshot.data ?? [];
-                      final friendUids = allConnections
-                          .where((f) => f['status'] == 'friends')
-                          .map((f) => f['uid'] as String)
-                          .toList();
-
-                      return StreamBuilder<List<DocumentSnapshot>>(
-                        stream: _getLeaderboardUsersStream(friendUids),
-                        builder: (context, usersSnapshot) {
-                          if (!usersSnapshot.hasData) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
-
-                          final userDocs = usersSnapshot.data ?? [];
-
-                          if (userDocs.isEmpty) {
-                            return const Center(child: Text('Žádná data v tomto žebříčku.'));
-                          }
-
-                          // Dynamic Sorting
-                          userDocs.sort((a, b) {
-                            final dataA = a.data() as Map<String, dynamic>? ?? {};
-                            final dataB = b.data() as Map<String, dynamic>? ?? {};
-
-                            double valA = 0.0;
-                            double valB = 0.0;
-
-                            if (_selectedTimeFilter == 0) {
-                              valA = (dataA['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
-                              valB = (dataB['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
-                            } else if (_selectedTimeFilter == 1) {
-                              valA = (dataA['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
-                              valB = (dataB['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
-                            } else {
-                              valA = (dataA['yearlyDistance'] as num? ?? dataA['totalDistance'] as num?)?.toDouble() ?? 0.0;
-                              valB = (dataB['yearlyDistance'] as num? ?? dataB['totalDistance'] as num?)?.toDouble() ?? 0.0;
+                  child: _isAchievementLeaderboard && !_isCollector
+                      ? _buildOptInView(cardColor, textColor, textSecondary, borderColor)
+                      : StreamBuilder<List<Map<String, dynamic>>>(
+                          stream: _getFriendsListStream(),
+                          builder: (context, friendsSnapshot) {
+                            if (!friendsSnapshot.hasData) {
+                              return const Center(child: CircularProgressIndicator());
                             }
 
-                            return valB.compareTo(valA);
-                          });
+                            final allConnections = friendsSnapshot.data ?? [];
+                            final friendUids = allConnections
+                                .where((f) => f['status'] == 'friends')
+                                .map((f) => f['uid'] as String)
+                                .toList();
 
-                          final top3 = userDocs.take(3).toList();
-                          final restUsers = userDocs.skip(3).toList();
+                            return StreamBuilder<List<DocumentSnapshot>>(
+                              stream: _getLeaderboardUsersStream(friendUids),
+                              builder: (context, usersSnapshot) {
+                                if (!usersSnapshot.hasData) {
+                                  return const Center(child: CircularProgressIndicator());
+                                }
 
-                          return Column(
-                            children: [
-                              _buildPodium(top3, currentUser.uid, cardColor, textColor, textSecondary, borderColor, isWhite),
-                              const SizedBox(height: 8),
-                              Expanded(
-                                child: restUsers.isEmpty
-                                    ? Center(
-                                        child: Text(
-                                          'Žádní další uživatelé',
-                                          style: TextStyle(color: textSecondary, fontSize: 14),
-                                        ),
-                                      )
-                                    : ListView.separated(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                        itemCount: restUsers.length,
-                                        separatorBuilder: (context, index) => const SizedBox(height: 10),
-                                        itemBuilder: (context, index) {
-                                          final doc = restUsers[index];
-                                          final actualRankIndex = index + 3;
-                                          final data = doc.data() as Map<String, dynamic>? ?? {};
-                                          final isMe = doc.id == currentUser.uid;
+                                final userDocs = usersSnapshot.data ?? [];
 
-                                          final username = data['username'] ?? 'Uživatel';
-                                          final code = data['friend_code'] ?? '';
-                                          final firstName = data['first_name'] ?? '';
-                                          final lastName = data['last_name'] ?? '';
-                                          final fullName = '$firstName $lastName'.trim().isEmpty ? username : '$firstName $lastName';
+                                if (userDocs.isEmpty) {
+                                  return const Center(child: Text('Žádná data v tomto žebříčku.'));
+                                }
 
-                                          double dist = 0.0;
-                                          if (_selectedTimeFilter == 0) {
-                                            dist = (data['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
-                                          } else if (_selectedTimeFilter == 1) {
-                                            dist = (data['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
-                                          } else {
-                                            dist = (data['yearlyDistance'] as num? ?? data['totalDistance'] as num?)?.toDouble() ?? 0.0;
-                                          }
+                                // Dynamic Sorting
+                                var sortedDocs = List<DocumentSnapshot>.from(userDocs);
+                                if (_isAchievementLeaderboard) {
+                                  // Filter out non-collectors if any are returned by local streams (e.g. Friends list)
+                                  sortedDocs = sortedDocs.where((doc) {
+                                    final data = doc.data() as Map<String, dynamic>? ?? {};
+                                    return data['is_achievement_collector'] == true;
+                                  }).toList();
 
-                                          return Container(
-                                            decoration: BoxDecoration(
-                                              color: isMe ? const Color(0xFF1B5E20).withOpacity(0.3) : cardColor,
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(
-                                                color: isMe ? const Color(0xFFBFFF00).withOpacity(0.5) : borderColor,
-                                                width: 1.5,
+                                  sortedDocs.sort((a, b) {
+                                    final dataA = a.data() as Map<String, dynamic>? ?? {};
+                                    final dataB = b.data() as Map<String, dynamic>? ?? {};
+                                    final valA = (dataA['achievement_completion_ratio'] as num?)?.toDouble() ?? 0.0;
+                                    final valB = (dataB['achievement_completion_ratio'] as num?)?.toDouble() ?? 0.0;
+                                    return valB.compareTo(valA);
+                                  });
+                                } else {
+                                  sortedDocs.sort((a, b) {
+                                    final dataA = a.data() as Map<String, dynamic>? ?? {};
+                                    final dataB = b.data() as Map<String, dynamic>? ?? {};
+
+                                    double valA = 0.0;
+                                    double valB = 0.0;
+
+                                    if (_selectedTimeFilter == 0) {
+                                      valA = (dataA['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
+                                      valB = (dataB['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
+                                    } else if (_selectedTimeFilter == 1) {
+                                      valA = (dataA['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
+                                      valB = (dataB['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
+                                    } else {
+                                      valA = (dataA['yearlyDistance'] as num? ?? dataA['totalDistance'] as num?)?.toDouble() ?? 0.0;
+                                      valB = (dataB['yearlyDistance'] as num? ?? dataB['totalDistance'] as num?)?.toDouble() ?? 0.0;
+                                    }
+
+                                    return valB.compareTo(valA);
+                                  });
+                                }
+
+                                final top3 = sortedDocs.take(3).toList();
+                                final restUsers = sortedDocs.skip(3).toList();
+
+                                return Column(
+                                  children: [
+                                    _buildPodium(top3, currentUser.uid, cardColor, textColor, textSecondary, borderColor, isWhite),
+                                    const SizedBox(height: 8),
+                                    Expanded(
+                                      child: restUsers.isEmpty
+                                          ? Center(
+                                              child: Text(
+                                                'Žádní další uživatelé',
+                                                style: TextStyle(color: textSecondary, fontSize: 14),
                                               ),
-                                            ),
-                                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                                            child: Row(
-                                              children: [
-                                                SizedBox(
-                                                  width: 40,
-                                                  child: Center(
-                                                    child: _buildMedal(actualRankIndex, textSecondary),
+                                            )
+                                          : ListView.separated(
+                                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                              itemCount: restUsers.length,
+                                              separatorBuilder: (context, index) => const SizedBox(height: 10),
+                                              itemBuilder: (context, index) {
+                                                final doc = restUsers[index];
+                                                final actualRankIndex = index + 3;
+                                                final data = doc.data() as Map<String, dynamic>? ?? {};
+                                                final isMe = doc.id == currentUser.uid;
+
+                                                final username = data['username'] ?? 'Uživatel';
+                                                final code = data['friend_code'] ?? '';
+                                                final firstName = data['first_name'] ?? '';
+                                                final lastName = data['last_name'] ?? '';
+                                                final fullName = '$firstName $lastName'.trim().isEmpty ? username : '$firstName $lastName';
+
+                                                double dist = 0.0;
+                                                if (_selectedTimeFilter == 0) {
+                                                  dist = (data['weeklyDistance'] as num?)?.toDouble() ?? 0.0;
+                                                } else if (_selectedTimeFilter == 1) {
+                                                  dist = (data['monthlyDistance'] as num?)?.toDouble() ?? 0.0;
+                                                } else {
+                                                  dist = (data['yearlyDistance'] as num? ?? data['totalDistance'] as num?)?.toDouble() ?? 0.0;
+                                                }
+
+                                                return Container(
+                                                  decoration: BoxDecoration(
+                                                    color: isMe ? const Color(0xFF1B5E20).withOpacity(0.3) : cardColor,
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    border: Border.all(
+                                                      color: isMe ? const Color(0xFFBFFF00).withOpacity(0.5) : borderColor,
+                                                      width: 1.5,
+                                                    ),
                                                   ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                CircleAvatar(
-                                                  backgroundColor: isMe ? const Color(0xFFBFFF00) : (isWhite ? Colors.grey.shade100 : const Color(0xFF263238)),
-                                                  foregroundColor: isMe ? Colors.black : const Color(0xFFBFFF00),
-                                                  child: Text(fullName.substring(0, 1).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                                                  child: Row(
                                                     children: [
-                                                      Text(
-                                                        isMe ? '$fullName (Ty)' : fullName,
-                                                        style: TextStyle(
-                                                          fontWeight: FontWeight.bold,
-                                                          fontSize: 15,
-                                                          color: textColor,
+                                                      SizedBox(
+                                                        width: 40,
+                                                        child: Center(
+                                                          child: _buildMedal(actualRankIndex, textSecondary),
                                                         ),
                                                       ),
-                                                      if (code.isNotEmpty)
-                                                        Text(
-                                                          code,
-                                                          style: TextStyle(fontSize: 12, color: textSecondary),
+                                                      const SizedBox(width: 8),
+                                                      CircleAvatar(
+                                                        backgroundColor: isMe ? const Color(0xFFBFFF00) : (isWhite ? Colors.grey.shade100 : const Color(0xFF263238)),
+                                                        foregroundColor: isMe ? Colors.black : const Color(0xFFBFFF00),
+                                                        child: Text(fullName.substring(0, 1).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                                      ),
+                                                      const SizedBox(width: 12),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Text(
+                                                              isMe ? '$fullName (Ty)' : fullName,
+                                                              style: TextStyle(
+                                                                fontWeight: FontWeight.bold,
+                                                                fontSize: 15,
+                                                                color: textColor,
+                                                              ),
+                                                            ),
+                                                            if (code.isNotEmpty)
+                                                              Text(
+                                                                code,
+                                                                style: TextStyle(fontSize: 12, color: textSecondary),
+                                                              ),
+                                                          ],
                                                         ),
+                                                      ),
+                                                      Text(
+                                                        _isAchievementLeaderboard
+                                                            ? '${((data['achievement_completion_ratio'] as num? ?? 0) * 100).toStringAsFixed(0)} %'
+                                                            : '${dist.toStringAsFixed(1)} km',
+                                                        style: TextStyle(
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 16,
+                                                          color: isMe ? const Color(0xFFBFFF00) : textColor,
+                                                        ),
+                                                      ),
                                                     ],
                                                   ),
-                                                ),
-                                                Text(
-                                                  '${dist.toStringAsFixed(1)} km',
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16,
-                                                    color: isMe ? const Color(0xFFBFFF00) : textColor,
-                                                  ),
-                                                ),
-                                              ],
+                                                );
+                                              },
                                             ),
-                                          );
-                                        },
-                                      ),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                  ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                        ),
                 ),
               ],
             ),
@@ -1000,6 +1139,221 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLeaderboardTypeToggle(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: 1.5),
+        ),
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isAchievementLeaderboard = false;
+                  });
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: !_isAchievementLeaderboard ? const Color(0xFFBFFF00) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.directions_run_rounded,
+                        size: 16,
+                        color: !_isAchievementLeaderboard ? Colors.black : textSecondary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Aktivita',
+                        style: TextStyle(
+                          fontWeight: !_isAchievementLeaderboard ? FontWeight.bold : FontWeight.w600,
+                          color: !_isAchievementLeaderboard ? Colors.black : textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isAchievementLeaderboard = true;
+                  });
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _isAchievementLeaderboard ? const Color(0xFFBFFF00) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.emoji_events_rounded,
+                        size: 16,
+                        color: _isAchievementLeaderboard ? Colors.black : textSecondary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Sběratelé',
+                        style: TextStyle(
+                          fontWeight: _isAchievementLeaderboard ? FontWeight.bold : FontWeight.w600,
+                          color: _isAchievementLeaderboard ? Colors.black : textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptInView(Color cardColor, Color textColor, Color textSecondary, Color borderColor) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Container(
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: borderColor, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFBFFF00).withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  size: 64,
+                  color: Color(0xFFBFFF00),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Sběratelé úspěchů',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                  color: textColor,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Chceš porovnat své úspěchy s ostatními a ukázat, že jsi nejlepší sběratel? Zapoj se do žebříčku sběratelů!',
+                style: TextStyle(
+                  color: textSecondary,
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildBenefitRow(Icons.leaderboard_rounded, 'Porovnání s celou ČR, krajem i přáteli', textSecondary, textColor),
+                  const SizedBox(height: 10),
+                  _buildBenefitRow(Icons.percent_rounded, 'Ukazatel vzácnosti u každého úspěchu', textSecondary, textColor),
+                  const SizedBox(height: 10),
+                  _buildBenefitRow(Icons.sync_rounded, 'Automatická synchronizace tvého postupu', textSecondary, textColor),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _isSearching
+                  ? const CircularProgressIndicator()
+                  : Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFBFFF00).withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color(0xFFD4FF00),
+                            Color(0xFFBFFF00),
+                          ],
+                        ),
+                      ),
+                      child: ElevatedButton(
+                        onPressed: _optInCollector,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          'Zapojit se do sběratelů',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ),
+                    ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBenefitRow(IconData icon, String text, Color textSecondary, Color textColor) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: const Color(0xFFBFFF00)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
     );
   }
 }

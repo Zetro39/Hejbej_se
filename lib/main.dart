@@ -15,6 +15,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'services/remote_config_service.dart';
+import 'features/launch/launch_countdown_screen.dart';
+import 'widgets/location_disclosure_dialog.dart';
+import 'services/ad_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -82,6 +85,9 @@ void main() async {
 
     // Inicializace Remote Config
     await RemoteConfigService().initialize();
+
+    // Inicializace Mobile Ads
+    unawaited(AdService().initialize());
   } catch (e) {
     if (kDebugMode) {
       debugPrint('Firebase init error: $e');
@@ -136,9 +142,21 @@ void main() async {
     debugPrint('Saved user: $savedUser, profileCompleted: $isProfileCompleted');
   }
 
+  // Check if we should bypass the launch countdown screen
+  bool bypassLaunchCountdown = false;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    bypassLaunchCountdown = prefs.getBool('bypass_launch_countdown') ?? false;
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('SharedPreferences bypass read error: $e');
+    }
+  }
+
   runApp(HejbejSeApp(
     initialUserName: savedUser,
     isProfileCompleted: isProfileCompleted,
+    bypassLaunchCountdown: bypassLaunchCountdown,
   ));
 }
 
@@ -147,10 +165,12 @@ class HejbejSeApp extends StatefulWidget {
     super.key,
     this.initialUserName,
     required this.isProfileCompleted,
+    required this.bypassLaunchCountdown,
   });
 
   final String? initialUserName;
   final bool isProfileCompleted;
+  final bool bypassLaunchCountdown;
 
   @override
   State<HejbejSeApp> createState() => _HejbejSeAppState();
@@ -159,10 +179,12 @@ class HejbejSeApp extends StatefulWidget {
 class _HejbejSeAppState extends State<HejbejSeApp> {
   final LocationService _locationService = LocationService();
   StreamSubscription<double>? _locationSubscription;
+  late bool _bypassLaunchCountdown;
 
   @override
   void initState() {
     super.initState();
+    _bypassLaunchCountdown = widget.bypassLaunchCountdown;
     // Defer location initialization to next frame to ensure context is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeLocationTracking();
@@ -179,6 +201,17 @@ class _HejbejSeAppState extends State<HejbejSeApp> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Povolte služby polohy pro sledování vzdálenosti')),
+          );
+        }
+        return;
+      }
+
+      // Show prominent location disclosure dialog first
+      final disclosureAccepted = await LocationDisclosureDialog.checkAndShow(context);
+      if (!disclosureAccepted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Bez souhlasu s využitím polohy nelze sledovat aktivitu.')),
           );
         }
         return;
@@ -291,9 +324,17 @@ class _HejbejSeAppState extends State<HejbejSeApp> {
         Locale('cs', 'CZ'),
         Locale('en', 'US'),
       ],
-      home: widget.initialUserName != null
-          ? (widget.isProfileCompleted ? MainShell(userName: widget.initialUserName!) : const ProfileCreationScreen())
-          : const LoginScreen(),
+      home: (!_bypassLaunchCountdown && DateTime.now().isBefore(DateTime(2026, 7, 1)))
+          ? LaunchCountdownScreen(
+              onLaunch: () {
+                setState(() {
+                  _bypassLaunchCountdown = true;
+                });
+              },
+            )
+          : (widget.initialUserName != null
+              ? (widget.isProfileCompleted ? MainShell(userName: widget.initialUserName!) : const ProfileCreationScreen())
+              : const LoginScreen()),
     );
   }
 }

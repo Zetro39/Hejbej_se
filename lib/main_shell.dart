@@ -15,6 +15,7 @@ import 'features/gamification/gamification_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/shop/shop_screen.dart';
 import 'features/leaderboard/leaderboard_screen.dart';
+import 'widgets/app_tutorial_overlay.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key, required this.userName});
@@ -22,12 +23,25 @@ class MainShell extends StatefulWidget {
   final String userName;
   static final ValueNotifier<String> themeNotifier = appThemeNotifier;
 
+  static MainShellState? of(BuildContext context) {
+    return context.findAncestorStateOfType<MainShellState>();
+  }
+
   @override
-  State<MainShell> createState() => _MainShellState();
+  State<MainShell> createState() => MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class MainShellState extends State<MainShell> {
   int _index = 2;
+  bool _showTutorial = false;
+
+  void setIndex(int index) {
+    if (mounted) {
+      setState(() {
+        _index = index;
+      });
+    }
+  }
   bool _blocked = false;
   Timer? _verifyTimer;
   StreamSubscription? _incomingFriendsSubscription;
@@ -47,12 +61,14 @@ class _MainShellState extends State<MainShell> {
     SharedPreferences.getInstance().then((prefs) {
       final savedTheme = prefs.getString('design_theme') ?? 'grey';
       MainShell.themeNotifier.value = savedTheme;
+      final hasSeen = prefs.getBool('has_seen_tutorial') ?? false;
       if (mounted) {
         setState(() {
           _showMapType = prefs.getBool('show_map_type') ?? true;
           _showMapStyle = prefs.getBool('show_map_style') ?? true;
           _showShareLocation = prefs.getBool('show_share_location') ?? true;
           _showArNav = prefs.getBool('show_ar_nav') ?? true;
+          _showTutorial = !hasSeen;
         });
       }
     });
@@ -361,113 +377,132 @@ class _MainShellState extends State<MainShell> {
           const ShopScreen(),
         ];
 
-        return Scaffold(
-          extendBody: true,
-          backgroundColor: bgColor,
-          body: _blocked
-              ? _VerificationWall(
-                  onSignOut: () async {
-                    await AuthService().signOut();
-                    if (!mounted) return;
-                    Navigator.of(context).pushReplacementNamed('/');
-                  },
-                  onResend: () async {
-                    final user = AuthService().currentUser;
-                    try {
-                      await user?.sendEmailVerification();
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Odeslán potvrzovací e-mail')));
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Chyba při odesílání: $e')));
-                    }
-                  },
-                )
-              : IndexedStack(
-                  index: _index,
-                  children: _screens,
-                ),
-          bottomNavigationBar: BottomAppBar(
-            elevation: 8,
-            color: navBgColor,
-            surfaceTintColor: navBgColor,
-            padding: EdgeInsets.zero,
-            child: SafeArea(
-              child: SizedBox(
-                height: 72,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _NavButton(
-                      icon: Icons.emoji_events_outlined,
-                      activeIcon: Icons.emoji_events_rounded,
-                      label: 'Hry',
-                      index: 0,
-                      selected: _index == 0,
-                      onTap: () => setState(() => _index = 0),
-                      theme: theme,
-                    ),
-                    _NavButton(
-                      icon: Icons.leaderboard_outlined,
-                      activeIcon: Icons.leaderboard_rounded,
-                      label: 'Žebříček',
-                      index: 3,
-                      selected: _index == 3,
-                      onTap: () => setState(() => _index = 3),
-                      theme: theme,
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        _loadMapPreferences();
-                        setState(() => _index = 2);
+        return Stack(
+          children: [
+            Scaffold(
+              extendBody: true,
+              backgroundColor: bgColor,
+              body: _blocked
+                  ? _VerificationWall(
+                      onSignOut: () async {
+                        await AuthService().signOut();
+                        if (!mounted) return;
+                        Navigator.of(context).pushReplacementNamed('/');
                       },
-                      child: Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: _index == 2 ? const Color(0xFFBFFF00) : (isWhiteTheme ? Colors.grey.shade200 : const Color(0xFF263238)),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _index == 2 ? const Color(0xFFBFFF00) : (isWhiteTheme ? Colors.grey.shade300 : Colors.white10),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFBFFF00).withOpacity(_index == 2 ? 0.35 : 0.0),
-                              blurRadius: 10,
-                              spreadRadius: 1,
-                              offset: const Offset(0, 3),
+                      onResend: () async {
+                        final user = AuthService().currentUser;
+                        try {
+                          await user?.sendEmailVerification();
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Odeslán potvrzovací e-mail')));
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Chyba při odesílání: $e')));
+                        }
+                      },
+                    )
+                  : IndexedStack(
+                      index: _index,
+                      children: _screens,
+                    ),
+              bottomNavigationBar: BottomAppBar(
+                elevation: 8,
+                color: navBgColor,
+                surfaceTintColor: navBgColor,
+                padding: EdgeInsets.zero,
+                child: SafeArea(
+                  child: SizedBox(
+                    height: 72,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _NavButton(
+                          icon: Icons.emoji_events_outlined,
+                          activeIcon: Icons.emoji_events_rounded,
+                          label: 'Hry',
+                          index: 0,
+                          selected: _index == 0,
+                          onTap: () => setState(() => _index = 0),
+                          theme: theme,
+                        ),
+                        _NavButton(
+                          icon: Icons.leaderboard_outlined,
+                          activeIcon: Icons.leaderboard_rounded,
+                          label: 'Žebříček',
+                          index: 3,
+                          selected: _index == 3,
+                          onTap: () => setState(() => _index = 3),
+                          theme: theme,
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            _loadMapPreferences();
+                            setState(() => _index = 2);
+                          },
+                          child: Container(
+                            width: 54,
+                            height: 54,
+                            decoration: BoxDecoration(
+                              color: _index == 2 ? const Color(0xFFBFFF00) : (isWhiteTheme ? Colors.grey.shade200 : const Color(0xFF263238)),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _index == 2 ? const Color(0xFFBFFF00) : (isWhiteTheme ? Colors.grey.shade300 : Colors.white10),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFBFFF00).withOpacity(_index == 2 ? 0.35 : 0.0),
+                                  blurRadius: 10,
+                                  spreadRadius: 1,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
                             ),
-                          ],
+                            child: Icon(
+                              Icons.map_rounded,
+                              size: 26,
+                              color: _index == 2 ? const Color(0xFF1B5E20) : (isWhiteTheme ? Colors.black54 : Colors.white70),
+                            ),
+                          ),
                         ),
-                        child: Icon(
-                          Icons.map_rounded,
-                          size: 26,
-                          color: _index == 2 ? const Color(0xFF1B5E20) : (isWhiteTheme ? Colors.black54 : Colors.white70),
+                        _NavButton(
+                          icon: Icons.shopping_bag_outlined,
+                          activeIcon: Icons.shopping_bag_rounded,
+                          label: 'Obchod',
+                          index: 4,
+                          selected: _index == 4,
+                          onTap: () => setState(() => _index = 4),
+                          theme: theme,
                         ),
-                      ),
+                        _NavButton(
+                          icon: Icons.person_outline_rounded,
+                          activeIcon: Icons.person_rounded,
+                          label: 'Profil',
+                          index: 1,
+                          selected: _index == 1,
+                          onTap: () => setState(() => _index = 1),
+                          theme: theme,
+                        ),
+                      ],
                     ),
-                    _NavButton(
-                      icon: Icons.shopping_bag_outlined,
-                      activeIcon: Icons.shopping_bag_rounded,
-                      label: 'Obchod',
-                      index: 4,
-                      selected: _index == 4,
-                      onTap: () => setState(() => _index = 4),
-                      theme: theme,
-                    ),
-                    _NavButton(
-                      icon: Icons.person_outline_rounded,
-                      activeIcon: Icons.person_rounded,
-                      label: 'Profil',
-                      index: 1,
-                      selected: _index == 1,
-                      onTap: () => setState(() => _index = 1),
-                      theme: theme,
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+            if (_showTutorial)
+              AppTutorialOverlay(
+                onTabChange: (index) {
+                  setState(() {
+                    _index = index;
+                  });
+                },
+                onFinish: () async {
+                  setState(() {
+                    _showTutorial = false;
+                  });
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('has_seen_tutorial', true);
+                },
+              ),
+          ],
         );
       },
     );

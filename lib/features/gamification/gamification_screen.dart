@@ -11,6 +11,7 @@ import 'models/wheel_of_fortune_model.dart';
 import 'services/wheel_of_fortune_service.dart';
 import 'wheel_editor_screen.dart';
 import '../../main_shell.dart';
+import '../leaderboard/leaderboard_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -670,6 +671,23 @@ class _GameScreenState extends State<GameScreen> {
               );
             },
           ),
+          const SizedBox(width: 12),
+          _buildSpecialGameCard(
+            title: 'Sběratelé úspěchů 🏆',
+            description: 'Porovnej se v počtu nasbíraných úspěchů a získej prestižní místo v síni slávy!',
+            icon: Icons.emoji_events_rounded,
+            color: Colors.amber.shade50,
+            iconColor: Colors.amber.shade700,
+            is18Plus: false,
+            cardColor: cardColor,
+            textColor: textColor,
+            textSecondary: textSecondary,
+            borderColor: borderColor,
+            onTap: () {
+              LeaderboardScreen.showAchievementsNotifier.value = true;
+              MainShell.of(context)?.setIndex(3);
+            },
+          ),
           if (show18Plus) ...[
             const SizedBox(width: 12),
             _buildSpecialGameCard(
@@ -702,7 +720,7 @@ class _GameScreenState extends State<GameScreen> {
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
-                        child: const Text('Rozumím'),
+                        child: const Text('Rozumím', style: TextStyle(color: Colors.lime, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),

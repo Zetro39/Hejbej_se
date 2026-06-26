@@ -66,6 +66,28 @@ class AuthService {
     }
   }
 
+  Future<void> deleteAccount() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      final uid = user.uid;
+      
+      // Delete user document in Firestore first
+      try {
+        await _firestore.collection('users').doc(uid).delete();
+      } catch (e) {
+        if (kDebugMode) debugPrint('Failed to delete user doc in Firestore: $e');
+      }
+
+      // Delete Firebase user
+      await user.delete();
+
+      // Clear local storage and preferences
+      await clear();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    }
+  }
+
   // Authentication methods using Firebase
   Future<UserCredential> registerWithEmail(String email, String password) async {
     final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);

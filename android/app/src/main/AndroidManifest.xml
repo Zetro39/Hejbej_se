@@ -54,6 +54,11 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDXW1KW4W9tpUWDa5bzQLXGpEpTwE_d5Kw" />
 
+        <!-- Google AdMob Application ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-6543788544174221~9089593931"/>
+
         <!-- AppWidget Provider for Home Screen Widget -->
         <receiver android:name=".HejbejSeWidgetProvider" android:exported="true">
             <intent-filter>
@@ -63,6 +68,13 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/hejbej_se_widget_info" />
         </receiver>
+
+        <!-- Geolocator background location service -->
+        <service
+            android:name="com.baseflow.geolocator.GeolocatorLocationService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
     </application>
     <!-- Required to query activities that can process text, see:
@@ -80,6 +92,11 @@
     <!-- Permissions for Maps and Location -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    
+    <!-- Background Location Permissions -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     
     <!-- Permissions for Step Counter -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />

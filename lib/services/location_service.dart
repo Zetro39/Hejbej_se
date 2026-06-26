@@ -233,13 +233,38 @@ class LocationService {
     }
   }
 
+  LocationSettings _getBackgroundSettings(int distanceFilter) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distanceFilter,
+        intervalDuration: const Duration(seconds: 5),
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationText: "Hejbej Se běží na pozadí a zaznamenává vaši aktivitu.",
+          notificationTitle: "Sledování trasy aktivní",
+          enableWifiWorkaround: true,
+        ),
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distanceFilter,
+        activityType: ActivityType.fitness,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+      );
+    } else {
+      return LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distanceFilter,
+      );
+    }
+  }
+
   /// Stream of position updates with distance tracking
   Stream<double> get positionStream {
     return Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.medium,
-        distanceFilter: 50, // Update every 50 meters
-      ),
+      locationSettings: _getBackgroundSettings(50),
     ).asyncMap((position) async {
       double distanceKm = 0.0;
 
@@ -254,7 +279,7 @@ class LocationService {
           _lastPosition!.longitude,
           position.latitude,
           position.longitude,
-      );
+        );
         distanceKm = distance / 1000; // Convert to kilometers
       }
 
@@ -266,10 +291,7 @@ class LocationService {
   /// Stream of positions for map tracking (polyline and marker)
   Stream<Position> get positionUpdateStream {
     return Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.medium,
-        distanceFilter: 10, // Update more frequently for map
-      ),
+      locationSettings: _getBackgroundSettings(10),
     );
   }
 

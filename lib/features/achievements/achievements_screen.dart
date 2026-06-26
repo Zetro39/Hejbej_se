@@ -5,6 +5,7 @@ import 'package:confetti/confetti.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/location_service.dart';
+import '../../services/achievement_service.dart';
 
 const List<Map<String, dynamic>> _achievementData = [
   {
@@ -97,6 +98,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
   late final DistanceManager _distanceManager;
   final List<bool> _loyaltyAchievements = [false, false, false];
   final List<bool> _stepsAchievements = List.filled(6, false);
+  Map<String, double> _rarities = {};
   bool _storyAmuletCompleted = false;
   bool _storyDifficultyEasy = false;
   bool _storyDifficultyMedium = false;
@@ -181,6 +183,16 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
         _checkpointAchievements['checkpoint_$i'] = prefs.getBool('achievement_checkpoint_${i}_reached') ?? false;
       }
     });
+
+    try {
+      final rarities = await AchievementService.getCachedAchievementRarities();
+      if (mounted) {
+        setState(() {
+          _rarities = rarities;
+        });
+      }
+      await AchievementService.syncUserAchievements();
+    } catch (_) {}
   }
 
   void _triggerConfetti() {
@@ -278,6 +290,8 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
         final reached = totalDistance >= goal;
         final progress = math.min(totalDistance / goal, 1.0);
 
+        final id = item['id'] as String;
+        final rarity = _rarities[id];
         return AchievementCard(
           title: item['title'] as String,
           description: item['description'] as String,
@@ -286,6 +300,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           medalType: item['medalType'] as String,
           subLabel: reached ? 'Splněno!' : '${totalDistance.toStringAsFixed(1)} / ${goal.toInt()} km',
           onFlip: _triggerConfetti,
+          rarity: rarity,
         );
       },
     );
@@ -297,9 +312,9 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
       children: [
         _buildSectionHeader('🔥 Každodenní série přihlášení'),
         const SizedBox(height: 12),
-        _buildStreakTile('10 dnů v řadě', 'Udržuj sérii 10 dnů aktivní chůze', _loyaltyAchievements[0], 'bronze'),
-        _buildStreakTile('50 dnů v řadě', 'Udržuj sérii 50 dnů aktivní chůze', _loyaltyAchievements[1], 'silver'),
-        _buildStreakTile('250 dnů v řadě', 'Udržuj sérii 250 dnů aktivní chůze', _loyaltyAchievements[2], 'gold'),
+        _buildStreakTile('10 dnů v řadě', 'Udržuj sérii 10 dnů aktivní chůze', _loyaltyAchievements[0], 'bronze', rarity: _rarities['loyaltyAchievement_0']),
+        _buildStreakTile('50 dnů v řadě', 'Udržuj sérii 50 dnů aktivní chůze', _loyaltyAchievements[1], 'silver', rarity: _rarities['loyaltyAchievement_1']),
+        _buildStreakTile('250 dnů v řadě', 'Udržuj sérii 250 dnů aktivní chůze', _loyaltyAchievements[2], 'gold', rarity: _rarities['loyaltyAchievement_2']),
         
         const SizedBox(height: 24),
         _buildSectionHeader('🎯 Plnění denního krokového cíle'),
@@ -313,12 +328,12 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           crossAxisSpacing: 16,
           childAspectRatio: 0.9,
           children: [
-            _buildGridStreakTile('Svědomitý I', '5 dní splněno', _stepsAchievements[0], 'bronze'),
-            _buildGridStreakTile('Svědomitý II', '10 dní splněno', _stepsAchievements[1], 'silver'),
-            _buildGridStreakTile('Svědomitý III', '25 dní splněno', _stepsAchievements[2], 'gold'),
-            _buildGridStreakTile('Svědomitý IV', '50 dní splněno', _stepsAchievements[3], 'platinum'),
-            _buildGridStreakTile('Svědomitý V', '100 dní splněno', _stepsAchievements[4], 'emerald'),
-            _buildGridStreakTile('Legenda', '365 dní splněno', _stepsAchievements[5], 'cosmic'),
+            _buildGridStreakTile('Svědomitý I', '5 dní splněno', _stepsAchievements[0], 'bronze', rarity: _rarities['steps_achievement_5']),
+            _buildGridStreakTile('Svědomitý II', '10 dní splněno', _stepsAchievements[1], 'silver', rarity: _rarities['steps_achievement_10']),
+            _buildGridStreakTile('Svědomitý III', '25 dní splněno', _stepsAchievements[2], 'gold', rarity: _rarities['steps_achievement_25']),
+            _buildGridStreakTile('Svědomitý IV', '50 dní splněno', _stepsAchievements[3], 'platinum', rarity: _rarities['steps_achievement_50']),
+            _buildGridStreakTile('Svědomitý V', '100 dní splněno', _stepsAchievements[4], 'emerald', rarity: _rarities['steps_achievement_100']),
+            _buildGridStreakTile('Legenda', '365 dní splněno', _stepsAchievements[5], 'cosmic', rarity: _rarities['steps_achievement_365']),
           ],
         ),
       ],
@@ -341,6 +356,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
         final id = item['id'] as String;
         final reached = _checkpointAchievements[id] ?? false;
 
+        final rarity = _rarities[id];
         return AchievementCard(
           title: item['title'] as String,
           description: item['description'] as String,
@@ -349,6 +365,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           medalType: item['medalType'] as String,
           subLabel: reached ? 'Checkpoint nalezen!' : 'Hledej body na mapě',
           onFlip: _triggerConfetti,
+          rarity: rarity,
         );
       },
     );
@@ -397,12 +414,29 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                   color: _storyAmuletCompleted ? Colors.white : Colors.black87,
                 ),
               ),
-              subtitle: Text(
-                'Dokonči celou příběhovou linku Cesta živlů a získej legendární odznak.',
-                style: TextStyle(
-                  color: _storyAmuletCompleted ? Colors.white70 : Colors.black54,
-                  fontSize: 12,
-                ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Dokonči celou příběhovou linku Cesta živlů a získej legendární odznak.',
+                    style: TextStyle(
+                      color: _storyAmuletCompleted ? Colors.white70 : Colors.black54,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (_rarities['achievement_hero_lost_amulet'] != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Získalo: ${_rarities['achievement_hero_lost_amulet']!.toStringAsFixed(1)}% sběračů',
+                      style: TextStyle(
+                        color: _storyAmuletCompleted ? Colors.white54 : Colors.grey.shade600,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
               ),
               trailing: Text(
                 _storyAmuletCompleted ? '100%' : '0%',
@@ -420,10 +454,10 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
         _buildSectionHeader('⚙️ Obtížnosti příběhu'),
         const SizedBox(height: 12),
         
-        _buildStoryDifficultyRow('Lehká (6 km)', _storyDifficultyEasy, Colors.green, 'Pohodový poutník'),
-        _buildStoryDifficultyRow('Střední (10 km)', _storyDifficultyMedium, Colors.cyan, 'Zkušený dobrodruh'),
-        _buildStoryDifficultyRow('Těžká (15 km)', _storyDifficultyHard, Colors.orange, 'Vytrvalý hrdina'),
-        _buildStoryDifficultyRow('Hardcore (20 km)', _storyDifficultyHardcore, Colors.redAccent, 'Legenda z bažin'),
+        _buildStoryDifficultyRow('Lehká (6 km)', _storyDifficultyEasy, Colors.green, 'Pohodový poutník', rarity: _rarities['achievement_story_difficulty_easy']),
+        _buildStoryDifficultyRow('Střední (10 km)', _storyDifficultyMedium, Colors.cyan, 'Zkušený dobrodruh', rarity: _rarities['achievement_story_difficulty_medium']),
+        _buildStoryDifficultyRow('Těžká (15 km)', _storyDifficultyHard, Colors.orange, 'Vytrvalý hrdina', rarity: _rarities['achievement_story_difficulty_hard']),
+        _buildStoryDifficultyRow('Hardcore (20 km)', _storyDifficultyHardcore, Colors.redAccent, 'Legenda z bažin', rarity: _rarities['achievement_story_difficulty_hardcore']),
       ],
     );
   }
@@ -443,7 +477,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
     );
   }
 
-  Widget _buildStreakTile(String title, String desc, bool unlocked, String medalType) {
+  Widget _buildStreakTile(String title, String desc, bool unlocked, String medalType, {double? rarity}) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -457,7 +491,20 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           ),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(desc, style: const TextStyle(fontSize: 12)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(desc, style: const TextStyle(fontSize: 12)),
+            if (rarity != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Získalo: ${rarity.toStringAsFixed(1)}% sběračů',
+                style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ],
+        ),
         trailing: Icon(
           unlocked ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
           color: unlocked ? const Color(0xFFBFFF00) : Colors.grey.shade400,
@@ -467,7 +514,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
     );
   }
 
-  Widget _buildGridStreakTile(String title, String desc, bool unlocked, String medalType) {
+  Widget _buildGridStreakTile(String title, String desc, bool unlocked, String medalType, {double? rarity}) {
     return AchievementCard(
       title: title,
       description: desc,
@@ -476,10 +523,11 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
       medalType: medalType,
       subLabel: unlocked ? 'Hotovo!' : 'Pokračuj v sérii',
       onFlip: _triggerConfetti,
+      rarity: rarity,
     );
   }
 
-  Widget _buildStoryDifficultyRow(String label, bool unlocked, Color activeColor, String badgeTitle) {
+  Widget _buildStoryDifficultyRow(String label, bool unlocked, Color activeColor, String badgeTitle, {double? rarity}) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -490,7 +538,20 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           size: 28,
         ),
         title: Text(badgeTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(label),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label),
+            if (rarity != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Získalo: ${rarity.toStringAsFixed(1)}% sběračů',
+                style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ],
+        ),
         trailing: Text(
           unlocked ? 'Odemčeno' : 'Zámek',
           style: TextStyle(
@@ -513,18 +574,21 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           'Měj alespoň 1 spojeného přítele v aplikaci (${_invitedFriendsCount}/1)',
           _invitedFriendsCount >= 1,
           'bronze',
+          rarity: _rarities['invited_friends_1'],
         ),
         _buildStreakTile(
           'Nová krev II',
           'Měj alespoň 5 spojených přátel v aplikaci (${_invitedFriendsCount}/5)',
           _invitedFriendsCount >= 5,
           'silver',
+          rarity: _rarities['invited_friends_5'],
         ),
         _buildStreakTile(
           'Nová krev III',
           'Měj alespoň 10 spojených přátel v aplikaci (${_invitedFriendsCount}/10)',
           _invitedFriendsCount >= 10,
           'gold',
+          rarity: _rarities['invited_friends_10'],
         ),
         const SizedBox(height: 24),
         _buildSectionHeader('💖 DONÁTOŘI A SPONZOŘI'),
@@ -534,12 +598,14 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           'Podpoř vývoj projektu dobrovolným členstvím (Premium)',
           _hasOwnedPremium,
           'platinum',
+          rarity: _rarities['ever_owned_premium'],
         ),
         _buildStreakTile(
           'Patron na věky',
           'Podporuj projekt dobrovolným členstvím po dobu jednoho roku',
           _premiumForYear,
           'cosmic',
+          rarity: _rarities['premium_for_year'],
         ),
       ],
     );
@@ -554,6 +620,7 @@ class AchievementCard extends StatefulWidget {
   final String medalType;
   final String subLabel;
   final VoidCallback onFlip;
+  final double? rarity;
 
   const AchievementCard({
     super.key,
@@ -564,6 +631,7 @@ class AchievementCard extends StatefulWidget {
     required this.medalType,
     required this.subLabel,
     required this.onFlip,
+    this.rarity,
   });
 
   @override
@@ -734,6 +802,18 @@ class _AchievementCardState extends State<AchievementCard> with SingleTickerProv
                 fontSize: 10,
               ),
             ),
+            if (widget.rarity != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Získalo: ${widget.rarity!.toStringAsFixed(1)}% sběračů',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,6 +33,7 @@ import 'package:pay/pay.dart';
 import 'ar_navigation_screen.dart';
 import 'route_selection_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../widgets/location_disclosure_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../gamification/models/wheel_of_fortune_model.dart';
 import '../gamification/services/wheel_of_fortune_service.dart';
@@ -154,6 +157,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   String? _activeRouteCykloNumber;
   String? _activeRouteTriviaQuestion;
   String? _activeRouteTriviaAnswer;
+  List<dynamic>? _activeRouteTriviaList;
+  final Set<int> _triggeredTriviaIndices = {};
 
   final TextEditingController _destinationController = TextEditingController();
 
@@ -392,13 +397,204 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
 
   void _shareDailyProgress() async {
     final km = _calculateBreadcrumbsDistance();
-    final count = _breadcrumbsCoordinates.length;
-    final text = 'Dnes jsem s mobilní aplikací Hejbej se ušel ${km.toStringAsFixed(2)} km! 🏃 Moje dnešní stopa má $count bodů. Sleduj moje pokroky a hejbni se taky! 🌟';
+    final steps = StepTrackerService().stepsNotifier.value;
+    final boundaryKey = GlobalKey();
+
+    // Zobrazit indikátor načítání
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFFBFFF00)),
+      ),
+    );
+
+    Uint8List? mapImageBytes;
     try {
-      await Share.share(text, subject: 'Moje dnešní stopa');
+      mapImageBytes = await _mapController?.takeSnapshot();
     } catch (e) {
-      debugPrint('Error sharing daily progress: $e');
+      debugPrint('Error taking map snapshot: $e');
     }
+
+    if (mounted) {
+      Navigator.pop(context); // Zavřít indikátor načítání
+    }
+
+    Widget buildStatItem(IconData icon, String value, String label, {bool isAccent = false}) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: isAccent ? Colors.orangeAccent : const Color(0xFFBFFF00),
+            size: 24,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white38,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      );
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E272C),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            contentPadding: const EdgeInsets.all(16),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Sdílet svůj den',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                ),
+                const SizedBox(height: 12),
+                // Premium 1:1 čtvercová karta pro Instagram
+                RepaintBoundary(
+                  key: boundaryKey,
+                  child: Container(
+                    width: 320,
+                    height: 320,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF263238), Color(0xFF1E272C)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFBFFF00).withOpacity(0.35), width: 2.5),
+                    ),
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        // Hlavička
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'HEJBEJ SE',
+                              style: TextStyle(
+                                color: Color(0xFFBFFF00),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            Text(
+                              '${DateTime.now().day}. ${DateTime.now().month}. ${DateTime.now().year}',
+                              style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        // Mapa
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white12, width: 1),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: mapImageBytes != null
+                                ? Image.memory(
+                                    mapImageBytes,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                  )
+                                : Container(
+                                    color: Colors.black26,
+                                    child: const Center(
+                                      child: Icon(Icons.map_rounded, color: Colors.white24, size: 48),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        // Statistiky (Vzdálenost, Kroky, Série)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            buildStatItem(Icons.directions_run_rounded, '${km.toStringAsFixed(2)} km', 'Vzdálenost'),
+                            buildStatItem(Icons.directions_walk_rounded, '$steps', 'Kroky'),
+                            buildStatItem(Icons.local_fire_department_rounded, '$_streak ${_streak == 1 ? 'den' : (_streak >= 2 && _streak <= 4) ? 'dny' : 'dní'}', 'Série', isAccent: true),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Tip: Kliknutím na tlačítko níže vygenerujete obrázek, který můžete přímo sdílet na Instagram Stories!',
+                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFBFFF00),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 2,
+                  ),
+                  icon: const Icon(Icons.share_rounded, size: 20),
+                  label: const Text('SDÍLET OBRÁZEK', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  onPressed: () async {
+                    try {
+                      RenderRepaintBoundary? boundary = boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+                      if (boundary == null) return;
+                      
+                      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+                      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+                      if (byteData == null) return;
+                      
+                      final pngBytes = byteData.buffer.asUint8List();
+                      final tempDir = await getTemporaryDirectory();
+                      final file = await File('${tempDir.path}/hejbej_se_den.png').create();
+                      await file.writeAsBytes(pngBytes);
+
+                      await Share.shareXFiles(
+                        [XFile(file.path)],
+                        text: 'Můj dnešní den na Hejbej Se! 🏃‍♂️',
+                      );
+                    } catch (e) {
+                      debugPrint('Error generating share image: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Nepodařilo se vygenerovat obrázek: $e'), backgroundColor: Colors.redAccent),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Zrušit', style: TextStyle(color: Colors.white60)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _loadUnreadNotificationsCount() async {
@@ -1960,6 +2156,122 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _checkTriviaTriggers(int closestIndex) async {
+    if (_activeRouteTriviaList == null || _activeRouteTriviaList!.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final bool showQuiz = prefs.getBool('show_quiz_during_walk') ?? true;
+    if (!showQuiz) return;
+
+    final int numQuestions = _activeRouteTriviaList!.length;
+    for (int i = 0; i < numQuestions; i++) {
+      if (_triggeredTriviaIndices.contains(i)) continue;
+
+      // Calculate the target ratio of route progress
+      final double targetRatio = (i + 1) / (numQuestions + 1.0);
+      final int targetIndex = (_activeRoutePoints.length * targetRatio).round();
+      
+      if (closestIndex >= targetIndex) {
+        _triggeredTriviaIndices.add(i);
+        final triviaItem = _activeRouteTriviaList![i];
+        String question = '';
+        String answer = '';
+        if (triviaItem is Map) {
+          question = triviaItem['question'] ?? triviaItem['trivia_question'] ?? '';
+          answer = triviaItem['answer'] ?? triviaItem['trivia_answer'] ?? '';
+        } else if (triviaItem is String) {
+          question = triviaItem;
+        }
+        
+        if (question.isNotEmpty) {
+          if (mounted) {
+            _showWalkingTriviaDialog(question, answer, i + 1, numQuestions);
+          }
+        }
+      }
+    }
+  }
+
+  void _showWalkingTriviaDialog(String question, String answer, int currentNum, int totalNum) {
+    HapticFeedback.vibrate();
+    bool showAnswer = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF263238),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Row(
+                children: [
+                  const Icon(Icons.lightbulb_outline_rounded, color: Color(0xFFBFFF00), size: 28),
+                  const SizedBox(width: 10),
+                  Text('Kvíz na cestě ($currentNum/$totalNum)', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    question,
+                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold, height: 1.45),
+                  ),
+                  const SizedBox(height: 20),
+                  if (showAnswer)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('ODPOVĚĎ:', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.w900, fontSize: 11)),
+                          const SizedBox(height: 6),
+                          Text(answer, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13.5)),
+                        ],
+                      ),
+                    )
+                  else
+                    ElevatedButton(
+                      onPressed: () {
+                        setDialogState(() {
+                          showAnswer = true;
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white.withOpacity(0.08),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: Colors.white24),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Zobrazit odpověď', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Pokračovat v chůzi', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _toggleMapType() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -2527,6 +2839,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _activeRouteCykloNumber = route['cyklo_number'] as String?;
       _activeRouteTriviaQuestion = route['trivia_question'] as String?;
       _activeRouteTriviaAnswer = route['trivia_answer'] as String?;
+      _activeRouteTriviaList = route['trivia'] as List<dynamic>?;
+      _triggeredTriviaIndices.clear();
     });
 
     _fitMapBounds(points);
@@ -2976,29 +3290,35 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         return;
       }
 
+      // Filter position update with AntiCheatService (ignore driving / car rides)
+      final countDistance = AntiCheatService().checkLocationUpdate(position, _usingBike);
+      final isCheating = AntiCheatService().isCheating;
+
       final newPoint = LatLng(position.latitude, position.longitude);
 
       // Sync position to Firestore for friends location map tracking
       _uploadMyLocation(position);
 
       // Update streak
-      final today = DateTime.now();
-      if (_lastActivityDate == null || !_isSameDay(_lastActivityDate!, today)) {
-        if (_lastActivityDate != null && _isConsecutiveDay(_lastActivityDate!, today)) {
-          _streak++;
-        } else if (_lastActivityDate == null) {
-          _streak = 1;
-        } else {
-          if (!_isStreakFrozen) {
+      if (countDistance && !isCheating) {
+        final today = DateTime.now();
+        if (_lastActivityDate == null || !_isSameDay(_lastActivityDate!, today)) {
+          if (_lastActivityDate != null && _isConsecutiveDay(_lastActivityDate!, today)) {
+            _streak++;
+          } else if (_lastActivityDate == null) {
             _streak = 1;
+          } else {
+            if (!_isStreakFrozen) {
+              _streak = 1;
+            }
           }
+          _lastActivityDate = today;
+          await _savePersistentData();
         }
-        _lastActivityDate = today;
-        await _savePersistentData();
       }
 
-      // Update distance only when tracking is enabled
-      if (_previousPosition != null && _trackingEnabled) {
+      // Update distance only when tracking is enabled and anti-cheat permits
+      if (_previousPosition != null && _trackingEnabled && countDistance && !isCheating) {
         final distanceKm = Geolocator.distanceBetween(
           _previousPosition!.latitude,
           _previousPosition!.longitude,
@@ -3020,27 +3340,29 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       }
       _previousPosition = position;
 
-      if (_breadcrumbsCoordinates.isEmpty ||
-          Geolocator.distanceBetween(
-            _breadcrumbsCoordinates.last.latitude,
-            _breadcrumbsCoordinates.last.longitude,
-            newPoint.latitude,
-            newPoint.longitude,
-          ) > 10.0) {
-        setState(() {
-          _breadcrumbsCoordinates.add(newPoint);
-        });
-        await _saveBreadcrumbs();
-        _snapBreadcrumbsToRoads();
-        _updateBreadcrumbsPolyline();
-      }
-      if (_polylineCoordinates.isEmpty ||
-          _polylineCoordinates.last.latitude != newPoint.latitude ||
-          _polylineCoordinates.last.longitude != newPoint.longitude) {
-        setState(() {
-          _polylineCoordinates.add(newPoint);
-        });
-        _updatePolyline();
+      if (countDistance && !isCheating) {
+        if (_breadcrumbsCoordinates.isEmpty ||
+            Geolocator.distanceBetween(
+              _breadcrumbsCoordinates.last.latitude,
+              _breadcrumbsCoordinates.last.longitude,
+              newPoint.latitude,
+              newPoint.longitude,
+            ) > 10.0) {
+          setState(() {
+            _breadcrumbsCoordinates.add(newPoint);
+          });
+          await _saveBreadcrumbs();
+          _snapBreadcrumbsToRoads();
+          _updateBreadcrumbsPolyline();
+        }
+        if (_polylineCoordinates.isEmpty ||
+            _polylineCoordinates.last.latitude != newPoint.latitude ||
+            _polylineCoordinates.last.longitude != newPoint.longitude) {
+          setState(() {
+            _polylineCoordinates.add(newPoint);
+          });
+          _updatePolyline();
+        }
       }
       _addMarker(position);
       _checkCheckpointProximity(position);
@@ -3056,6 +3378,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
         remainingD = _calculateRemainingDistance(newPoint, closestIndex);
         remainingE = _calculateRouteEta(remainingD);
         _updateNavigationInstruction(newPoint, closestIndex);
+        _checkTriviaTriggers(closestIndex);
 
         // Compute segment direction bearing if user is stationary or has invalid heading
         if (position.speed < 1.0 && closestIndex + 1 < _activeRoutePoints.length) {
@@ -3231,6 +3554,15 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                       // Check location permissions
                       final permission = await Geolocator.checkPermission();
                       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+                        final disclosureAccepted = await LocationDisclosureDialog.checkAndShow(context);
+                        if (!disclosureAccepted) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Bez souhlasu s využitím polohy nelze sledovat aktivitu.')),
+                            );
+                          }
+                          return;
+                        }
                         final requested = await _locationService.requestLocationPermission();
                         if (!requested) {
                           if (mounted) {
@@ -3313,6 +3645,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                               'poi_count': 0,
                               'trivia_question': result['trivia_question'] as String?,
                               'trivia_answer': result['trivia_answer'] as String?,
+                              'trivia': result['trivia'] as List<dynamic>?,
                             }
                           ];
                           _selectedRouteSuggestionIndex = 0;
@@ -3320,6 +3653,11 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                           _showRouteSearch = false;
                           _taskCardExpanded = false;
                           _routePlotted = true;
+
+                          _activeRouteTriviaQuestion = result['trivia_question'] as String?;
+                          _activeRouteTriviaAnswer = result['trivia_answer'] as String?;
+                          _activeRouteTriviaList = result['trivia'] as List<dynamic>?;
+                          _triggeredTriviaIndices.clear();
 
                           if (result['selected_game'] != null) {
                             _activeRouteGame = result['selected_game'] as WheelOfFortune?;
@@ -3370,6 +3708,15 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                       // Check location permissions
                       final permission = await Geolocator.checkPermission();
                       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+                        final disclosureAccepted = await LocationDisclosureDialog.checkAndShow(context);
+                        if (!disclosureAccepted) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Bez souhlasu s využitím polohy nelze sledovat aktivitu.')),
+                            );
+                          }
+                          return;
+                        }
                         final requested = await _locationService.requestLocationPermission();
                         if (!requested) {
                           if (mounted) {
@@ -3447,6 +3794,7 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                               'poi_count': 0,
                               'trivia_question': result['trivia_question'] as String?,
                               'trivia_answer': result['trivia_answer'] as String?,
+                              'trivia': result['trivia'] as List<dynamic>?,
                             }
                           ];
                           _selectedRouteSuggestionIndex = 0;
@@ -3454,6 +3802,11 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                           _showRouteSearch = false;
                           _taskCardExpanded = false;
                           _routePlotted = true;
+
+                          _activeRouteTriviaQuestion = result['trivia_question'] as String?;
+                          _activeRouteTriviaAnswer = result['trivia_answer'] as String?;
+                          _activeRouteTriviaList = result['trivia'] as List<dynamic>?;
+                          _triggeredTriviaIndices.clear();
 
                           if (result['selected_game'] != null) {
                             _activeRouteGame = result['selected_game'] as WheelOfFortune?;

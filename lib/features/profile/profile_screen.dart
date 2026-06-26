@@ -65,6 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool? _tempShowMapStyle;
   bool? _tempShowShareLocation;
   bool? _tempShowArNav;
+  bool? _tempShowQuizDuringWalk;
   double? _tempWalkMin;
   double? _tempWalkMax;
   double? _tempBikeMin;
@@ -113,6 +114,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _tempShowMapStyle = prefs.getBool('show_map_style') ?? true;
             _tempShowShareLocation = prefs.getBool('show_share_location') ?? true;
             _tempShowArNav = prefs.getBool('show_ar_nav') ?? true;
+            _tempShowQuizDuringWalk = prefs.getBool('show_quiz_during_walk') ?? true;
           });
         }
       });
@@ -641,6 +643,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text('Smazat účet?', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'Tato akce je nevratná. Dojde k trvalému smazání vašeho profilu, všech statistik, dosažených úspěchů a historie tras. Opravdu chcete pokračovat?',
+          style: TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Zrušit', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Trvale smazat', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+      _isSavingSettings = true;
+    });
+
+    try {
+      await AuthService().deleteAccount();
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Váš účet byl úspěšně smazán.')),
+      );
+      
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSavingSettings = false;
+      });
+      
+      if (e is FirebaseAuthException && e.code == 'requires-recent-login') {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Nutné opětovné přihlášení'),
+            content: const Text(
+              'Z bezpečnostních důvodů je pro smazání účtu nutné se odhlásit, znovu přihlásit a akci opakovat. Chcete se nyní odhlásit?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Storno'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _logout();
+                },
+                child: const Text('Odhlásit se'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chyba při mazání účtu: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
   String _cleanStringForSearch(String input) {
     var str = input.toLowerCase().trim();
     const diacritics = {
@@ -985,6 +1076,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
+                  SwitchListTile(
+                    title: Text('Zobrazovat AI Kvíz při chůzi', style: TextStyle(fontSize: 14, color: textColor)),
+                    value: _tempShowQuizDuringWalk ?? true,
+                    activeColor: accentColor,
+                    onChanged: (val) {
+                      setState(() {
+                        _tempShowQuizDuringWalk = val;
+                      });
+                    },
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
                 ],
               ),
             ),
@@ -1144,6 +1246,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: const Text('ODHLÁSIT SE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: _deleteAccount,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red.shade700,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text(
+              'Trvale smazat účet a data',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
           const SizedBox(height: 80),
         ],
       ),
@@ -1229,6 +1347,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await prefs.setBool('show_map_style', _tempShowMapStyle ?? true);
       await prefs.setBool('show_share_location', _tempShowShareLocation ?? true);
       await prefs.setBool('show_ar_nav', _tempShowArNav ?? true);
+      await prefs.setBool('show_quiz_during_walk', _tempShowQuizDuringWalk ?? true);
       await prefs.setDouble('walk_range_min', _tempWalkMin ?? 2.0);
       await prefs.setDouble('walk_range_max', _tempWalkMax ?? 5.0);
       await prefs.setDouble('bike_range_min', _tempBikeMin ?? 10.0);
@@ -2082,7 +2201,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     
                     // Log out button
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 85.0),
+                      padding: const EdgeInsets.only(bottom: 24.0),
                       child: SizedBox(
                         width: double.infinity,
                         child: OutlinedButton(
@@ -2099,6 +2218,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Text(
                             'Odhlásit se',
                             style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    // Account deletion button
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 85.0),
+                      child: TextButton(
+                        onPressed: _deleteAccount,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red.shade700,
+                        ),
+                        child: const Text(
+                          'Trvale smazat účet a data',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
                           ),
                         ),
                       ),

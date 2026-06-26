@@ -35,4 +35,9 @@ class RemoteConfigService {
     final model = _remoteConfig.getString('gemini_model');
     return model.isNotEmpty ? model : 'gemini-1.5-flash';
   }
+
+  String get openRouteServiceApiKey {
+    final key = _remoteConfig.getString('openrouteservice_api_key');
+    return key.isNotEmpty ? key : '5b3ce3597851110001cf6248c8b417c8d9c148a0a860775d7b5f1349';
+  }
 }

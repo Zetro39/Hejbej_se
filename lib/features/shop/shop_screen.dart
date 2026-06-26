@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
+import '../../services/ad_service.dart';
 import '../../widgets/app_logo.dart';
 import '../../main_shell.dart';
 
@@ -386,6 +387,76 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _showRewardedAdFlow() async {
+    final canWatch = await AdService().canWatchRewardedAd();
+    if (!canWatch) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Dnes už jsi vyčerpal limit 3 reklam.')),
+        );
+      }
+      return;
+    }
+
+    if (!AdService().isRewardedAdReady()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reklama se připravuje, zkuste to za chvíli... ⏳'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      AdService().loadRewardedAd();
+      return;
+    }
+
+    // Show loading indicator dialog during transitions
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFFBFFF00)),
+      ),
+    );
+
+    // Close loading indicator and show ad
+    Navigator.pop(context);
+
+    AdService().showRewardedAd(
+      onRewardEarned: (reward) async {
+        await AuthService().addLimetky(1);
+        await AdService().incrementRewardedAdCount();
+        await _loadLimetkyAndCompanions();
+        
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: const Color(0xFF263238),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('🎉 Reklama dokončena!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              content: const Text('Byla ti připsána 1 Limetka do tvého měšce. Děkujeme za podporu!', style: TextStyle(color: Colors.white70)),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Paráda', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+      },
+      onAdFailed: () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Nebylo možné spustit reklamu. Zkuste to za chvíli.')),
+          );
+        }
+      },
+    );
+  }
+
   String get _donationAmount {
     final typed = _donationController.text.replaceAll(',', '.').trim();
     final parsed = double.tryParse(typed);
@@ -686,6 +757,81 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
               ),
             ],
           ),
+        ),
+
+        // Rewarded ad card
+        FutureBuilder<bool>(
+          future: AdService().canWatchRewardedAd(),
+          builder: (context, snapshot) {
+            final canWatch = snapshot.data ?? false;
+            return FutureBuilder<int>(
+              future: AdService().getRemainingRewardedAds(),
+              builder: (context, remSnapshot) {
+                final remaining = remSnapshot.data ?? 3;
+                return Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: borderColor, width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFBFFF00).withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_circle_fill_rounded,
+                          color: Color(0xFF5C9E00),
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Sleduj reklamu pro limetku!',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              remaining > 0
+                                  ? 'Získej 1 🍋 navíc. Dnes zbývá: $remaining/3'
+                                  : 'Dnešní limit 3 reklam vyčerpán.',
+                              style: TextStyle(color: textSecondary, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton(
+                        onPressed: canWatch
+                            ? () {
+                                _showRewardedAdFlow();
+                              }
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFBFFF00),
+                          foregroundColor: Colors.black,
+                          disabledBackgroundColor: Colors.grey.withOpacity(0.15),
+                          disabledForegroundColor: Colors.grey,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          elevation: 0,
+                        ),
+                        child: const Text('Spustit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
         ),
 
         const SizedBox(height: 16),
