@@ -1,7 +1,7 @@
 name: hejbej_se
 description: Hejbej se – trasy v ČR s gamifikací.
 publish_to: "none"
-version: 1.2.3+162
+version: 1.2.3+163
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -50,6 +50,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  disable-swift-package-manager: true
   assets:
     - assets/images/
     - assets/google_pay_config.json
