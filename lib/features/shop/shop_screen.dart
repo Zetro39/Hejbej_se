@@ -1127,14 +1127,14 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Upozornění pro dárce 💖',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Členství je zamýšleno jako dobrovolný příspěvek a podpora na provoz a další vývoj mapových služeb. Zakoupením získáte grafické zvýraznění a VIP odznaky mezi přáteli a v žebříčcích.',
-                      style: TextStyle(color: Colors.grey.shade300, fontSize: 11),
+                      style: TextStyle(color: textSecondary, fontSize: 11),
                     ),
                   ],
                 ),

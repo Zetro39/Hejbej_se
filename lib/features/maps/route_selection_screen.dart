@@ -1158,7 +1158,7 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
       debugPrint('Firestore cache check failed: $e');
     }
 
-    final int count = _isPremium ? 10 : 3;
+    final int count = 3;
     String? aiError;
     final List<Map<String, dynamic>> options = [];
 
@@ -1328,6 +1328,9 @@ Odpověz POUZE JSON polem objektů:
       final List<Map<String, dynamic>> tempOrsRoutes = [];
 
       for (int i = 0; i < count; i++) {
+        if (i > 0) {
+          await Future.delayed(const Duration(milliseconds: 800));
+        }
         final result = await _fetchOrsRoundTrip(
           widget.startLocation,
           _selectedTargetKm,
