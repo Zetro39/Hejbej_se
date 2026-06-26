@@ -1,6 +1,7 @@
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'achievement_service.dart';
 
 class AdService {
   static final AdService _instance = AdService._internal();
@@ -109,9 +110,18 @@ class AdService {
     final prefs = await SharedPreferences.getInstance();
     final todayStr = DateTime.now().toIso8601String().substring(0, 10);
     int count = prefs.getInt('rewarded_ads_count') ?? 0;
+    int total = prefs.getInt('total_rewarded_ads_count') ?? 0;
     
     await prefs.setString('last_rewarded_ad_date', todayStr);
     await prefs.setInt('rewarded_ads_count', count + 1);
+    await prefs.setInt('total_rewarded_ads_count', total + 1);
+    
+    if (count + 1 >= 3) {
+      await prefs.setBool('shop_ad_3_days_unlocked', true);
+    }
+    
+    // Sync achievements on the fly
+    await AchievementService.syncUserAchievements();
   }
 
   Future<int> getRemainingRewardedAds() async {

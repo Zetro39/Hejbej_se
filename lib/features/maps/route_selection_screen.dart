@@ -414,6 +414,7 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
       'trivia': triviaData,
       'is_bike': _usingBike,
       'is_a_to_b': widget.isAtoBMode,
+      'route_kraj': opt['route_kraj'],
     };
   }
 
@@ -466,6 +467,7 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
       'trivia': triviaList,
       'trivia_question': triviaList.isNotEmpty ? triviaList[0]['question'] : 'Znáš historii tohoto místa?',
       'trivia_answer': triviaList.isNotEmpty ? triviaList[0]['answer'] : 'Více se dozvíš na trase!',
+      'route_kraj': opt['route_kraj'] as String?,
     };
   }
 
@@ -981,7 +983,49 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
       debugPrint('Dnešní trasy uloženy do lokální cache pro klíč $cacheKey.');
     } catch (e) {
       debugPrint('Chyba při ukládání dnešních tras do lokální cache: $e');
+  }
+
+  Future<String?> _detectKrajFromCoordinates(LatLng latLng) async {
+    try {
+      final url = Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?format=json&lat=${latLng.latitude}&lon=${latLng.longitude}&zoom=10&addressdetails=1&accept-language=cs');
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'HejbejSeApp/1.0'},
+      ).timeout(const Duration(seconds: 4));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final address = data['address'] as Map<String, dynamic>?;
+        if (address != null) {
+          final state = address['state'] as String?;
+          if (state != null) {
+            return _normalizeKrajName(state);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error detecting kraj: $e');
     }
+    return null;
+  }
+
+  String? _normalizeKrajName(String rawState) {
+    final state = rawState.toLowerCase();
+    if (state.contains('středočesk') || state.contains('střední čechy')) return 'Středočeský';
+    if (state.contains('jihočesk')) return 'Jihočeský';
+    if (state.contains('plzeň')) return 'Plzeňský';
+    if (state.contains('karlovars')) return 'Karlovarský';
+    if (state.contains('ústeck')) return 'Ústecký';
+    if (state.contains('liberec')) return 'Liberecký';
+    if (state.contains('královéhradec')) return 'Královéhradecký';
+    if (state.contains('pardubic')) return 'Pardubický';
+    if (state.contains('vysočin')) return 'Vysočina';
+    if (state.contains('jihomorav')) return 'Jihomoravský';
+    if (state.contains('olomouc')) return 'Olomoucký';
+    if (state.contains('zlín')) return 'Zlínský';
+    if (state.contains('moravskoslez')) return 'Moravskoslezský';
+    if (state.contains('praha') || state.contains('prague')) return 'Praha';
+    return null;
   }
 
   Future<void> _generateRoutes() async {
@@ -1016,6 +1060,8 @@ class _RouteSelectionScreenState extends State<RouteSelectionScreen> {
         }
       }
     }
+
+    final String? detectedKraj = await _detectKrajFromCoordinates(widget.startLocation);
 
     final user = FirebaseAuth.instance.currentUser;
     final userEmail = user?.email?.toLowerCase() ?? '';
@@ -1539,6 +1585,11 @@ Odpověz POUZE JSON polem objektů (přesně $count prvků):
       }
     }
 
+    // Attach detected region/kraj to all generated options
+    for (var opt in options) {
+      opt['route_kraj'] = detectedKraj;
+    }
+
     if (options.isNotEmpty) {
       // 4. Save newly generated routes to Firestore cache
       await _saveToFirestoreCache(options);
@@ -1719,6 +1770,7 @@ Odpověz POUZE JSON polem objektů (přesně $count prvků):
           'environment': opt['environment'] ?? 'příroda',
           'pois': opt['pois'] ?? [],
           'trivia': triviaData,
+          'route_kraj': opt['route_kraj'],
         });
       }
 
@@ -2741,6 +2793,7 @@ Odpověz POUZE JSON polem objektů (přesně $count prvků):
                                                           'trivia_answer': option['trivia_answer'] as String?,
                                                           'trivia': option['trivia'] as List<dynamic>?,
                                                           'using_bike': _usingBike,
+                                                          'route_kraj': option['route_kraj'] as String?,
                                                         });
                                                       },
                                                 style: ElevatedButton.styleFrom(

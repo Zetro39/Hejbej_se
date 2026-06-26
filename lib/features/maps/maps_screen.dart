@@ -154,11 +154,17 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
   double _searchDrivingRadius = 25.0;
 
   String? _activeRouteKctColor;
+  String? _activeRouteKraj;
+  double? _activeRouteClimb;
+  bool? _activeRouteIsBike;
+  bool? _activeRouteIsAtoB;
   String? _activeRouteCykloNumber;
   String? _activeRouteTriviaQuestion;
   String? _activeRouteTriviaAnswer;
   List<dynamic>? _activeRouteTriviaList;
   final Set<int> _triggeredTriviaIndices = {};
+  int _currentRouteCorrectTriviaCount = 0;
+  bool _cheatedOnCurrentRoute = false;
 
   final TextEditingController _destinationController = TextEditingController();
 
@@ -283,6 +289,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     await prefs.setDouble('totalDistance', _totalDistance);
     await prefs.setInt('limetkyBalance', _limetkyBalance);
     await prefs.setInt('streak', _streak);
+    final int maxStreak = prefs.getInt('max_streak') ?? 0;
+    if (_streak > maxStreak) {
+      await prefs.setInt('max_streak', _streak);
+    }
     await prefs.setBool('isStreakFrozen', _isStreakFrozen);
     if (_lastActivityDate != null) {
       await prefs.setString('lastActivityDate', _lastActivityDate!.toIso8601String());
@@ -2088,6 +2098,71 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
     final title = _routeSuggestions.isNotEmpty ? _routeSuggestions.first['title'] as String : 'Neznámý okruh';
     final points = _activeRoutePoints;
     if (points.isEmpty) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // 1. Visited region
+      if (_activeRouteKraj != null) {
+        final List<String> visited = prefs.getStringList('visited_krajs') ?? [];
+        if (!visited.contains(_activeRouteKraj!)) {
+          visited.add(_activeRouteKraj!);
+          await prefs.setStringList('visited_krajs', visited);
+          debugPrint('Přidán navštívený kraj: $_activeRouteKraj');
+        }
+      }
+      
+      // 2. Loop vs A-to-B routes
+      final double routeDist = _routeSuggestions.isNotEmpty ? _routeSuggestions.first['distance'] as double : 0.0;
+      final bool isAtoB = _activeRouteIsAtoB ?? false;
+      if (isAtoB) {
+        final int atobCount = prefs.getInt('completed_atob_routes_count') ?? 0;
+        await prefs.setInt('completed_atob_routes_count', atobCount + 1);
+        
+        final double maxAtoBDist = prefs.getDouble('max_single_atob_distance') ?? 0.0;
+        if (routeDist > maxAtoBDist) {
+          await prefs.setDouble('max_single_atob_distance', routeDist);
+        }
+      } else {
+        final int loopCount = prefs.getInt('completed_loop_routes_count') ?? 0;
+        await prefs.setInt('completed_loop_routes_count', loopCount + 1);
+      }
+      
+      // 3. Cycling distance and climb
+      final bool isBike = _activeRouteIsBike ?? prefs.getBool('preferred_bike_mode') ?? false;
+      if (isBike) {
+        final double maxBikeDist = prefs.getDouble('max_single_bike_distance') ?? 0.0;
+        if (routeDist > maxBikeDist) {
+          await prefs.setDouble('max_single_bike_distance', routeDist);
+        }
+        
+        if (_activeRouteClimb != null) {
+          final double maxClimb = prefs.getDouble('max_single_bike_climb') ?? 0.0;
+          if (_activeRouteClimb! > maxClimb) {
+            await prefs.setDouble('max_single_bike_climb', _activeRouteClimb!);
+          }
+        }
+      }
+      
+      // 4. Completed route with trivia count
+      final hasTrivia = _activeRouteTriviaList != null && _activeRouteTriviaList!.isNotEmpty;
+      if (hasTrivia) {
+        final int triviaRoutes = prefs.getInt('completed_routes_with_trivia_count') ?? 0;
+        await prefs.setInt('completed_routes_with_trivia_count', triviaRoutes + 1);
+      }
+      
+      // 5. Clean routes (no cheating)
+      if (!_cheatedOnCurrentRoute) {
+        final int cleanCount = prefs.getInt('clean_routes_completed_count') ?? 0;
+        await prefs.setInt('clean_routes_completed_count', cleanCount + 1);
+      }
+      
+      // Sync achievements
+      await AchievementService.syncUserAchievements();
+      debugPrint('Statistiky dokončení trasy uloženy, achievements synchronizovány.');
+    } catch (e) {
+      debugPrint('Chyba při ukládání statistik trasy: $e');
+    }
     
     final String routeId = 'route_${points.first.latitude.toStringAsFixed(4)}_${points.first.longitude.toStringAsFixed(4)}_${points.last.latitude.toStringAsFixed(4)}_${points.last.longitude.toStringAsFixed(4)}';
 
@@ -2260,10 +2335,35 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                 ],
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Pokračovat v chůzi', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
-                ),
+                if (!showAnswer)
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Pokračovat v chůzi', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+                  )
+                else ...[
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Špatně ❌', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      final prefs = await SharedPreferences.getInstance();
+                      final int currentCorrect = prefs.getInt('trivia_correct_answers_count') ?? 0;
+                      await prefs.setInt('trivia_correct_answers_count', currentCorrect + 1);
+                      
+                      _currentRouteCorrectTriviaCount++;
+                      if (_activeRouteTriviaList != null && 
+                          _activeRouteTriviaList!.length >= 3 && 
+                          _currentRouteCorrectTriviaCount >= _activeRouteTriviaList!.length) {
+                        await prefs.setBool('trivia_perfect_route_unlocked', true);
+                      }
+                      
+                      debugPrint('Trivia correct graded! Total correct: ${currentCorrect + 1}, current route correct: $_currentRouteCorrectTriviaCount');
+                    },
+                    child: const Text('Správně! 🎉', style: TextStyle(color: Color(0xFFBFFF00), fontWeight: FontWeight.bold)),
+                  ),
+                ]
               ],
             );
           },
@@ -2836,6 +2936,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _taskCardExpanded = false;
       
       _activeRouteKctColor = route['kct_color'] as String?;
+      _activeRouteKraj = route['route_kraj'] as String?;
+      _activeRouteClimb = (route['climb'] as num?)?.toDouble();
+      _activeRouteIsBike = route['using_bike'] as bool? ?? route['is_bike'] as bool?;
+      _activeRouteIsAtoB = route['is_a_to_b'] as bool?;
       _activeRouteCykloNumber = route['cyklo_number'] as String?;
       _activeRouteTriviaQuestion = route['trivia_question'] as String?;
       _activeRouteTriviaAnswer = route['trivia_answer'] as String?;
@@ -2866,6 +2970,8 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       _closestWaypointIndex = 0;
       _remainingDistance = initialRemaining;
       _remainingEta = initialEta;
+      _currentRouteCorrectTriviaCount = 0;
+      _cheatedOnCurrentRoute = false;
     });
 
     if (_lastPosition != null && _activeRoutePoints.isNotEmpty) {
@@ -3293,6 +3399,9 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
       // Filter position update with AntiCheatService (ignore driving / car rides)
       final countDistance = AntiCheatService().checkLocationUpdate(position, _usingBike);
       final isCheating = AntiCheatService().isCheating;
+      if (isCheating) {
+        _cheatedOnCurrentRoute = true;
+      }
 
       final newPoint = LatLng(position.latitude, position.longitude);
 
@@ -3653,6 +3762,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                           _showRouteSearch = false;
                           _taskCardExpanded = false;
                           _routePlotted = true;
+                          _activeRouteKraj = result['route_kraj'] as String?;
+                          _activeRouteClimb = (result['climb'] as num?)?.toDouble();
+                          _activeRouteIsBike = result['using_bike'] as bool?;
+                          _activeRouteIsAtoB = result['is_a_to_b'] as bool?;
 
                           _activeRouteTriviaQuestion = result['trivia_question'] as String?;
                           _activeRouteTriviaAnswer = result['trivia_answer'] as String?;
@@ -3802,6 +3915,10 @@ class _MapsScreenState extends State<MapsScreen> with TickerProviderStateMixin {
                           _showRouteSearch = false;
                           _taskCardExpanded = false;
                           _routePlotted = true;
+                          _activeRouteKraj = result['route_kraj'] as String?;
+                          _activeRouteClimb = (result['climb'] as num?)?.toDouble();
+                          _activeRouteIsBike = result['using_bike'] as bool?;
+                          _activeRouteIsAtoB = result['is_a_to_b'] as bool?;
 
                           _activeRouteTriviaQuestion = result['trivia_question'] as String?;
                           _activeRouteTriviaAnswer = result['trivia_answer'] as String?;

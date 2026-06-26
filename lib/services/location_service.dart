@@ -19,12 +19,16 @@ class DistanceManager {
   DistanceManager._internal();
 
   double _totalDistance = 0.0;
+  double _totalDistanceWalking = 0.0;
+  double _totalDistanceCycling = 0.0;
   double _weeklyDistance = 0.0;
   double _monthlyDistance = 0.0;
   double _yearlyDistance = 0.0;
   String? _lastDistanceUpdateStr;
 
   double get totalDistance => _totalDistance;
+  double get totalDistanceWalking => _totalDistanceWalking;
+  double get totalDistanceCycling => _totalDistanceCycling;
   double get weeklyDistance => _weeklyDistance;
   double get monthlyDistance => _monthlyDistance;
   double get yearlyDistance => _yearlyDistance;
@@ -32,6 +36,8 @@ class DistanceManager {
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     _totalDistance = prefs.getDouble(_distanceKey) ?? 0.0;
+    _totalDistanceWalking = prefs.getDouble('totalDistance_walking') ?? _totalDistance;
+    _totalDistanceCycling = prefs.getDouble('totalDistance_cycling') ?? 0.0;
     _weeklyDistance = prefs.getDouble('weeklyDistance') ?? 0.0;
     _monthlyDistance = prefs.getDouble('monthlyDistance') ?? 0.0;
     _yearlyDistance = prefs.getDouble('yearlyDistance') ?? 0.0;
@@ -71,6 +77,15 @@ class DistanceManager {
     
     final now = DateTime.now();
     final prefs = await SharedPreferences.getInstance();
+    
+    final bool isBike = prefs.getBool('preferred_bike_mode') ?? false;
+    if (isBike) {
+      _totalDistanceCycling += kilometers;
+      await prefs.setDouble('totalDistance_cycling', _totalDistanceCycling);
+    } else {
+      _totalDistanceWalking += kilometers;
+      await prefs.setDouble('totalDistance_walking', _totalDistanceWalking);
+    }
     
     // Reset if period changed since last update
     if (_lastDistanceUpdateStr != null) {
