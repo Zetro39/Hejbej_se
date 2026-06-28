@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hejbej Se – Pohyb s gamifikací</title>
+    <style>
+        :root {
+            --bg-color: #0B0F13;
+            --card-bg: #131A21;
+            --lime: #BFFF00;
+            --lime-hover: #a3d900;
+            --text-primary: #F8FAFC;
+            --text-secondary: #94A3B8;
+            --border: rgba(191, 255, 0, 0.15);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            max-width: 1000px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 900;
+            color: var(--lime);
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo span {
+            color: var(--text-primary);
+        }
+
+        main {
+            flex: 1;
+            max-width: 1000px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 40px 24px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 60px;
+        }
+
+        .hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 20px;
+            padding: 40px 0;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 900;
+            line-height: 1.1;
+            margin: 0;
+            letter-spacing: -1px;
+        }
+
+        .hero h1 span {
+            color: var(--lime);
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0;
+        }
+
+        .store-buttons {
+            display: flex;
+            gap: 16px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn-store {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 12px 24px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .btn-store:hover {
+            border-color: var(--lime);
+            transform: translateY(-2px);
+            background-color: rgba(191, 255, 0, 0.05);
+        }
+
+        .btn-store svg {
+            fill: var(--lime);
+            width: 24px;
+            height: 24px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background-color: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.03);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            transition: border-color 0.2s ease;
+        }
+
+        .feature-card:hover {
+            border-color: var(--border);
+        }
+
+        .feature-icon {
+            font-size: 32px;
+            margin-bottom: 16px;
+        }
+
+        .feature-card h3 {
+            font-size: 18px;
+            color: var(--lime);
+            margin: 0 0 10px 0;
+            font-weight: bold;
+        }
+
+        .feature-card p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .contact-section {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .contact-section h2 {
+            margin: 0 0 10px 0;
+            color: var(--lime);
+        }
+
+        .contact-section p {
+            color: var(--text-secondary);
+            margin: 0 0 16px 0;
+        }
+
+        .contact-email {
+            color: var(--text-primary);
+            font-weight: bold;
+            text-decoration: none;
+            font-size: 16px;
+        }
+
+        .contact-email:hover {
+            color: var(--lime);
+            text-decoration: underline;
+        }
+
+        footer {
+            max-width: 1000px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 40px 24px;
+            box-sizing: border-box;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        footer a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        footer a:hover {
+            color: var(--lime);
+            text-decoration: underline;
+        }
+
+        @media (max-width: 600px) {
+            .hero h1 {
+                font-size: 36px;
+            }
+            .hero p {
+                font-size: 15px;
+            }
+            footer {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">🍋 Hejbej <span>Se</span></div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h1>Chyť se do pohybu s <span>Hejbej Se</span></h1>
+            <p>Generuj si reálné okružní trasy v České republice, sbírej Limetky, objevuj checkpointy, soutěž s přáteli a upgraduj své trofeje v Síni slávy.</p>
+            <div class="store-buttons">
+                <!-- App Store Button -->
+                <a href="#" class="btn-store">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M18.71,19.5C17.88,20.74 17,21.95 15.66,21.97C14.32,22 13.89,21.18 12.37,21.18C10.84,21.18 10.37,21.95 9.1,22C7.79,22.05 6.8,20.68 5.96,19.47C4.25,17 2.94,12.45 4.7,9.39C5.57,7.87 7.13,6.91 8.82,6.88C10.1,6.86 11.32,7.75 12.11,7.75C12.89,7.75 14.37,6.68 15.92,6.84C16.57,6.87 18.39,7.1 19.56,8.82C19.47,8.88 17.39,10.1 17.41,12.63C17.44,15.65 20.06,16.66 20.1,16.67C20.08,16.74 19.67,18.11 18.71,19.5M15.97,4.17C16.63,3.37 17.07,2.28 16.95,1C16,1.04 14.9,1.6 14.24,2.38C13.68,3.04 13.19,4.14 13.34,5.39C14.39,5.47 15.4,4.88 15.97,4.17Z"/>
+                    </svg>
+                    <span>App Store</span>
+                </a>
+                <!-- Google Play Button -->
+                <a href="#" class="btn-store">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M3,5.27V18.73L16.55,12L3,5.27M17.87,11.33L21,12.9L21.32,13.06C21.73,13.27 22,13.62 22,14C22,14.38 21.73,14.73 21.32,14.94L21,15.1L17.87,16.67L15,12L17.87,11.33M3,3.15C3.21,3.15 3.42,3.22 3.61,3.34L17,10.6L14.27,12L3,3.15M3,20.85L14.27,12L17,13.4L3.61,20.66C3.42,20.78 3.21,20.85 3,20.85Z"/>
+                    </svg>
+                    <span>Google Play</span>
+                </a>
+            </div>
+        </section>
+
+        <section class="features-grid">
+            <!-- Feature 1 -->
+            <div class="feature-card">
+                <div class="feature-icon">🔁</div>
+                <h3>Chytré okruhy & A-to-B trasy</h3>
+                <p>Generuj si trasy na základě své startovní polohy a zvolené délky. Trasa tě provede přírodou a vrátí tě zpátky na začátek, aniž bys šel dvakrát stejnou cestou.</p>
+            </div>
+            <!-- Feature 2 -->
+            <div class="feature-card">
+                <div class="feature-icon">🧠</div>
+                <h3>Zeměpisné AI Kvízy</h3>
+                <p>Při plnění trasy ti aplikace v pravidelných intervalech nabídne zábavné otázky o historii a zeměpisu okolí. Odpovídej správně a získej bonusové odměny.</p>
+            </div>
+            <!-- Feature 3 -->
+            <div class="feature-card">
+                <div class="feature-icon">🐾</div>
+                <h3>Limetkoví společníci (Pets)</h3>
+                <p>Sbírej na trasách virtuální herní měnu – Limetky. Ty pak můžeš v obchodě vyměnit za zvířecí doprovod (medvěd, liška, vlk, jelen), který tě bude provázet na mapě.</p>
+            </div>
+            <!-- Feature 4 -->
+            <div class="feature-card">
+                <div class="feature-icon">🏆</div>
+                <h3>Stupňované úspěchy (LoL style)</h3>
+                <p>Sleduj své úspěchy v Síni slávy! Tvoje odznaky se dynamicky vylepšují od Bronzové přes Stříbrnou, Zlatou až po Vesmírnou podle tvých celkových statistik.</p>
+            </div>
+        </section>
+
+        <section class="contact-section">
+            <h2>Máte otázky?</h2>
+            <p>Naše technická podpora je připravena vám pomoci se vším od zaznamenávání tras po váš uživatelský účet.</p>
+            <a href="mailto:podpora@hejbejse.cz" class="contact-email">podpora@hejbejse.cz</a>
+        </section>
+    </main>
+
+    <footer>
+        <div>&copy; 2026 Hejbej Se. Všechna práva vyhrazená.</div>
+        <div>
+            <a href="privacy.html">Zásady ochrany osobních údajů</a>
+        </div>
+    </footer>
+</body>
+</html>
